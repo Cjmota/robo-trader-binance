@@ -12,7 +12,7 @@ from binance.enums import SIDE_SELL, ORDER_TYPE_STOP_LOSS_LIMIT
 from binance.exceptions import BinanceAPIException
 
 from src.modules.BinanceClient import BinanceClient
-from modules.TraderOrder import TraderOrder
+from src.modules.TraderOrder import TraderOrder
 from modules.Logger import *
 
 from modules.StrategyRunner import StrategyRunner
