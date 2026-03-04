@@ -1,0 +1,57 @@
+{
+    "MAIN_STRATEGY": "getVortexTradeStrategy",
+    "MAIN_STRATEGY_ARGS": {},
+    "FALLBACK_ACTIVATED": true,
+    "FALLBACK_STRATEGY": "getMovingAverageTradeStrategy",
+    "FALLBACK_STRATEGY_ARGS": {},
+    "ACCEPTABLE_LOSS_PERCENTAGE": 0,
+    "STOP_LOSS_PERCENTAGE": 3.5,
+    "TP_AT_PERCENTAGE": [
+        2,
+        4
+    ],
+    "TP_AMOUNT_PERCENTAGE": [
+        50,
+        50
+    ],
+    "CANDLE_PERIOD": "Client.KLINE_INTERVAL_5MINUTE",
+    "TEMPO_ENTRE_TRADES": 60,
+    "DELAY_ENTRE_ORDENS": 10,
+    "stocks_traded_list": [
+        {
+            "stockCode": "ADA",
+            "operationCode": "ADAUSDT",
+            "capital": 10
+        },
+
+        {
+            "stockCode": "BTC",
+            "operationCode": "BTCUSDT",
+            "capital": 50
+        },
+        {
+            "stockCode": "XRP",
+            "operationCode": "XRPUSDT",
+            "capital": 15
+        },
+
+        {
+            "stockCode": "SHIB",
+            "operationCode": "SHIBUSDT",
+            "capital": 10
+        },
+        
+        {
+            "stockCode": "SOL",
+            "operationCode": "SOLUSDT",
+            "capital": 20
+        },
+
+        {
+            "stockCode": "BNB",
+            "operationCode": "BNBUSDT",
+            "capital": 15
+        }
+
+    ]
+}
