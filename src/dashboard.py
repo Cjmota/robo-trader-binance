@@ -2,7 +2,7 @@ from flask import Flask, render_template, request, jsonify
 from datetime import datetime
 import numpy as np
 import threading
-import main
+from src import main
 import json
 import os
 
@@ -11,7 +11,11 @@ EQUITY_HISTORY = []
 BTC_HISTORY = []
 INITIAL_EQUITY = None
 
-app = Flask(__name__)
+app = Flask(
+    __name__,
+    template_folder="templates",
+    static_folder="static"
+)
 bot_thread = None
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app", "config.json")
