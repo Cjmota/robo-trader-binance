@@ -1,10 +1,9 @@
 # fmt: off
 import os
 import time
-from datetime import datetime
 import logging
 import math
-           
+from datetime import datetime
 from dotenv import load_dotenv
 import pandas as pd
 from binance.client import Client
@@ -12,7 +11,7 @@ from binance.enums import *
 from binance.enums import SIDE_SELL, ORDER_TYPE_STOP_LOSS_LIMIT
 from binance.exceptions import BinanceAPIException
 
-from modules.BinanceClient import BinanceClient
+from src.modules.BinanceClient import BinanceClient
 from modules.TraderOrder import TraderOrder
 from modules.Logger import *
 
