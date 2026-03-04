@@ -285,3 +285,20 @@ if __name__ == "__main__":
             time.sleep(1)
     except KeyboardInterrupt:
         print("\nPrograma encerrado pelo usuário.")
+
+def safe_trader_master_loop():
+    while BOT_RUNNING:
+        try:
+            print("🚀 Iniciando ciclo do robô...")
+            trader_master_loop()
+
+        except Exception as e:
+            print("⚠️ Erro inesperado no robô:", e)
+
+            logging.error(
+                f"Erro inesperado no robô: {e}",
+                exc_info=True
+            )
+
+            print("🔄 Reiniciando robô em 10 segundos...")
+            time.sleep(10)

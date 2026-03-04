@@ -44,7 +44,7 @@ def start_bot():
     global bot_thread
     if not main.BOT_RUNNING:
         main.BOT_RUNNING = True
-        bot_thread = threading.Thread(target=main.trader_master_loop)
+        bot_thread = threading.Thread(target=main.safe_trader_master_loop)
         bot_thread.daemon = True
         bot_thread.start()
     return "OK"
