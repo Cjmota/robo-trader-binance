@@ -1,6 +1,6 @@
 import numpy as np
 import pandas as pd
-from indicators import Indicators
+from src.indicators import Indicators
 
 
 def calculate_atr(high, low, close, period=10):

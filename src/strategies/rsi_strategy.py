@@ -1,5 +1,5 @@
 import pandas as pd
-from indicators import Indicators
+from src.indicators import Indicators
 
 
 def getRsiTradeStrategy(stock_data: pd.DataFrame, low=30, high=70, verbose=True):

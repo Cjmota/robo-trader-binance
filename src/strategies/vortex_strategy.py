@@ -1,5 +1,5 @@
 import pandas as pd
-from indicators import Indicators
+from src.indicators import Indicators
 
 
 def getVortexTradeStrategy(stock_data: pd.DataFrame, verbose=True):
