@@ -21,6 +21,9 @@ from src.strategies.ma_rsi_volume_strategy import getMovingAverageRSIVolumeStrat
 from dotenv import load_dotenv
 load_dotenv()
 
+print("API KEY:", os.getenv("BINANCE_API_KEY"))
+print("API SECRET:", os.getenv("BINANCE_API_SECRET"))
+
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app", "config.json")
 
