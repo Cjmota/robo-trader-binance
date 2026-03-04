@@ -13,17 +13,14 @@ from binance.exceptions import BinanceAPIException
 
 from src.modules.BinanceClient import BinanceClient
 from src.modules.TraderOrder import TraderOrder
-from modules.Logger import *
+from src.modules.Logger import *
+from src.modules.StrategyRunner import StrategyRunner
 
-from modules.StrategyRunner import StrategyRunner
+from src.strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
+from src.strategies.moving_average import getMovingAverageTradeStrategy
 
-
-from strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
-from strategies.moving_average import getMovingAverageTradeStrategy
-
-from indicators import Indicators
+from src.indicators import Indicators
 # fmt: on
-
 
 load_dotenv()
 api_key = os.getenv("BINANCE_API_KEY")
