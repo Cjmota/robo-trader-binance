@@ -4,7 +4,6 @@ import time
 from datetime import datetime
 import logging
 import math
-import main  # se necessário dependendo da estrutura
            
 from dotenv import load_dotenv
 import pandas as pd
