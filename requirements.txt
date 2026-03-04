@@ -1,0 +1,10 @@
+flask
+python-binance==1.0.22
+python-dotenv
+pytz
+numpy
+pandas
+requests
+aiohttp
+websockets
+ujson
