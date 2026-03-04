@@ -8,19 +8,16 @@ import pytz
 br_tz = pytz.timezone("America/Sao_Paulo")
 from datetime import datetime
 
-from modules.BinanceTraderBot import BinanceTraderBot
+from src.modules.BinanceTraderBot import BinanceTraderBot
 from binance.client import Client
-from Models.StockStartModel import StockStartModel
+from src.Models.StockStartModel import StockStartModel
 
+from src.strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
+from src.strategies.moving_average import getMovingAverageTradeStrategy
+from src.strategies.rsi_strategy import getRsiTradeStrategy
+from src.strategies.vortex_strategy import getVortexTradeStrategy
+from src.strategies.ma_rsi_volume_strategy import getMovingAverageRSIVolumeStrategy
 
-
-from strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
-from strategies.moving_average import getMovingAverageTradeStrategy
-
-# from strategies.vortex_strategy import getVortexTradeStrategy
-from strategies.rsi_strategy import getRsiTradeStrategy
-from strategies.vortex_strategy import getVortexTradeStrategy
-from strategies.ma_rsi_volume_strategy import getMovingAverageRSIVolumeStrategy
 from dotenv import load_dotenv
 load_dotenv()
 
