@@ -1389,6 +1389,9 @@ class BinanceTraderBot:
 
             whale_signal = self.detectWhalePressure()
 
+            # confirmação de volume
+            volume_spike = self.detectPump()
+
             liquidity_signal = self.detectLiquidityWall()
             liquidation_signal = self.detectLiquidationMove()
             strategy_signal = self.getFinalDecisionStrategy()
@@ -1399,15 +1402,19 @@ class BinanceTraderBot:
 
             signal = None
 
-            if whale_signal == "BUY":
+            # prioridade institucional
+            if whale_signal and volume_spike:
                 signal = whale_signal
-            elif liquidation_signal:
-                signal = liquidation_signal
+
             elif liquidity_signal:
                 signal = liquidity_signal
+
+            elif liquidation_signal:
+                signal = liquidation_signal
+
             else:
                 signal = strategy_signal
-
+                
             # ---------------------------------------------
             # COMPRA
             if signal in [True, "BUY"] and self.getTrendMultiTimeframe():
@@ -1801,6 +1808,36 @@ class BinanceTraderBot:
 
             print("Erro no detector de baleias:", e)
 
+            return None
+        
+    def detectLiquidityWall(self):
+
+        try:
+
+            depth = self.getCachedOrderBook()
+
+            bids = depth["bids"]
+            asks = depth["asks"]
+
+            bid_wall = max(float(b[1]) for b in bids[:15])
+            ask_wall = max(float(a[1]) for a in asks[:15])
+
+            print(f"💧 Maior parede de compra: {bid_wall}")
+            print(f"💧 Maior parede de venda : {ask_wall}")
+
+            if bid_wall > ask_wall * 2:
+                print("🟢 Parede forte de COMPRA detectada")
+                return "BUY"
+
+            if ask_wall > bid_wall * 2:
+                print("🔴 Parede forte de VENDA detectada")
+                return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de liquidez:", e)
             return None
         
     def getCachedOrderBook(self):
