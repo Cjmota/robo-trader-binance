@@ -21,8 +21,8 @@ from src.strategies.ma_rsi_volume_strategy import getMovingAverageRSIVolumeStrat
 from dotenv import load_dotenv
 load_dotenv()
 
-print("API KEY:", os.getenv("BINANCE_API_KEY"))
-print("API SECRET:", os.getenv("BINANCE_API_SECRET"))
+print("API KEY carregada:", bool(os.getenv("BINANCE_API_KEY")))
+print("API SECRET carregada:", bool(os.getenv("BINANCE_SECRET_KEY")))
 
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app", "config.json")
@@ -149,56 +149,15 @@ THREAD_LOCK = True # True = Executa 1 moeda por vez | False = Executa todas simu
 
 thread_lock = threading.Lock()
 
-def choose_best_asset(stocks):
-    """
-    Avalia todas as moedas e escolhe a melhor oportunidade de trade.
-    Retorna o objeto StockStartModel com melhor sinal de compra.
-    """
-    best_asset = None
-    best_signal = False
-
-    for stock in stocks:
-        trader = BinanceTraderBot(
-            stock_code=stock.stockCode,
-            operation_code=stock.operationCode,
-            traded_quantity=stock.tradedQuantity,
-            traded_percentage=stock.tradedPercentage,
-            candle_period=stock.candlePeriod,
-            
-            api_key=API_KEY,
-            api_secret=API_SECRET,
-            testnet=TESTNET,
-            
-            time_to_trade=stock.tempoEntreTrades,
-            delay_after_order=stock.delayEntreOrdens,
-            acceptable_loss_percentage=stock.acceptableLossPercentage,
-            stop_loss_percentage=stock.stopLossPercentage,
-            fallback_activated=stock.fallBackActivated,
-            take_profit_at_percentage=stock.takeProfitAtPercentage,
-            take_profit_amount_percentage=stock.takeProfitAmountPercentage,
-            main_strategy=stock.mainStrategy,
-            main_strategy_args=stock.mainStrategyArgs,
-            fallback_strategy=stock.fallbackStrategy,
-            fallback_strategy_args=stock.fallbackStrategyArgs,
-        )
-
-        trader.updateAllData()
-        decision = trader.getFinalDecisionStrategy()
-
-        if decision is True:  # sinal de compra
-            best_asset = stock
-            best_signal = True
-            break  # pega a primeira boa oportunidade
-
-    return best_asset if best_signal else None
-
 
 def trader_master_loop():
     global CURRENT_TRADER, BOT_RUNNING, BINANCE_CLIENT
 
     current_trader = None
-
     last_outside_log = False
+    
+    if BINANCE_CLIENT is None:
+        BINANCE_CLIENT = Client(API_KEY, API_SECRET)
 
     while BOT_RUNNING:
 
@@ -227,30 +186,57 @@ def trader_master_loop():
             last_outside_log = False
 
         if current_trader is None:
-            best_asset = choose_best_asset(stocks_traded_list)
 
-            if best_asset:
-                current_trader = BinanceTraderBot(
-                    stock_code=best_asset.stockCode,
-                    operation_code=best_asset.operationCode,
-                    traded_quantity=best_asset.tradedQuantity,
-                    traded_percentage=best_asset.tradedPercentage,
-                    candle_period=best_asset.candlePeriod,
-                    api_key=API_KEY,
-                    api_secret=API_SECRET,
-                    testnet=TESTNET,
-                    time_to_trade=best_asset.tempoEntreTrades,
-                    delay_after_order=best_asset.delayEntreOrdens,
-                    acceptable_loss_percentage=best_asset.acceptableLossPercentage,
-                    stop_loss_percentage=best_asset.stopLossPercentage,
-                    fallback_activated=best_asset.fallBackActivated,
-                    take_profit_at_percentage=best_asset.takeProfitAtPercentage,
-                    take_profit_amount_percentage=best_asset.takeProfitAmountPercentage,
-                    main_strategy=best_asset.mainStrategy,
-                    main_strategy_args=best_asset.mainStrategyArgs,
-                    fallback_strategy=best_asset.fallbackStrategy,
-                    fallback_strategy_args=best_asset.fallbackStrategyArgs,
-                )
+            print("🔎 Procurando melhor oportunidade...")
+
+            symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=5)
+            
+            if not symbols:
+                print("⚠️ Nenhuma oportunidade encontrada.")
+                time.sleep(10)
+                continue
+
+            for symbol in symbols:
+
+                stock = symbol.replace("USDT", "")
+
+                print(f"🎯 Testando ativo: {symbol}")
+
+                try:
+
+                    trader = BinanceTraderBot(
+                        stock_code=stock,
+                        operation_code=symbol,
+                        traded_quantity=20,
+                        traded_percentage=100,
+                        candle_period=CANDLE_PERIOD,
+                        api_key=API_KEY,
+                        api_secret=API_SECRET,
+                        testnet=TESTNET,
+                        time_to_trade=TEMPO_ENTRE_TRADES,
+                        delay_after_order=DELAY_ENTRE_ORDENS,
+                        acceptable_loss_percentage=ACCEPTABLE_LOSS_PERCENTAGE,
+                        stop_loss_percentage=STOP_LOSS_PERCENTAGE,
+                        fallback_activated=FALLBACK_ACTIVATED,
+                        take_profit_at_percentage=TP_AT_PERCENTAGE,
+                        take_profit_amount_percentage=TP_AMOUNT_PERCENTAGE,
+                        main_strategy=MAIN_STRATEGY,
+                        main_strategy_args=MAIN_STRATEGY_ARGS,
+                        fallback_strategy=FALLBACK_STRATEGY,
+                        fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
+                    )
+
+                    trader.updateAllData()
+
+                    decision = trader.getFinalDecisionStrategy()
+
+                    if decision is True:
+                        print(f"🚀 Oportunidade encontrada em {symbol}")
+                        current_trader = trader
+                        break
+
+                except Exception as e:
+                    print(f"Erro ao analisar {symbol}: {e}")
 
         if current_trader:
             CURRENT_TRADER = current_trader
@@ -281,8 +267,6 @@ if __name__ == "__main__":
     BOT_RUNNING = True
     trader_master_loop()
 
-    print("🤖 Master Trader iniciado (modo multi-moedas inteligente).")
-
     try:
         while True:
             time.sleep(1)
@@ -305,3 +289,80 @@ def safe_trader_master_loop():
 
             print("🔄 Reiniciando robô em 10 segundos...")
             time.sleep(10)
+            
+    
+def symbol_to_stock(symbol):
+
+    if symbol.endswith("USDT"):
+        return symbol.replace("USDT", "")
+
+    return symbol
+
+def scan_market_top_symbols(client, limit=20):
+
+    print("🔎 Escaneando mercado inteligente...")
+
+    try:
+
+        tickers = client.get_ticker()
+
+        if not tickers:
+            return []
+
+        candidates = []
+
+        for t in tickers:
+
+            symbol = t["symbol"]
+
+            if not symbol.endswith("USDT"):
+                continue
+
+            volume = float(t["quoteVolume"])
+            price_change = abs(float(t["priceChangePercent"]))
+
+            # ignorar moedas com pouco volume
+            if volume < 5_000_000:
+                continue
+
+            try:
+                candles = client.get_klines(
+                    symbol=symbol,
+                    interval=Client.KLINE_INTERVAL_5MINUTE,
+                    limit=20
+                )
+
+                closes = [float(c[4]) for c in candles]
+
+                if not closes:
+                    continue
+
+                min_price = min(closes)
+                max_price = max(closes)
+
+                if min_price == 0:
+                    continue
+
+                volatility = (max_price - min_price) / min_price
+
+            except:
+                continue
+
+            # score profissional
+            score = volume * price_change * volatility
+
+            candidates.append((symbol, score))
+
+        candidates.sort(key=lambda x: x[1], reverse=True)
+
+        best = [s[0] for s in candidates[:limit]]
+
+        print("🔥 TOP OPORTUNIDADES:", best)
+
+        return best
+
+    except Exception as e:
+
+        print("Erro no scanner:", e)
+
+        return []

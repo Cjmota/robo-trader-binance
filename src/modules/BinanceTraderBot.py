@@ -7,8 +7,7 @@ from datetime import datetime
 from dotenv import load_dotenv
 import pandas as pd
 from binance.client import Client
-from binance.enums import *
-from binance.enums import SIDE_SELL, ORDER_TYPE_STOP_LOSS_LIMIT
+from binance.enums import SIDE_BUY, SIDE_SELL, ORDER_TYPE_MARKET, ORDER_TYPE_LIMIT, ORDER_TYPE_STOP_LOSS_LIMIT
 from binance.exceptions import BinanceAPIException
 
 from src.modules.BinanceClient import BinanceClient
@@ -20,6 +19,9 @@ from src.strategies.moving_average_antecipation import getMovingAverageAntecipat
 from src.strategies.moving_average import getMovingAverageTradeStrategy
 
 from src.indicators import Indicators
+
+from src import main
+
 # fmt: on
 
 load_dotenv()
@@ -123,6 +125,14 @@ class BinanceTraderBot:
         self.time_to_trade = time_to_trade
         self.delay_after_order = delay_after_order
         self.time_to_sleep = time_to_trade
+        
+        self.last_trend_check = 0
+        self.cached_trend = False
+        
+        self.break_even_activated = False
+        
+        self.last_orderbook_check = 0
+        self.cached_orderbook = None
 
         for attempt in range(5):
             try:
@@ -195,9 +205,18 @@ class BinanceTraderBot:
         """
         Retorna True se tendência estiver alinhada em:
         5m + 15m + 1h (usando médias móveis)
+
+        Usa cache de 5 minutos para evitar excesso de chamadas na API.
         """
+
         try:
+
+            # 🔒 Usa cache se já verificou recentemente
+            if time.time() - self.last_trend_check < 300:
+                return self.cached_trend
+
             def get_ma_trend(interval):
+
                 candles = self.client_binance.get_klines(
                     symbol=self.operation_code,
                     interval=interval,
@@ -205,6 +224,7 @@ class BinanceTraderBot:
                 )
 
                 df = pd.DataFrame(candles)
+
                 df.columns = [
                     "open_time","open","high","low","close","volume",
                     "close_time","qav","trades","tbav","tqav","ignore"
@@ -215,7 +235,7 @@ class BinanceTraderBot:
                 ma_fast = df["close"].rolling(5).mean().iloc[-1]
                 ma_slow = df["close"].rolling(20).mean().iloc[-1]
 
-                return ma_fast > ma_slow  # tendência de alta
+                return ma_fast > ma_slow
 
             trend_5m = get_ma_trend(Client.KLINE_INTERVAL_5MINUTE)
             trend_15m = get_ma_trend(Client.KLINE_INTERVAL_15MINUTE)
@@ -226,17 +246,28 @@ class BinanceTraderBot:
             print(f" - 15m : {'ALTA' if trend_15m else 'BAIXA'}")
             print(f" - 1h  : {'ALTA' if trend_1h else 'BAIXA'}")
 
-            return trend_5m and trend_15m and trend_1h
+            result = trend_5m and trend_15m and trend_1h
+
+            # 💾 salva no cache
+            self.cached_trend = result
+            self.last_trend_check = time.time()
+
+            return result
 
         except Exception as e:
-            print(f"Erro ao verificar tendência multi-timeframe: {e}")
-            return False
 
+            print(f"Erro ao verificar tendência multi-timeframe: {e}")
+
+            return False
     # Atualiza todos os dados da conta
     def updateAllData(self, verbose=False):
         try:
             # 1️⃣ Dados atualizados da conta
             self.account_data = self.getUpdatedAccountData()
+
+            if self.account_data is None:
+                print("⚠️ Falha ao obter dados da conta.")
+                return False
 
             # 2️⃣ Dados de mercado
             self.stock_data = self.getStockData()
@@ -281,11 +312,15 @@ class BinanceTraderBot:
 
     # Busca o último balanço da conta, na stock escolhida.
     def getLastStockAccountBalance(self):
+
+        in_wallet_amount = 0.0
+
         for stock in self.account_data["balances"]:
             if stock["asset"] == self.stock_code:
                 free = float(stock["free"])
                 locked = float(stock["locked"])
                 in_wallet_amount = free + locked
+
         return float(in_wallet_amount)
 
     # Checa se a posição atual é comprado ou vendido
@@ -650,10 +685,12 @@ class BinanceTraderBot:
             return False
 
     def getPriceChangePercentage(self, initial_price, close_price):
-        if initial_price == 0:
-            raise ValueError("O initial_price não pode ser zero.")
+
+        if initial_price <= 0:
+            return 0
 
         percentual_change = ((close_price - initial_price) / initial_price) * 100
+
         return percentual_change
 
     # --------------------------------------------------------------
@@ -1087,7 +1124,9 @@ class BinanceTraderBot:
             print(f"Erro ao verificar ordens abertas para {self.operation_code}: {e}")
             return False
 
-    # --------------------------------------------------------------
+    
+    
+    # -------------------------------------------------------------
     # ESTRATÉGIAS DE DECISÃO
 
     # Função que executa estratégias implementadas e retorna a decisão final
@@ -1101,6 +1140,8 @@ class BinanceTraderBot:
             fallback_strategy=self.fallback_strategy,
             fallback_strategy_args=self.fallback_strategy_args,
         )
+        
+        print("📈 Rodando estratégia principal...")
 
         return final_decision
 
@@ -1256,22 +1297,52 @@ class BinanceTraderBot:
     def execute(self):
         try:
             print("------------------------------------------------")
-            print(f'🟢 Executado {datetime.now().strftime("(%H:%M:%S) %d-%m-%Y")}\n')
+            print(f"🟢 Executado {datetime.now().strftime('(%H:%M:%S) %d-%m-%Y')}\n")
 
             # Atualiza todos os dados
             if not self.updateAllData(verbose=True):
                 print("⚠️ Falha na atualização dos dados. Pulando ciclo...")
                 time.sleep(2)
                 return
+            
+            # 🔎 Detectar regime de mercado
+            regime = self.detectMarketRegime()
+            
+            if self.actual_trade_position and not self.stock_data.empty:
+                if self.trailingStopTrigger():
+                    return
 
-            self.updateDailyProfit()
+            # break even
+            if self.breakEvenTrigger():
+                return
+            
+            if self.partialTakeProfitHybrid():
+                return
 
             # 🧹 Limpeza automática de poeira
             if self.cleanDustPosition():
                 return
 
-            # Detector inteligente: Lateralização + Tendência maior
+            self.updateDailyProfit()
+
+            # Detecta pump
+            if self.detectPump() and not self.actual_trade_position:
+                self.buyMarketOrder()
+
+            # Evita operar em baixa volatilidade
+            if self.isLowVolatility():
+                print("⏸️ Pulando trade por baixa volatilidade.")
+                return
+            
+            # Evitar mercado lateral
+            if regime == "SIDEWAYS":
+                print("⏸️ Mercado lateral detectado pelo regime.")
+                return
+
+            # ---------------------------------------------
+            # Detector inteligente: Lateralização + Tendência
             if self.actual_trade_position:
+
                 sideways = self.isMarketSideways()
                 multi_trend_ok = self.getTrendMultiTimeframe()
 
@@ -1282,59 +1353,107 @@ class BinanceTraderBot:
                     if self.sideways_counter >= self.sideways_limit and not multi_trend_ok:
                         print("🔻 Lateralização persistente + tendência fraca detectada.")
 
-                        close_price = self.stock_data["close_price"].iloc[-1]
-                        half_value = (self.last_stock_account_balance * 0.5) * close_price
+                        if not self.stock_data.empty:
+                            close_price = self.stock_data["close_price"].iloc[-1]
 
-                        self.cancelAllOrders()
-                        time.sleep(1)
+                            quantity_half = self.last_stock_account_balance * 0.5
+                            value_half = quantity_half * close_price
 
-                        if half_value < 5:
-                            print("⚠️ Posição pequena demais para redução parcial. Vendendo 100%...")
-                            self.sellMarketOrder()
-                        else:
-                            print("🔻 Reduzindo posição em 50% por mercado lateral...")
-                            self.sellMarketOrder(quantity=self.last_stock_account_balance * 0.5)
+                            self.cancelAllOrders()
+                            time.sleep(1)
+
+                            if value_half < 5:
+                                print("⚠️ Posição pequena demais para redução parcial. Vendendo 100%...")
+                                self.sellMarketOrder()
+                            else:
+                                print("🔻 Reduzindo posição em 50% por mercado lateral...")
+                                self.sellMarketOrder(quantity=quantity_half)
 
                         self.sideways_counter = 0
                         return
                 else:
                     self.sideways_counter = 0
 
-            # ... (restante do seu código permanece exatamente igual)
+            # 🚀 Detector institucional
+            if regime in ["TREND", "EXPLOSIVE"] and self.detectInstitutionalMomentum() and not self.actual_trade_position:
 
-            print("------------------------------------------------")
+                print("🔥 Entrada institucional antecipada")
+
+                if not self.actual_trade_position:
+                    self.buyMarketOrder()
+
+                return
+
+            # ---------------------------------------------
+            # EXECUTAR ESTRATÉGIA
+
+            whale_signal = self.detectWhalePressure()
+
+            liquidity_signal = self.detectLiquidityWall()
+            liquidation_signal = self.detectLiquidationMove()
+            strategy_signal = self.getFinalDecisionStrategy()
+
+            print(f"📊 Estratégia: {strategy_signal}")
+            print(f"💧 Liquidez: {liquidity_signal}")
+            print(f"💥 Liquidação: {liquidation_signal}")
+
+            signal = None
+
+            if whale_signal == "BUY":
+                signal = whale_signal
+            elif liquidation_signal:
+                signal = liquidation_signal
+            elif liquidity_signal:
+                signal = liquidity_signal
+            else:
+                signal = strategy_signal
+
+            # ---------------------------------------------
+            # COMPRA
+            if signal in [True, "BUY"] and self.getTrendMultiTimeframe():
+
+                if not self.actual_trade_position:
+                    print("🚀 Entrada confirmada.")
+                    self.buyLimitedOrder()
+
+            # ---------------------------------------------
+            # VENDA
+            elif signal in [False, "SELL"]:
+
+                if self.actual_trade_position:
+                    print("⚠️ Saída confirmada.")
+                    self.sellMarketOrder()
 
         except Exception as e:
-            print(f"❌ ERRO NO LOOP PRINCIPAL: {e}")
-            time.sleep(2)
-
+            print(f"❌ Erro no ciclo do robô: {e}")
+                        
     def cleanDustPosition(self):
-        """
-        Limpa posições residuais (dust) menores que o mínimo negociável.
-        Evita loops infinitos de venda quando sobra poeira.
-        """
-        try:
-            close_price = self.stock_data["close_price"].iloc[-1]
-            notional_value = self.last_stock_account_balance * close_price
+            """
+            Limpa posições residuais (dust) menores que o mínimo negociável.
+            Evita loops infinitos de venda quando sobra poeira.
+            """
+            try:
+                close_price = self.stock_data["close_price"].iloc[-1]
+                notional_value = self.last_stock_account_balance * close_price
 
-            if self.last_stock_account_balance > 0 and notional_value < 5:
-                print("\n🧹 Poeira detectada na carteira:")
-                print(f" - Quantidade: {self.last_stock_account_balance:.8f} {self.stock_code}")
-                print(f" - Valor estimado: {notional_value:.4f} USDT")
-                print("⚠️ Valor abaixo do mínimo negociável da Binance (< 5 USDT).")
-                print("🔄 Marcando posição como zerada para evitar loops de venda.\n")
+                if 0 < notional_value < 5:
+                    print("\n🧹 Poeira detectada na carteira:")
+                    print(f" - Quantidade: {self.last_stock_account_balance:.8f} {self.stock_code}")
+                    print(f" - Valor estimado: {notional_value:.4f} USDT")
+                    print("⚠️ Valor abaixo do mínimo negociável da Binance (< 5 USDT).")
+                    print("🔄 Marcando posição como zerada para evitar loops de venda.\n")
 
-                # Marca como sem posição
-                self.actual_trade_position = False
-                self.last_stock_account_balance = 0.0
-                return True
+                    # Marca como sem posição
+                    self.actual_trade_position = False
+                    self.last_stock_account_balance = 0.0
+                    return True
 
-            return False
+                return False
 
-        except Exception as e:
-            print(f"Erro ao limpar poeira: {e}")
-            return False
-    
+            except Exception as e:
+                print(f"Erro ao limpar poeira: {e}")
+                return False
+                            
     def getCurrentOperationProfit(self):
         """
         Calcula lucro/prejuízo da operação atual (não realizado).
@@ -1360,7 +1479,7 @@ class BinanceTraderBot:
         except Exception as e:
             print(f"Erro ao calcular lucro da operação: {e}")
             return 0.0, 0.0
-    
+        
     def updateDailyProfit(self):
         """
         Calcula lucro realizado no dia baseado nas ordens FILLED.
@@ -1405,7 +1524,7 @@ class BinanceTraderBot:
 
         except Exception as e:
             print(f"Erro ao atualizar lucro diário: {e}")
-        
+            
     def printOperationResult(self, sell_price, quantity):
         """ Mostra o lucro/prejuízo da operação atual
         """
@@ -1430,7 +1549,7 @@ class BinanceTraderBot:
 
         except Exception as e:
             print(f"Erro ao calcular PnL: {e}")
-    
+
     def breakEvenTrigger(self):
         """
         Move o stop para o preço de entrada quando lucro atinge o break-even configurado por ativo
@@ -1452,7 +1571,7 @@ class BinanceTraderBot:
             print("🛡️ Break-even ativado!")
 
         return False
-    
+
     def partialTakeProfitHybrid(self):
         """
         Realiza vendas parciais em níveis de lucro e deixa o restante rodar com trailing.
@@ -1488,7 +1607,7 @@ class BinanceTraderBot:
                 return True
 
         return False
-    
+
     def close_position_market(self):
         """
         Fecha posição atual a mercado usando o saldo real.
@@ -1506,7 +1625,7 @@ class BinanceTraderBot:
             quantity = self.last_stock_account_balance
 
             # Ajusta ao step da Binance
-            quantity = self.adjust_to_step(quantity, self.step_size, as_string=True)
+            quantity = self.adjust_to_step(quantity, self.step_size, as_string=False)
 
             if float(quantity) * close_price < 5:
                 print("⚠️ Valor muito pequeno para fechar posição.")
@@ -1527,6 +1646,232 @@ class BinanceTraderBot:
             print("✅ Posição encerrada com sucesso.")
             return order
 
+        except BinanceAPIException as e:
+            print("⚠️ Erro Binance:", e)
+            time.sleep(5)
+
         except Exception as e:
-            print("❌ Erro ao fechar posição:", e)
+            print("❌ Erro inesperado:", e)
+            time.sleep(2)
+
+    def detectPump(self):
+
+        volume = self.stock_data["volume"].iloc[-1]
+        avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
+
+        close = self.stock_data["close_price"].iloc[-1]
+        prev = self.stock_data["close_price"].iloc[-2]
+
+        if prev == 0:
+            return None
+
+        price_change = (close - prev) / prev
+
+        if volume > avg_volume * 2 and price_change > 0.005:
+
+            print("🚀 POSSÍVEL PUMP DETECTADO")
+
+            return True
+
+        return False
+
+    def isLowVolatility(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+
+            # Range do mercado
+            recent_range = (closes.iloc[-20:].max() - closes.iloc[-20:].min()) / closes.iloc[-20:].min()
+
+            # ATR simplificado
+            true_ranges = (highs - lows)
+            atr = true_ranges.rolling(14).mean().iloc[-1]
+
+            atr_pct = atr / closes.iloc[-1]
+
+            print(f"📊 Range 20 candles: {recent_range*100:.2f}%")
+            print(f"📊 ATR: {atr_pct*100:.2f}%")
+
+            if recent_range < 0.005 and atr_pct < 0.002:
+
+                print("⚠️ Mercado realmente sem volatilidade.")
+
+                return True
+
             return False
+
+        except Exception as e:
+
+            print("Erro ao calcular volatilidade:", e)
+
+            return False
+
+    def detectLiquidationMove(self):
+
+        volume = self.stock_data["volume"].iloc[-1]
+        avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
+
+        close = self.stock_data["close_price"].iloc[-1]
+        prev = self.stock_data["close_price"].iloc[-2]
+
+        price_change = (close - prev) / prev
+
+        if volume > avg_volume * 3 and abs(price_change) > 0.01:
+
+            print("💥 Liquidação detectada")
+
+            if price_change > 0:
+                return "BUY"
+            else:
+                return "SELL"
+
+        return None    
+    
+    def detectInstitutionalMomentum(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            current_price = closes.iloc[-1]
+
+            avg_volume = volumes.rolling(20).mean().iloc[-1]
+            current_volume = volumes.iloc[-1]
+
+            recent_high = closes.iloc[-30:-1].max()
+
+            volume_spike = avg_volume > 0 and current_volume > avg_volume * 2
+            breakout = current_price >= recent_high * 0.999
+
+            price_momentum = (current_price - closes.iloc[-2]) / closes.iloc[-2]
+
+            trend = closes.iloc[-1] > closes.rolling(20).mean().iloc[-1]
+
+            if volume_spike and breakout and price_momentum > 0.003 and trend:
+
+                print("🚀 MOMENTUM INSTITUCIONAL DETECTADO")
+
+                print(f"Volume spike: {current_volume / avg_volume:.2f}x")
+                print(f"Breakout nível: {recent_high}")
+
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no detector institucional:", e)
+
+            return False
+    
+    def detectWhalePressure(self):
+
+        try:
+
+            depth = self.getCachedOrderBook()
+            
+
+            bids = depth["bids"]
+            asks = depth["asks"]
+
+            bid_volume = sum(float(b[1]) for b in bids[:10])
+            ask_volume = sum(float(a[1]) for a in asks[:10])
+
+            imbalance = bid_volume / ask_volume if ask_volume > 0 else 0
+
+            print(f"🐋 Pressão de compra: {bid_volume}")
+            print(f"🐋 Pressão de venda : {ask_volume}")
+            print(f"⚖️ Imbalance: {imbalance:.2f}")
+
+            if imbalance > 1.6:
+                print("🚀 Baleias comprando forte!")
+                return "BUY"
+
+            if imbalance < 0.6:
+                print("🔻 Baleias vendendo forte!")
+                return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de baleias:", e)
+
+            return None
+        
+    def getCachedOrderBook(self):
+
+        try:
+
+            # usa cache por 5 segundos
+            if self.cached_orderbook and time.time() - self.last_orderbook_check < 5:
+                return self.cached_orderbook
+
+            depth = self.client_binance.get_order_book(
+                symbol=self.operation_code,
+                limit=50
+            )
+
+            self.cached_orderbook = depth
+            self.last_orderbook_check = time.time()
+
+            return depth
+
+        except Exception as e:
+
+            print("Erro ao obter orderbook:", e)
+
+            return self.cached_orderbook
+        
+    def detectMarketRegime(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+            volumes = self.stock_data["volume"]
+
+            # tendência usando média
+            ma20 = closes.rolling(20).mean().iloc[-1]
+            ma50 = closes.rolling(50).mean().iloc[-1]
+
+            # range
+            recent_range = (closes.iloc[-20:].max() - closes.iloc[-20:].min()) / closes.iloc[-20:].min()
+
+            # volume
+            avg_volume = volumes.rolling(20).mean().iloc[-1]
+            current_volume = volumes.iloc[-1]
+
+            # ATR simplificado
+            atr = (highs - lows).rolling(14).mean().iloc[-1]
+            atr_pct = atr / closes.iloc[-1]
+
+            # ----------------------------
+
+            # mercado explosivo
+            if current_volume > avg_volume * 2 and atr_pct > 0.004:
+                print("🔥 REGIME: EXPLOSIVO")
+                return "EXPLOSIVE"
+
+            # mercado em tendência
+            if abs(ma20 - ma50) / closes.iloc[-1] > 0.002:
+                print("📈 REGIME: TREND")
+                return "TREND"
+
+            # mercado lateral
+            if recent_range < 0.01:
+                print("↔️ REGIME: SIDEWAYS")
+                return "SIDEWAYS"
+
+            return "NORMAL"
+
+        except Exception as e:
+
+            print("Erro ao detectar regime:", e)
+
+            return "NORMAL"
