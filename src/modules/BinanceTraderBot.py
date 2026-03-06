@@ -1399,6 +1399,8 @@ class BinanceTraderBot:
             
             sweep_signal = self.detectLiquiditySweepReversal()
             
+            trap_signal = self.detectMarketMakerTrap()
+            
             multi_trend_ok = self.getTrendMultiTimeframe()
             
             # normalizar sinal
@@ -1415,11 +1417,15 @@ class BinanceTraderBot:
 
             signal = None
 
-            # prioridade máxima
+            # spoofing (maior prioridade)
             if spoof_signal:
                 signal = spoof_signal
 
-            # caça de stops (muito forte)
+            # market maker trap
+            elif trap_signal:
+                signal = trap_signal
+
+            # stop hunt
             elif sweep_signal:
                 signal = sweep_signal
 
@@ -1438,7 +1444,7 @@ class BinanceTraderBot:
             # fallback estratégia
             else:
                 signal = strategy_signal
-                
+        
             # ---------------------------------------------
             # COMPRA
             if signal in [True, "BUY"] and (multi_trend_ok or regime == "EXPLOSIVE"):
@@ -2049,3 +2055,47 @@ class BinanceTraderBot:
             print("Erro no detector de spoofing:", e)
 
             return None
+        
+    def detectMarketMakerTrap(self):
+        """
+        Detecta armadilha de market maker (fake breakout + reversão).
+        Retorna BUY, SELL ou None.
+        """
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 20:
+                return None
+
+            current_close = closes.iloc[-1]
+            previous_close = closes.iloc[-2]
+
+            recent_high = highs.iloc[-20:-1].max()
+            recent_low = lows.iloc[-20:-1].min()
+
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            # trap de compra (fake breakout para baixo)
+            if previous_close < recent_low and current_close > recent_low and current_volume > avg_volume * 1.5:
+
+                print("🪤 Market Maker Trap detectada (reversão para cima)")
+                return "BUY"
+
+            # trap de venda (fake breakout para cima)
+            if previous_close > recent_high and current_close < recent_high and current_volume > avg_volume * 1.5:
+
+                print("🪤 Market Maker Trap detectada (reversão para baixo)")
+                return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de Market Maker Trap:", e)
+            return None    
