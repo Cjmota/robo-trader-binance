@@ -224,7 +224,7 @@ def trader_master_loop():
 
             print("🔎 Procurando melhor oportunidade...")
 
-            symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=5)
+            symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=12)
             
             if not symbols:
                 print("⚠️ Nenhuma oportunidade encontrada.")
@@ -284,6 +284,8 @@ def trader_master_loop():
 
                     # normalizar decisão
                     decision_str = str(decision).upper()
+                    
+                    print(f"🔎 Decisão da estratégia: {decision_str}")
 
                     if decision_str in ["TRUE", "BUY", "COMPRAR"]:
                         print(f"🚀 Oportunidade encontrada em {symbol}")
