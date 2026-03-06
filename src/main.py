@@ -156,7 +156,6 @@ for stock in config["stocks_traded_list"]:
     )
     stocks_traded_list.append(asset)
 
-THREAD_LOCK = True # True = Executa 1 moeda por vez | False = Executa todas simultânemaente
 
 # 🔴🔴🔴 CONFIGURAÇÕES - FIM 🔴🔴🔴
 # -------------------------------------------------------------------------------------------------
@@ -309,26 +308,31 @@ def trader_master_loop():
             current_trader.execute()
 
             if not current_trader.actual_trade_position:
-    
-                # 🔥 Registrar trade finalizado
+
+                print("⚠️ Nenhuma posição aberta. Aplicando cooldown...")
+
+                symbol_cooldown[last_traded_symbol] = time.time()
+
                 if hasattr(current_trader, "last_trade_profit"):
 
                     profit = current_trader.last_trade_profit
-                    
+
                     TRADE_HISTORY.append({
                         "timestamp": time.time(),
                         "asset": current_trader.operation_code,
-                        "profit": current_trader.last_trade_profit
+                        "profit": profit
                     })
-                    
+
                     update_market_memory(current_trader.operation_code, profit)
 
-                current_trader = None 
-                last_traded_symbol = None           
-            
-
-        sleep_time = max(10, TEMPO_ENTRE_TRADES)
-        time.sleep(sleep_time)
+                current_trader = None
+                last_traded_symbol = None
+                
+                time.sleep(15)
+        
+        # 🔥 sleep global do loop        
+        cooldown = max(15, TEMPO_ENTRE_TRADES)
+        time.sleep(cooldown)
 
     print("🛑 Loop do robô finalizado.")
 
@@ -421,7 +425,7 @@ def scan_market_top_symbols(client, limit=10):
                     limit=30
                 )
                 
-                time.sleep(0.05)
+                time.sleep(0.1)
 
                 closes = [float(c[4]) for c in candles]
                 volumes = [float(c[5]) for c in candles]
@@ -570,6 +574,8 @@ def scan_market_top_symbols(client, limit=10):
         best = [s[0] for s in candidates[:limit]]
 
         print("🔥 TOP OPORTUNIDADES:", best)
+
+        time.sleep(2)
 
         return best
 

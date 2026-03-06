@@ -701,12 +701,9 @@ class BinanceTraderBot:
         try:
             if not self.actual_trade_position:  # Se a posição for vendida
 
-                if quantity is None:  # Se não definida, vende tudo
-                    quantity = self.adjust_to_step(
-                        self.last_stock_account_balance,
-                        self.step_size,
-                        as_string=True,
-                    )
+                if quantity is None:
+                    close_price = self.stock_data["close_price"].iloc[-1]
+                    quantity = self.capital / close_price
                 else:
                     quantity = self.adjust_to_step(
                         quantity,
@@ -1409,27 +1406,36 @@ class BinanceTraderBot:
             print(f"💧 Liquidez: {liquidity_signal}")
             print(f"💥 Liquidação: {liquidation_signal}")
 
-            signal = None
+            signal = strategy_signal
 
+            # prioridade máxima
             if spoof_signal:
                 signal = spoof_signal
 
-            # prioridade institucional
-            if whale_signal and volume_spike:
+            # institucional
+            elif whale_signal and volume_spike:
                 signal = whale_signal
 
+            # liquidez
             elif liquidity_signal:
                 signal = liquidity_signal
 
+            # liquidação
             elif liquidation_signal:
                 signal = liquidation_signal
-
-            else:
-                signal = strategy_signal
                 
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and self.getTrendMultiTimeframe():
+            if signal in [True, "BUY"] and (self.getTrendMultiTimeframe() or regime == "EXPLOSIVE"):
+
+                # 🔎 Filtros institucionais antes da entrada
+                if self.detectFakeBreakout():
+                    print("⚠️ Entrada cancelada: fake breakout")
+                    return
+
+                if self.detectAbsorption():
+                    print("🏦 Absorção detectada, aguardando confirmação")
+                    return
 
                 if not self.actual_trade_position:
                     print("🚀 Entrada confirmada.")
