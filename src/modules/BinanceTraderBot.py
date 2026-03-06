@@ -246,7 +246,8 @@ class BinanceTraderBot:
             print(f" - 15m : {'ALTA' if trend_15m else 'BAIXA'}")
             print(f" - 1h  : {'ALTA' if trend_1h else 'BAIXA'}")
 
-            result = trend_5m and trend_15m and trend_1h
+            bull_count = sum([trend_5m, trend_15m, trend_1h])
+            result = bull_count >= 2
 
             # 💾 salva no cache
             self.cached_trend = result
@@ -1305,8 +1306,13 @@ class BinanceTraderBot:
             # 🔎 Detectar regime de mercado
             regime = self.detectMarketRegime()
             
-            whale_signal = self.detectWhalePressure()
+            volume_spike = self.detectPump()
+            pump_signal = volume_spike
+            
             sweep_signal = self.detectLiquiditySweepReversal()
+            whale_signal = self.detectWhalePressure()
+            
+            multi_trend_ok = self.getTrendMultiTimeframe()
             
             if self.actual_trade_position and not self.stock_data.empty:
                 if self.trailingStopTrigger():
@@ -1324,9 +1330,6 @@ class BinanceTraderBot:
                 return
 
             self.updateDailyProfit()
-
-            # Detecta pump
-            pump_signal = self.detectPump()
 
             if pump_signal and not self.actual_trade_position and regime == "EXPLOSIVE":
                 print("🚀 Pump confirmado em regime explosivo.")
@@ -1347,8 +1350,7 @@ class BinanceTraderBot:
             if self.actual_trade_position:
 
                 sideways = self.isMarketSideways()
-                multi_trend_ok = self.getTrendMultiTimeframe()
-
+                
                 if sideways:
                     self.sideways_counter += 1
                     print(f"⚠️ Lateralização detectada ({self.sideways_counter}/{self.sideways_limit})")
@@ -1389,12 +1391,8 @@ class BinanceTraderBot:
 
             # ---------------------------------------------
             # ---------------------------------------------
-            # EXECUTAR ESTRATÉGIA
-
-            whale_signal = self.detectWhalePressure()
-
-            volume_spike = self.detectPump()
-
+            # EXECUTAR ESTRATÉGIA   
+            
             liquidity_signal = self.detectLiquidityWall()
 
             liquidation_signal = self.detectLiquidationMove()
@@ -1402,15 +1400,34 @@ class BinanceTraderBot:
             strategy_signal = self.getFinalDecisionStrategy()
 
             # 🔥 TODOS OS DETECTORES PRIMEIRO
-            sweep_signal = self.detectLiquiditySweepReversal()
-
+           
             trap_signal = self.detectMarketMakerTrap()
 
             compression_signal = self.detectVolatilityCompression()
 
             spoof_signal = self.detectSpoofing()
+            
+            score = 0
 
-            multi_trend_ok = self.getTrendMultiTimeframe()
+            if trap_signal:
+                score += 3
+
+            if sweep_signal:
+                score += 3
+
+            if whale_signal == "BUY":
+                score += 2
+
+            if volume_spike:
+                score += 1
+
+            if compression_signal:
+                score += 1
+
+            if multi_trend_ok:
+                score += 2
+
+            print(f"📊 Score de entrada: {score}")
             
             # normalizar sinal
             if strategy_signal in ["Comprar", "BUY", True]:
@@ -1437,8 +1454,8 @@ class BinanceTraderBot:
                 signal = sweep_signal
 
             # institucional
-            elif whale_signal and volume_spike:
-                signal = whale_signal
+            elif whale_signal == "BUY" and volume_spike:
+                signal = "BUY"
 
             # liquidez
             elif liquidity_signal:
@@ -1454,7 +1471,7 @@ class BinanceTraderBot:
         
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and (multi_trend_ok or regime == "EXPLOSIVE"):
+            if signal in [True, "BUY"] and score >= 4:
 
                 # 🔎 Filtros institucionais antes da entrada
                 if self.detectFakeBreakout():
