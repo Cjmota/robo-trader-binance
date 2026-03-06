@@ -4,6 +4,7 @@ import json
 import time
 import os
 import logging
+import math
 
 import pytz
 br_tz = pytz.timezone("America/Sao_Paulo")
@@ -391,6 +392,14 @@ def scan_market_top_symbols(client, limit=10):
 
             price = float(t.get("lastPrice", 0))
 
+            bid = float(t.get("bidPrice", 0))
+            ask = float(t.get("askPrice", 0))
+
+            if bid > 0 and ask > 0:
+                spread = (ask - bid) / bid
+                if spread > 0.003:
+                    continue
+
             if price == 0:
                 continue
 
@@ -410,7 +419,7 @@ def scan_market_top_symbols(client, limit=10):
 
                 closes = [float(c[4]) for c in candles]
                 volumes = [float(c[5]) for c in candles]
-                avg_volume = sum(volumes[-20:]) / 20
+                avg_volume = sum(volumes[-20:]) / max(len(volumes[-20:]),1)
                 current_volume = volumes[-1]
                 highs = [float(c[2]) for c in candles]
                 lows = [float(c[3]) for c in candles]
@@ -418,8 +427,8 @@ def scan_market_top_symbols(client, limit=10):
                 # -----------------------------
                 # ORDER FLOW ACCELERATION
 
-                volume_recent = sum(volumes[-5:]) / 5
-                volume_previous = sum(volumes[-10:-5]) / 5
+                volume_recent = sum(volumes[-5:]) / max(len(volumes[-5:]),1)
+                volume_previous = sum(volumes[-10:-5]) / max(len(volumes[-10:-5]),1)
 
                 if volume_previous == 0:
                     volume_acceleration = 0
@@ -466,6 +475,11 @@ def scan_market_top_symbols(client, limit=10):
                     bollinger_width = (std_dev * 2) / closes[-1]
                     squeeze_signal = bollinger_width < 0.008
                 
+                accumulation_signal = (
+                    volatility < 0.02 and
+                    volume_recent > avg_volume * 1.3
+                )
+                
                 # -----------------------------
                 # DETECTOR DE PRÉ-PUMP
 
@@ -476,11 +490,11 @@ def scan_market_top_symbols(client, limit=10):
                 pre_pump_signal = (
                     recent_range < 0.015 and
                     volume_spike and
-                    closes[-1] > closes[-3]
+                    len(closes) >= 3 and closes[-1] > closes[-3]
                 )
 
                 # evita moedas lateralizadas
-                if volatility < 0.01:
+                if volatility < 0.006:
                     continue
 
                 # evita pump exagerado
@@ -490,7 +504,12 @@ def scan_market_top_symbols(client, limit=10):
                 if closes[-5] == 0:
                     continue
 
-                momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.00000001)  
+                momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.00000001) 
+                 
+                dump_risk = (closes[-1] - closes[-3]) / max(closes[-3], 0.00000001)
+
+                if dump_risk < -0.04:
+                    continue
                 
                 # -----------------------------
                 # LIQUIDITY SWEEP DETECTOR
@@ -510,8 +529,8 @@ def scan_market_top_symbols(client, limit=10):
                     continue
 
                 score = (
-                    volume *
-                    volatility *
+                    math.log(max(volume,1)) *
+                    (volatility ** 0.7) *
                     abs(trend_strength) *
                     abs(price_change) *
                     abs(momentum) *
@@ -520,6 +539,8 @@ def scan_market_top_symbols(client, limit=10):
                     (ADAPTIVE_WEIGHTS["orderflow"] if orderflow_signal else 1) *
                     (ADAPTIVE_WEIGHTS["sweep"] if liquidity_sweep_signal else 1)
                 )
+                
+                score *= (1.5 if accumulation_signal else 1)
                 
                 # bônus de win rate
                 if symbol in MARKET_MEMORY:
