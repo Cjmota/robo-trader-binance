@@ -1407,6 +1407,8 @@ class BinanceTraderBot:
 
             spoof_signal = self.detectSpoofing()
             
+            vacuum_signal = self.detectLiquidityVacuum()
+            
             score = 0
 
             if trap_signal:
@@ -1414,6 +1416,9 @@ class BinanceTraderBot:
 
             if sweep_signal:
                 score += 3
+                
+            if vacuum_signal:
+                score += 2
 
             if whale_signal == "BUY":
                 score += 2
@@ -1452,6 +1457,9 @@ class BinanceTraderBot:
             # stop hunt
             elif sweep_signal:
                 signal = sweep_signal
+
+            elif vacuum_signal:
+                signal = vacuum_signal
 
             # institucional
             elif whale_signal == "BUY" and volume_spike:
@@ -2090,7 +2098,51 @@ class BinanceTraderBot:
             print("Erro no detector de spoofing:", e)
 
             return None
-        
+    def detectLiquidityVacuum(self):
+        """
+        Detecta vácuo de liquidez no orderbook.
+        Quando há pouca liquidez perto do preço atual,
+        o mercado tende a se mover rapidamente.
+        """
+
+        try:
+
+            depth = self.getCachedOrderBook()
+
+            bids = depth["bids"][:10]
+            asks = depth["asks"][:10]
+
+            bid_volume = sum(float(b[1]) for b in bids)
+            ask_volume = sum(float(a[1]) for a in asks)
+
+            close_price = self.stock_data["close_price"].iloc[-1]
+
+            total_liquidity = bid_volume + ask_volume
+
+            print(f"🌪️ Liquidity Vacuum check: {total_liquidity:.4f}")
+
+            # Liquidez muito baixa
+            if total_liquidity < 5:
+
+                print("🌪️ Vácuo de liquidez detectado!")
+
+                # direção baseada em imbalance
+                if bid_volume > ask_volume:
+                    print("🚀 Possível pump por falta de liquidez")
+                    return "BUY"
+
+                elif ask_volume > bid_volume:
+                    print("🔻 Possível dump por falta de liquidez")
+                    return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de Liquidity Vacuum:", e)
+            return None
+    
+    
     def detectMarketMakerTrap(self):
         """
         Detecta armadilha de market maker (fake breakout + reversão).
