@@ -1394,7 +1394,15 @@ class BinanceTraderBot:
 
             liquidity_signal = self.detectLiquidityWall()
             liquidation_signal = self.detectLiquidationMove()
+            
             strategy_signal = self.getFinalDecisionStrategy()
+            
+            # normalizar sinal
+            if strategy_signal in ["Comprar", "BUY", True]:
+                strategy_signal = "BUY"
+
+            elif strategy_signal in ["Vender", "SELL", False]:
+                strategy_signal = "SELL"
             spoof_signal = self.detectSpoofing()
 
             print(f"📊 Estratégia: {strategy_signal}")

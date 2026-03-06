@@ -277,11 +277,15 @@ def trader_master_loop():
                         fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
                     )
 
-                    trader.updateAllData()
+                    if not trader.updateAllData():
+                        continue
 
                     decision = trader.getFinalDecisionStrategy()
 
-                    if decision is True:
+                    # normalizar decisão
+                    decision_str = str(decision).upper()
+
+                    if decision_str in ["TRUE", "BUY", "COMPRAR"]:
                         print(f"🚀 Oportunidade encontrada em {symbol}")
                         symbol_cooldown[symbol] = time.time()
                         last_traded_symbol = symbol
