@@ -1385,22 +1385,28 @@ class BinanceTraderBot:
                 return
 
             # ---------------------------------------------
+            # ---------------------------------------------
             # EXECUTAR ESTRATÉGIA
 
             whale_signal = self.detectWhalePressure()
 
-            # confirmação de volume
             volume_spike = self.detectPump()
 
             liquidity_signal = self.detectLiquidityWall()
+
             liquidation_signal = self.detectLiquidationMove()
-            
+
             strategy_signal = self.getFinalDecisionStrategy()
-            
+
+            # 🔥 TODOS OS DETECTORES PRIMEIRO
             sweep_signal = self.detectLiquiditySweepReversal()
-            
+
             trap_signal = self.detectMarketMakerTrap()
-            
+
+            compression_signal = self.detectVolatilityCompression()
+
+            spoof_signal = self.detectSpoofing()
+
             multi_trend_ok = self.getTrendMultiTimeframe()
             
             # normalizar sinal
@@ -1457,6 +1463,17 @@ class BinanceTraderBot:
                 if self.detectAbsorption():
                     print("🏦 Absorção detectada, aguardando confirmação")
                     return
+                
+                capital_to_use = self.calculatePositionSize(
+                    signal,
+                    sweep_signal,
+                    trap_signal,
+                    whale_signal,
+                    volume_spike,
+                    compression_signal
+                )
+
+                self.capital = capital_to_use
 
                 if not self.actual_trade_position:
                     print("🚀 Entrada confirmada.")
@@ -2099,3 +2116,30 @@ class BinanceTraderBot:
 
             print("Erro no detector de Market Maker Trap:", e)
             return None    
+        
+    def calculatePositionSize(self, signal, sweep_signal, trap_signal, whale_signal, volume_spike, compression_signal):
+        """
+        Define o tamanho da posição baseado na força do setup.
+        """
+
+        base_capital = self.capital
+
+        if trap_signal:
+            print("💰 Setup forte: Market Maker Trap")
+            return base_capital * 1.0
+
+        elif sweep_signal:
+            print("💰 Setup forte: Liquidity Sweep")
+            return base_capital * 0.9
+
+        elif whale_signal and volume_spike:
+            print("💰 Setup institucional detectado")
+            return base_capital * 0.8
+
+        elif compression_signal:
+            print("💰 Breakout após compressão")
+            return base_capital * 0.7
+
+        else:
+            print("💰 Setup padrão")
+            return base_capital * 0.4
