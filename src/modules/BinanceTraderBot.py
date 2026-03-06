@@ -1305,6 +1305,9 @@ class BinanceTraderBot:
             # 🔎 Detectar regime de mercado
             regime = self.detectMarketRegime()
             
+            whale_signal = self.detectWhalePressure()
+            sweep_signal = self.detectLiquiditySweepReversal()
+            
             if self.actual_trade_position and not self.stock_data.empty:
                 if self.trailingStopTrigger():
                     return
@@ -1414,8 +1417,6 @@ class BinanceTraderBot:
                 strategy_signal = "BUY"
             elif strategy_signal in ["Vender", "SELL", False]:
                 strategy_signal = "SELL"
-                
-            spoof_signal = self.detectSpoofing()
 
             print(f"📊 Estratégia: {strategy_signal}")
             print(f"💧 Liquidez: {liquidity_signal}")
