@@ -1323,8 +1323,12 @@ class BinanceTraderBot:
             self.updateDailyProfit()
 
             # Detecta pump
-            if self.detectPump() and not self.actual_trade_position:
+            pump_signal = self.detectPump()
+
+            if pump_signal and not self.actual_trade_position and regime == "EXPLOSIVE":
+                print("🚀 Pump confirmado em regime explosivo.")
                 self.buyMarketOrder()
+                return
 
             # Evita operar em baixa volatilidade
             if self.isLowVolatility():
@@ -1394,23 +1398,31 @@ class BinanceTraderBot:
             
             strategy_signal = self.getFinalDecisionStrategy()
             
+            sweep_signal = self.detectLiquiditySweepReversal()
+            
+            multi_trend_ok = self.getTrendMultiTimeframe()
+            
             # normalizar sinal
             if strategy_signal in ["Comprar", "BUY", True]:
                 strategy_signal = "BUY"
-
             elif strategy_signal in ["Vender", "SELL", False]:
                 strategy_signal = "SELL"
+                
             spoof_signal = self.detectSpoofing()
 
             print(f"📊 Estratégia: {strategy_signal}")
             print(f"💧 Liquidez: {liquidity_signal}")
             print(f"💥 Liquidação: {liquidation_signal}")
 
-            signal = strategy_signal
+            signal = None
 
             # prioridade máxima
             if spoof_signal:
                 signal = spoof_signal
+
+            # caça de stops (muito forte)
+            elif sweep_signal:
+                signal = sweep_signal
 
             # institucional
             elif whale_signal and volume_spike:
@@ -1423,10 +1435,14 @@ class BinanceTraderBot:
             # liquidação
             elif liquidation_signal:
                 signal = liquidation_signal
+
+            # fallback estratégia
+            else:
+                signal = strategy_signal
                 
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and (self.getTrendMultiTimeframe() or regime == "EXPLOSIVE"):
+            if signal in [True, "BUY"] and (multi_trend_ok or regime == "EXPLOSIVE"):
 
                 # 🔎 Filtros institucionais antes da entrada
                 if self.detectFakeBreakout():
@@ -1960,6 +1976,46 @@ class BinanceTraderBot:
             return True
 
         return False
+    
+    def detectLiquiditySweepReversal(self):
+        """
+        Detecta varredura de liquidez (stop hunt) seguida de reversão.
+        Retorna "BUY", "SELL" ou None.
+        """
+        try:
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 20:
+                return None
+
+            recent_low = lows.iloc[-2]
+            previous_low = lows.iloc[-10:-2].min()
+
+            recent_high = highs.iloc[-2]
+            previous_high = highs.iloc[-10:-2].max()
+
+            close = closes.iloc[-1]
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            # Sweep de fundo → possível reversão de alta
+            if recent_low < previous_low and close > previous_low and current_volume > avg_volume * 1.2:
+                print("🧹 Liquidity sweep detectado no fundo (stop hunt)")
+                return "BUY"
+
+            # Sweep de topo → possível reversão de baixa
+            if recent_high > previous_high and close < previous_high and current_volume > avg_volume * 1.2:
+                print("🧹 Liquidity sweep detectado no topo (stop hunt)")
+                return "SELL"
+
+            return None
+
+        except Exception as e:
+            print("Erro no detector de liquidity sweep:", e)
+            return None
     
     def detectSpoofing(self):
 
