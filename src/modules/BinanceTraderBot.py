@@ -2144,3 +2144,38 @@ class BinanceTraderBot:
         else:
             print("💰 Setup padrão")
             return base_capital * 0.4
+        
+    def detectVolatilityCompression(self):
+        """
+        Detecta compressão de volatilidade (Bollinger squeeze simplificado).
+        Geralmente precede movimentos fortes.
+        """
+
+        try:
+
+            closes = self.stock_data["close_price"]
+
+            if len(closes) < 20:
+                return False
+
+            std = closes.iloc[-20:].std()
+            mean = closes.iloc[-20:].mean()
+
+            if mean == 0:
+                return False
+
+            bollinger_width = (std * 2) / mean
+
+            print(f"📉 Compressão volatilidade: {bollinger_width:.4f}")
+
+            if bollinger_width < 0.006:
+                print("📦 Compressão de volatilidade detectada")
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no detector de compressão:", e)
+
+            return False
