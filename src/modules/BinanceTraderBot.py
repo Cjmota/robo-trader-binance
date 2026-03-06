@@ -1395,12 +1395,16 @@ class BinanceTraderBot:
             liquidity_signal = self.detectLiquidityWall()
             liquidation_signal = self.detectLiquidationMove()
             strategy_signal = self.getFinalDecisionStrategy()
+            spoof_signal = self.detectSpoofing()
 
             print(f"📊 Estratégia: {strategy_signal}")
             print(f"💧 Liquidez: {liquidity_signal}")
             print(f"💥 Liquidação: {liquidation_signal}")
 
             signal = None
+
+            if spoof_signal:
+                signal = spoof_signal
 
             # prioridade institucional
             if whale_signal and volume_spike:
@@ -1912,3 +1916,67 @@ class BinanceTraderBot:
             print("Erro ao detectar regime:", e)
 
             return "NORMAL"
+
+    def detectFakeBreakout(self):
+
+        closes = self.stock_data["close_price"]
+
+        breakout = closes.iloc[-1] > closes.iloc[-20:-1].max()
+
+        volume = self.stock_data["volume"].iloc[-1]
+        avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
+
+        if breakout and volume < avg_volume:
+            print("⚠️ POSSÍVEL FAKE BREAKOUT")
+            return True
+
+        return False
+
+    def detectAbsorption(self):
+
+        closes = self.stock_data["close_price"]
+        volumes = self.stock_data["volume"]
+
+        candle = abs(closes.iloc[-1] - closes.iloc[-2])
+        volume = volumes.iloc[-1]
+        avg_volume = volumes.rolling(20).mean().iloc[-1]
+
+        if volume > avg_volume * 3 and candle < closes.iloc[-1] * 0.001:
+            print("🏦 ABSORÇÃO INSTITUCIONAL DETECTADA")
+            return True
+
+        return False
+    
+    def detectSpoofing(self):
+
+        try:
+
+            depth = self.getCachedOrderBook()
+
+            bids = depth["bids"][:10]
+            asks = depth["asks"][:10]
+
+            bid_volume = sum(float(b[1]) for b in bids)
+            ask_volume = sum(float(a[1]) for a in asks)
+
+            max_bid = max(float(b[1]) for b in bids)
+            max_ask = max(float(a[1]) for a in asks)
+
+            print(f"🕵️ Spoofing check - bid wall: {max_bid} | ask wall: {max_ask}")
+
+            # parede muito grande comparada ao restante
+            if max_bid > bid_volume * 0.6:
+                print("⚠️ Possível spoofing de compra detectado")
+                return "SELL"
+
+            if max_ask > ask_volume * 0.6:
+                print("⚠️ Possível spoofing de venda detectado")
+                return "BUY"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de spoofing:", e)
+
+            return None

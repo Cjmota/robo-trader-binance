@@ -1,3 +1,4 @@
+import statistics
 import threading
 import json
 import time
@@ -37,7 +38,22 @@ bot_thread = None
 
 TRADE_HISTORY = []
 
+MARKET_MEMORY = {}
+LOSS_COOLDOWN = 3600  # 1 hora
+
+ADAPTIVE_WEIGHTS = {
+    "pre_pump": 3.0,
+    "squeeze": 2.0,
+    "orderflow": 2.0,
+    "sweep": 2.0
+}
+
 BINANCE_CLIENT = None
+
+symbol_cooldown = {}
+COOLDOWN_SECONDS = 1800  # 30 minutos
+
+MAX_TRADES_PER_DAY = 20
 
 def load_config():
     with open(CONFIG_PATH, "r") as f:
@@ -144,6 +160,8 @@ THREAD_LOCK = True # True = Executa 1 moeda por vez | False = Executa todas simu
 # 🔴🔴🔴 CONFIGURAÇÕES - FIM 🔴🔴🔴
 # -------------------------------------------------------------------------------------------------
 
+last_traded_symbol = None
+
 # 🔁 LOOP PRINCIPAL
 # 🔁 LOOP PRINCIPAL INTELIGENTE (UMA MOEDA POR VEZ)
 
@@ -151,28 +169,44 @@ thread_lock = threading.Lock()
 
 
 def trader_master_loop():
-    global CURRENT_TRADER, BOT_RUNNING, BINANCE_CLIENT
+    global CURRENT_TRADER, BOT_RUNNING, BINANCE_CLIENT, last_traded_symbol
 
     current_trader = None
     last_outside_log = False
-    
-    if BINANCE_CLIENT is None:
-        BINANCE_CLIENT = Client(API_KEY, API_SECRET)
+        
+    try:
+        if BINANCE_CLIENT is None:
+            BINANCE_CLIENT = Client(API_KEY, API_SECRET)
 
+    except Exception as e:
+        print("Erro conectando Binance:", e)
+        time.sleep(10)
+        return
+    
     while BOT_RUNNING:
+        
+        # limpeza da memória
+        if len(MARKET_MEMORY) > 200:
+            MARKET_MEMORY.clear()
+        
+        try:
+            BINANCE_CLIENT.ping()
+        except Exception as e:
+            print("🔄 Reconectando Binance...", e)
+            
+            try:
+                BINANCE_CLIENT = Client(API_KEY, API_SECRET)
+            except Exception as reconnect_error:
+                print("❌ Falha na reconexão:", reconnect_error)
+                time.sleep(10)
+                continue
 
         now = datetime.now(br_tz).hour
 
-        # 🔴 Se passou das 20h
-        if now >= 20:
-            print("🛑 Fora do horário operacional.")
-
-            if current_trader and current_trader.actual_trade_position:
-                print("🛑 Encerrando posição por fim de horário.")
-                current_trader.close_position_market()
-                current_trader = None  # evita tentar fechar de novo
-
-            time.sleep(60) #em vez de 300
+        # Limite diário
+        if len(TRADE_HISTORY) >= MAX_TRADES_PER_DAY:
+            print("🛑 Limite diário de trades atingido.")
+            time.sleep(600)
             continue
         
         if now < 5:
@@ -197,7 +231,23 @@ def trader_master_loop():
                 continue
 
             for symbol in symbols:
+                # evitar moedas com loss recente
+                if symbol in MARKET_MEMORY:
+                    last_loss = MARKET_MEMORY.get(symbol, {}).get("last_loss", 0)
 
+                    if time.time() - last_loss < LOSS_COOLDOWN:
+                        print(f"⚠️ {symbol} ignorado por loss recente")
+                        continue
+                    
+                now_ts = time.time()
+
+                if symbol in symbol_cooldown and now_ts - symbol_cooldown[symbol] < COOLDOWN_SECONDS:
+                    continue
+                
+                # 🔒 Evita repetir o mesmo ativo
+                if symbol == last_traded_symbol:
+                    continue    
+                
                 stock = symbol.replace("USDT", "")
 
                 print(f"🎯 Testando ativo: {symbol}")
@@ -232,11 +282,19 @@ def trader_master_loop():
 
                     if decision is True:
                         print(f"🚀 Oportunidade encontrada em {symbol}")
+                        symbol_cooldown[symbol] = time.time()
+                        last_traded_symbol = symbol
                         current_trader = trader
                         break
 
                 except Exception as e:
                     print(f"Erro ao analisar {symbol}: {e}")
+
+        # Limite diário de trades
+        if len(TRADE_HISTORY) >= MAX_TRADES_PER_DAY:
+            print("🛑 Limite diário de trades atingido.")
+            time.sleep(600)
+            continue   
 
         if current_trader:
             CURRENT_TRADER = current_trader
@@ -247,39 +305,37 @@ def trader_master_loop():
     
                 # 🔥 Registrar trade finalizado
                 if hasattr(current_trader, "last_trade_profit"):
+
+                    profit = current_trader.last_trade_profit
+                    
                     TRADE_HISTORY.append({
                         "timestamp": time.time(),
                         "asset": current_trader.operation_code,
                         "profit": current_trader.last_trade_profit
                     })
+                    
+                    update_market_memory(current_trader.operation_code, profit)
 
-                current_trader = None            
+                current_trader = None 
+                last_traded_symbol = None           
             
 
-        time.sleep(5)
+        sleep_time = max(10, TEMPO_ENTRE_TRADES)
+        time.sleep(sleep_time)
 
     print("🛑 Loop do robô finalizado.")
 
-
-# Inicia o robô principal
-if __name__ == "__main__":
-    print("🤖 Master Trader iniciado (modo multi-moedas inteligente).")
-    BOT_RUNNING = True
-    trader_master_loop()
-
-    try:
-        while True:
-            time.sleep(1)
-    except KeyboardInterrupt:
-        print("\nPrograma encerrado pelo usuário.")
-
 def safe_trader_master_loop():
+    global BOT_RUNNING
+
     while BOT_RUNNING:
         try:
             print("🚀 Iniciando ciclo do robô...")
+
             trader_master_loop()
 
         except Exception as e:
+
             print("⚠️ Erro inesperado no robô:", e)
 
             logging.error(
@@ -290,7 +346,6 @@ def safe_trader_master_loop():
             print("🔄 Reiniciando robô em 10 segundos...")
             time.sleep(10)
             
-    
 def symbol_to_stock(symbol):
 
     if symbol.endswith("USDT"):
@@ -298,13 +353,20 @@ def symbol_to_stock(symbol):
 
     return symbol
 
-def scan_market_top_symbols(client, limit=20):
+def scan_market_top_symbols(client, limit=10):
 
-    print("🔎 Escaneando mercado inteligente...")
+    print("🔎 Escaneando mercado inteligente PRO...")
 
     try:
 
         tickers = client.get_ticker()
+
+        # 🔥 Ordena por volume e pega apenas top 80
+        tickers = sorted(
+            tickers,
+            key=lambda x: float(x.get("quoteVolume", 0)),
+            reverse=True
+        )[:40]
 
         if not tickers:
             return []
@@ -319,39 +381,162 @@ def scan_market_top_symbols(client, limit=20):
                 continue
 
             volume = float(t["quoteVolume"])
-            price_change = abs(float(t["priceChangePercent"]))
+            
+            trade_count = int(t.get("count", 0))
 
-            # ignorar moedas com pouco volume
-            if volume < 5_000_000:
+            if trade_count < 500:
+                continue
+            
+            price_change = float(t.get("priceChangePercent", 0))
+
+            price = float(t.get("lastPrice", 0))
+
+            if price == 0:
+                continue
+
+            # filtro de liquidez
+            if volume < 10_000_000:
                 continue
 
             try:
+
                 candles = client.get_klines(
                     symbol=symbol,
                     interval=Client.KLINE_INTERVAL_5MINUTE,
-                    limit=20
+                    limit=30
                 )
+                
+                time.sleep(0.05)
 
                 closes = [float(c[4]) for c in candles]
+                volumes = [float(c[5]) for c in candles]
+                avg_volume = sum(volumes[-20:]) / 20
+                current_volume = volumes[-1]
+                highs = [float(c[2]) for c in candles]
+                lows = [float(c[3]) for c in candles]
 
-                if not closes:
+                # -----------------------------
+                # ORDER FLOW ACCELERATION
+
+                volume_recent = sum(volumes[-5:]) / 5
+                volume_previous = sum(volumes[-10:-5]) / 5
+
+                if volume_previous == 0:
+                    volume_acceleration = 0
+                else:
+                    volume_acceleration = volume_recent / volume_previous
+
+                orderflow_signal = volume_acceleration > 1.6
+
+                if len(closes) < 20:
                     continue
 
-                min_price = min(closes)
-                max_price = max(closes)
+                min_price = min(lows)
+                max_price = max(highs)
 
                 if min_price == 0:
                     continue
+                # evita moedas ultrabaratas    
+                if min_price < 0.0000005:
+                    continue
 
                 volatility = (max_price - min_price) / min_price
+                
+                if volatility > 0.25:
+                    continue
 
-            except:
+                # média curta
+                ma7 = sum(closes[-7:]) / 7
+
+                # média longa
+                ma25 = sum(closes[-25:]) / 25
+                
+                
+
+                trend_strength = (ma7 - ma25) / ma25
+                
+                # -----------------------------
+                # -----------------------------
+                # VOLATILITY SQUEEZE (Bollinger)
+
+                if len(closes) < 20 or closes[-1] == 0:
+                    squeeze_signal = False
+                else:
+                    std_dev = statistics.stdev(closes[-20:])
+                    bollinger_width = (std_dev * 2) / closes[-1]
+                    squeeze_signal = bollinger_width < 0.008
+                
+                # -----------------------------
+                # DETECTOR DE PRÉ-PUMP
+
+                recent_range = (max(closes[-10:]) - min(closes[-10:])) / min(closes[-10:])
+
+                volume_spike = current_volume > avg_volume * 1.8
+
+                pre_pump_signal = (
+                    recent_range < 0.015 and
+                    volume_spike and
+                    closes[-1] > closes[-3]
+                )
+
+                # evita moedas lateralizadas
+                if volatility < 0.01:
+                    continue
+
+                # evita pump exagerado
+                if abs(price_change) > 20:
+                    continue
+
+                if closes[-5] == 0:
+                    continue
+
+                momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.00000001)  
+                
+                # -----------------------------
+                # LIQUIDITY SWEEP DETECTOR
+
+                recent_low = min(lows[-5:])
+                previous_low = min(lows[-15:-5])
+
+                recent_high = max(highs[-5:])
+                previous_high = max(highs[-15:-5])
+
+                sweep_down = recent_low < previous_low and closes[-1] > previous_low
+                sweep_up = recent_high > previous_high and closes[-1] < previous_high
+
+                liquidity_sweep_signal = sweep_down or sweep_up  
+
+                if closes[-1] > max(closes[-10:]) * 1.05:
+                    continue
+
+                score = (
+                    volume *
+                    volatility *
+                    abs(trend_strength) *
+                    abs(price_change) *
+                    abs(momentum) *
+                    (ADAPTIVE_WEIGHTS["pre_pump"] if pre_pump_signal else 1) *
+                    (ADAPTIVE_WEIGHTS["squeeze"] if squeeze_signal else 1) *
+                    (ADAPTIVE_WEIGHTS["orderflow"] if orderflow_signal else 1) *
+                    (ADAPTIVE_WEIGHTS["sweep"] if liquidity_sweep_signal else 1)
+                )
+                
+                # bônus de win rate
+                if symbol in MARKET_MEMORY:
+
+                    wins = MARKET_MEMORY[symbol]["wins"]
+                    losses = MARKET_MEMORY[symbol]["losses"]
+
+                    total = wins + losses
+
+                    if total >= 3:
+                        winrate = wins / total
+                        score *= (1 + winrate)
+                        
+                candidates.append((symbol, score))
+
+            except Exception:
                 continue
-
-            # score profissional
-            score = volume * price_change * volatility
-
-            candidates.append((symbol, score))
 
         candidates.sort(key=lambda x: x[1], reverse=True)
 
@@ -365,4 +550,58 @@ def scan_market_top_symbols(client, limit=20):
 
         print("Erro no scanner:", e)
 
-        return []
+        return []            
+                   
+# Inicia o robô principal
+if __name__ == "__main__":
+    print("🤖 Master Trader iniciado (modo multi-moedas inteligente).")
+
+    BOT_RUNNING = True
+
+    bot_thread = threading.Thread(
+        target=safe_trader_master_loop,
+        daemon=True
+    )
+
+    bot_thread.start()
+
+    try:
+        while True:
+            time.sleep(1)
+
+    except KeyboardInterrupt:
+        BOT_RUNNING = False
+        print("🛑 Robô encerrado pelo usuário.")            
+    
+def update_market_memory(symbol, profit):
+
+    now = time.time()
+
+    if symbol not in MARKET_MEMORY:
+        MARKET_MEMORY[symbol] = {
+            "wins": 0,
+            "losses": 0,
+            "last_loss": 0
+        }
+
+    if profit > 0:
+        MARKET_MEMORY[symbol]["wins"] += 1
+    else:
+        MARKET_MEMORY[symbol]["losses"] += 1
+        MARKET_MEMORY[symbol]["last_loss"] = now
+    
+    # -----------------------------
+    # ADAPTIVE WEIGHT UPDATE
+
+    if profit > 0:
+        ADAPTIVE_WEIGHTS["pre_pump"] = min(5, ADAPTIVE_WEIGHTS["pre_pump"] * 1.02)
+        ADAPTIVE_WEIGHTS["squeeze"] = min(4, ADAPTIVE_WEIGHTS["squeeze"] * 1.01)
+        ADAPTIVE_WEIGHTS["orderflow"] = min(4, ADAPTIVE_WEIGHTS["orderflow"] * 1.02)
+        ADAPTIVE_WEIGHTS["sweep"] = min(4, ADAPTIVE_WEIGHTS["sweep"] * 1.01)
+    else:
+        ADAPTIVE_WEIGHTS["pre_pump"] = max(1.5, ADAPTIVE_WEIGHTS["pre_pump"] * 0.98)
+        ADAPTIVE_WEIGHTS["squeeze"] = max(1.2, ADAPTIVE_WEIGHTS["squeeze"] * 0.99)
+        ADAPTIVE_WEIGHTS["orderflow"] = max(1.2, ADAPTIVE_WEIGHTS["orderflow"] * 0.98)
+        ADAPTIVE_WEIGHTS["sweep"] = max(1.2, ADAPTIVE_WEIGHTS["sweep"] * 0.99)
+        
+    logging.info(f"Adaptive weights updated: {ADAPTIVE_WEIGHTS}")
