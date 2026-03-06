@@ -1335,8 +1335,7 @@ class BinanceTraderBot:
                 print("⏸️ Pulando trade por baixa volatilidade.")
                 return
             
-            # Evitar mercado lateral
-            if regime == "SIDEWAYS":
+            if regime == "SIDEWAYS" and not sweep_signal and not whale_signal:
                 print("⏸️ Mercado lateral detectado pelo regime.")
                 return
 
@@ -1935,7 +1934,7 @@ class BinanceTraderBot:
                 return "TREND"
 
             # mercado lateral
-            if recent_range < 0.01:
+            if recent_range < 0.006:
                 print("↔️ REGIME: SIDEWAYS")
                 return "SIDEWAYS"
 
