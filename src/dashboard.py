@@ -65,16 +65,6 @@ def stop_bot():
     return "OK"
 
 # ---------------- CONFIG ----------------
-@app.route("/get-config")
-def get_config_legacy():
-    with open(CONFIG_PATH, "r") as f:
-        return jsonify(json.load(f))
-
-@app.route("/update-config", methods=["POST"])
-def update_config():
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(request.json, f, indent=4)
-    return "OK"
 
 @app.route("/trades")
 def get_trades():
@@ -180,10 +170,10 @@ if __name__ == "__main__":
     print("🌐 Dashboard Profissional iniciado...")
     app.run(host="0.0.0.0", port=5000)
     
-@app.route("/api/config")
+@app.route("/api/config", methods=["GET"])
 def get_config():
-    return jsonify(load_config())
-
+    return load_config()    
+    
 @app.route("/api/config", methods=["POST"])
 def update_config():
 
@@ -193,7 +183,6 @@ def update_config():
     config["RISK"]["MAX_TRADES_PER_DAY"] = int(data["MAX_TRADES_PER_DAY"])
     config["RISK"]["SYMBOL_COOLDOWN"] = int(data["SYMBOL_COOLDOWN"])
     config["RISK"]["LOSS_COOLDOWN"] = int(data["LOSS_COOLDOWN"])
-
     config["RISK"]["MAX_POSITION_PERCENT"] = float(data["MAX_POSITION_PERCENT"]) / 100
 
     save_config(config)
