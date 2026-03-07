@@ -374,8 +374,7 @@ def symbol_to_stock(symbol):
 
 def scan_market_top_symbols(client, limit=10):
     
-    global SCANNER_SMART_MONEY
-    global SCANNER_RANKING
+    global SCANNER_SMART_MONEY, SCANNER_RANKING
 
     SCANNER_SMART_MONEY.clear()
     SCANNER_RANKING.clear()
@@ -694,7 +693,6 @@ def scan_market_top_symbols(client, limit=10):
 
         candidates.sort(key=lambda x: x[1], reverse=True)
 
-        global SCANNER_RANKING
         SCANNER_RANKING = candidates[:10]
 
         best = [s[0] for s in candidates[:limit]]
