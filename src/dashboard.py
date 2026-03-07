@@ -21,6 +21,10 @@ bot_thread = None
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app", "config.json")
 
+def load_config():
+    with open(CONFIG_PATH, "r") as f:
+        return json.load(f)
+
 # ---------------- HOME ----------------
 @app.route("/")
 def home():
@@ -58,7 +62,7 @@ def stop_bot():
 
 # ---------------- CONFIG ----------------
 @app.route("/get-config")
-def get_config():
+def get_config_legacy():
     with open(CONFIG_PATH, "r") as f:
         return jsonify(json.load(f))
 
@@ -155,6 +159,37 @@ def equity():
     
 # ---------------------------------------
 
+@app.route("/api/scanner")
+def scanner():
+
+    ranking = [
+        {"symbol": s[0], "score": round(s[1], 2)}
+        for s in SCANNER_RANKING
+    ]
+
+    return {
+        "ranking": ranking,
+        "smart_money": SCANNER_SMART_MONEY
+    }
+
 if __name__ == "__main__":
     print("🌐 Dashboard Profissional iniciado...")
     app.run(host="0.0.0.0", port=5000)
+    
+@app.route("/api/config")
+def get_config():
+    return jsonify(load_config())
+
+@app.route("/api/config", methods=["POST"])
+def save_config():
+
+    data = request.json
+
+    config = load_config()
+
+    config.update(data)
+
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=4)
+
+    return jsonify({"status":"saved"})

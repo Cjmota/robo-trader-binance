@@ -109,11 +109,17 @@ button:disabled {
 <!-- SIDEBAR -->
 <div id="sidebar" class="sidebar">
     <h4>Trader Pro</h4>
+    
     <a href="#" onclick="showPage('dashboard')">
-        <i class="bi bi-speedometer2"></i> Dashboard
+    <i class="bi bi-speedometer2"></i> Dashboard
     </a>
+
     <a href="#" onclick="showPage('performance')">
-        <i class="bi bi-graph-up"></i> Performance
+    <i class="bi bi-graph-up"></i> Performance
+    </a>
+
+    <a href="#" onclick="showPage('settings')">
+    <i class="bi bi-gear"></i> Configurações
     </a>
 </div>
 
@@ -279,10 +285,49 @@ button:disabled {
             <div id="statExpectancy" class="fs-5">0</div>
         </div>
     </div>
+</div>
+
+<button class="btn btn-primary mt-4" onclick="saveConfig()">
+💾 Salvar Configurações
+</button>
 
 </div>
+
+</div>
+
 </div> <!-- fecha row -->
 </div> <!-- fecha performancePage -->
+
+<div id="settingsPage" style="display:none;">
+
+    <h3 class="mb-4">⚙️ Configurações do Robô</h3>
+
+    <div class="card p-4">
+
+    <div class="row g-3">
+
+    <div class="col-md-3">
+    <label>Stop Loss (%)</label>
+    <input id="cfg_stoploss" class="form-control">
+    </div>
+
+    <div class="col-md-3">
+    <label>Take Profit 1 (%)</label>
+    <input id="cfg_tp1" class="form-control">
+    </div>
+
+    <div class="col-md-3">
+    <label>Take Profit 2 (%)</label>
+    <input id="cfg_tp2" class="form-control">
+    </div>
+
+    <div class="col-md-3">
+    <label>Tempo entre trades</label>
+    <input id="cfg_time" class="form-control">
+    </div>
+
+</div> <!-- fecha setingspage -->
+
 </div> <!-- fecha mainContent -->
 
 
@@ -513,21 +558,31 @@ async function updateTradeStats() {
 }
 
 function showPage(page) {
-    document.getElementById("dashboardPage").style.display =
-        page === "dashboard" ? "block" : "none";
 
-    document.getElementById("performancePage").style.display =
-        page === "performance" ? "block" : "none";
+document.getElementById("dashboardPage").style.display =
+page === "dashboard" ? "block" : "none";
 
-    if (page === "performance") {
-        setTimeout(() => {
-            initChart();
-            initTradeChart();   // 🔥 PRIMEIRO cria o gráfico
-            updateEquity();
-            updateTradeStats(); // 🔥 DEPOIS atualiza
-        }, 200);
-    }
+document.getElementById("performancePage").style.display =
+page === "performance" ? "block" : "none";
+
+document.getElementById("settingsPage").style.display =
+page === "settings" ? "block" : "none";
+
+if (page === "performance") {
+setTimeout(() => {
+initChart();
+initTradeChart();
+updateEquity();
+updateTradeStats();
+}, 200);
 }
+
+if (page === "settings") {
+loadConfig();
+}
+
+}
+
 setInterval(() => {
     if (profitChart) {
         updateEquity();
@@ -649,6 +704,47 @@ async function updateScanner(){
 setInterval(updateScanner, 3000)
 
 updateScanner()
+
+async function loadConfig(){
+
+let res = await fetch("/api/config")
+let data = await res.json()
+
+document.getElementById("cfg_stoploss").value = data.STOP_LOSS_PERCENTAGE
+document.getElementById("cfg_tp1").value = data.TP_AT_PERCENTAGE[0]
+document.getElementById("cfg_tp2").value = data.TP_AT_PERCENTAGE[1]
+document.getElementById("cfg_time").value = data.TEMPO_ENTRE_TRADES
+
+}
+
+async function saveConfig(){
+
+let config = {
+
+STOP_LOSS_PERCENTAGE: parseFloat(
+document.getElementById("cfg_stoploss").value
+),
+
+TP_AT_PERCENTAGE: [
+parseFloat(document.getElementById("cfg_tp1").value),
+parseFloat(document.getElementById("cfg_tp2").value)
+],
+
+TEMPO_ENTRE_TRADES: parseInt(
+document.getElementById("cfg_time").value
+)
+
+}
+
+await fetch("/api/config", {
+method:"POST",
+headers:{"Content-Type":"application/json"},
+body:JSON.stringify(config)
+})
+
+alert("Configuração salva!")
+
+}
 
 </script>
 
