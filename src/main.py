@@ -503,7 +503,7 @@ def scan_market_top_symbols(client, limit=10):
                     volume_acceleration = volume_recent / volume_previous
                     
                     # 🚫 elimina mercado sem fluxo
-                    if volume_acceleration < 0.8:
+                    if volume_acceleration < 0.6:
                         continue
 
                 orderflow_signal = volume_acceleration > 1.6
@@ -525,16 +525,12 @@ def scan_market_top_symbols(client, limit=10):
                 volatility = (max_price - min_price) / min_price
                 
                 # 🚫 elimina moedas mortas
-                if volatility < 0.012:
+                if volatility < 0.008:
                     continue
                 
                 #print(symbol, "volume:", volume, "vol:", volatility)
                 print(f"{symbol} | volume={volume:,.0f} | vol={volatility:.4f} | trades={trade_count}")
-                
-                print("CANDIDATE:", symbol, "score:", score)
-                
-                
-                
+                        
                 if volatility > config["SCANNER"]["MAX_VOLATILITY"]:
                     continue
 
@@ -608,7 +604,7 @@ def scan_market_top_symbols(client, limit=10):
                 # 🚫 evita comprar no topo do pump
                 recent_high = max(closes[-8:])
 
-                if closes[-1] >= recent_high * 0.995:
+                if closes[-1] >= recent_high * 1.01:
                     continue 
                 
                 # ---------------------------------
@@ -702,10 +698,13 @@ def scan_market_top_symbols(client, limit=10):
 
         candidates.sort(key=lambda x: x[1], reverse=True)
 
-        SCANNER_RANKING = candidates[:10]
+        SCANNER_RANKING[:] = candidates[:10]
 
         best = [s[0] for s in candidates[:limit]]
 
+        if not best and len(candidates) > 0:
+            best = [candidates[0][0]]
+        
         print("🔥 TOP OPORTUNIDADES:", best)
 
         time.sleep(2)
