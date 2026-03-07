@@ -416,15 +416,15 @@ def scan_market_top_symbols(client, limit=10):
 
             if bid > 0 and ask > 0:
                 spread = (ask - bid) / bid
-                if spread > 0.002:
+                if spread > 0.003:
                     continue
 
             if price == 0:
                 continue
 
             # filtro de liquidez
-            if volume < 3_000_000:
-                continue
+            #if volume < 1_500_000:
+            #    continue
 
             try:
 
@@ -526,7 +526,7 @@ def scan_market_top_symbols(client, limit=10):
                 )
 
                 # evita moedas lateralizadas
-                if volatility < 0.003:
+                if volatility < 0.015:
                     continue
 
                 # evita pump exagerado
