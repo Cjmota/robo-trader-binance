@@ -1,4 +1,5 @@
 from flask import Flask, render_template, request, jsonify
+from src.main import SCANNER_RANKING, SCANNER_SMART_MONEY
 from datetime import datetime
 import numpy as np
 import threading

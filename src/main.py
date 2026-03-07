@@ -48,6 +48,10 @@ bot_thread = None
 TRADE_HISTORY = []
 
 MARKET_MEMORY = {}
+
+SCANNER_RANKING = []   # 🔥 ranking do scanner para dashboard
+SCANNER_SMART_MONEY = []
+
 LOSS_COOLDOWN = config["RISK"]["LOSS_COOLDOWN"]
 
 ADAPTIVE_WEIGHTS = {
@@ -459,7 +463,7 @@ def scan_market_top_symbols(client, limit=10):
                 closes = [float(c[4]) for c in candles]
                 volumes = [float(c[5]) for c in candles]
                 
-                if volumes[-1] < volumes[-2]:
+                if len(volumes) > 2 and volumes[-1] < volumes[-2]:
                     continue
                 
                 avg_volume = sum(volumes[-20:]) / max(len(volumes[-20:]),1)
@@ -537,6 +541,19 @@ def scan_market_top_symbols(client, limit=10):
                 )
                 
                 # -----------------------------
+                # SMART MONEY ACCUMULATION DETECTOR
+
+                price_range = (max(closes[-15:]) - min(closes[-15:])) / max(min(closes[-15:]), 0.00000001)
+
+                volume_trend = volumes[-1] > volumes[-5]
+
+                smart_money_signal = (
+                    price_range < 0.025 and
+                    volume_trend and
+                    closes[-1] > closes[-3]
+                )
+                
+                # -----------------------------
                 # DETECTOR DE PRÉ-PUMP
 
                 recent_range = (max(closes[-10:]) - min(closes[-10:])) / min(closes[-10:])
@@ -602,11 +619,17 @@ def scan_market_top_symbols(client, limit=10):
                     (abs(trend_strength) * 100) *
                     abs(price_change) *
                     (abs(momentum) * 50) *
+                    (3 if smart_money_signal else 1) *
                     (ADAPTIVE_WEIGHTS["pre_pump"] if pre_pump_signal else 1) *
                     (ADAPTIVE_WEIGHTS["squeeze"] if squeeze_signal else 1) *
                     (ADAPTIVE_WEIGHTS["orderflow"] if orderflow_signal else 1) *
                     (ADAPTIVE_WEIGHTS["sweep"] if liquidity_sweep_signal else 1)
                 )
+                
+                if smart_money_signal:
+                    print("🏦 Acumulação institucional detectada:", symbol)
+                
+                SCANNER_SMART_MONEY.append(symbol)
                 
                 # ajuste baseado no modo de mercado
                 if market_mode == "HIGH_VOLATILITY":
@@ -640,6 +663,9 @@ def scan_market_top_symbols(client, limit=10):
                 continue
 
         candidates.sort(key=lambda x: x[1], reverse=True)
+
+        global SCANNER_RANKING
+        SCANNER_RANKING = candidates[:10]
 
         best = [s[0] for s in candidates[:limit]]
 

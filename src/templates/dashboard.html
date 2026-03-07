@@ -167,6 +167,46 @@ button:disabled {
             <i class="bi bi-stop-fill"></i> Parar
         </button>
     </div>
+
+    <div class="row mt-4">
+
+    <div class="col-md-6">
+    <div class="card p-3">
+
+    <h5>🔎 Scanner de Mercado</h5>
+
+    <table class="table table-dark table-sm mt-2">
+    <thead>
+    <tr>
+    <th>Moeda</th>
+    <th>Score</th>
+    </tr>
+    </thead>
+
+    <tbody id="scannerTable">
+    <tr><td colspan="2">Carregando...</td></tr>
+    </tbody>
+
+    </table>
+
+    </div>
+    </div>
+
+
+    <div class="col-md-6">
+    <div class="card p-3">
+
+    <h5>🏦 Smart Money</h5>
+
+    <ul id="smartMoneyList">
+    <li>Carregando...</li>
+    </ul>
+
+    </div>
+    </div>
+
+    </div>
+
 </div>
 
 <!-- PERFORMANCE PAGE -->
@@ -566,6 +606,50 @@ function checkStatus() {
 
 setInterval(checkStatus, 3000);
 window.onload = checkStatus;
+</script>
+
+<script>
+
+async function updateScanner(){
+
+    try{
+
+        let res = await fetch("/api/scanner")
+        let data = await res.json()
+
+        let table = document.getElementById("scannerTable")
+        let smart = document.getElementById("smartMoneyList")
+
+        table.innerHTML = ""
+        smart.innerHTML = ""
+
+        data.ranking.forEach(r => {
+
+            table.innerHTML += `
+            <tr>
+                <td>${r.symbol}</td>
+                <td>${r.score}</td>
+            </tr>
+            `
+        })
+
+        data.smart_money.forEach(s => {
+
+            smart.innerHTML += `
+            <li>${s}</li>
+            `
+        })
+
+    } catch(e){
+        console.log("Erro scanner", e)
+    }
+
+}
+
+setInterval(updateScanner, 3000)
+
+updateScanner()
+
 </script>
 
 </body>
