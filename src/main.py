@@ -374,6 +374,9 @@ def symbol_to_stock(symbol):
 
 def scan_market_top_symbols(client, limit=10):
     
+    global SCANNER_SMART_MONEY
+    SCANNER_SMART_MONEY.clear()
+    
     config = load_config()
     
     print("🔎 Escaneando mercado inteligente PRO...")
@@ -493,6 +496,10 @@ def scan_market_top_symbols(client, limit=10):
                     volume_acceleration = 0
                 else:
                     volume_acceleration = volume_recent / volume_previous
+                    
+                    # 🚫 elimina mercado sem fluxo
+                    if volume_acceleration < 1.2:
+                        continue
 
                 orderflow_signal = volume_acceleration > 1.6
 
@@ -506,9 +513,16 @@ def scan_market_top_symbols(client, limit=10):
                     continue
                 # evita moedas ultrabaratas    
                 if min_price < 0.0000005:
-                    continue
+                    
+                    # 🚫 evita microcaps perigosas
+                    if price < 0.0005:
+                       continue
 
                 volatility = (max_price - min_price) / min_price
+                
+                # 🚫 elimina moedas mortas
+                if volatility < 0.02:
+                    continue
                 
                 #print(symbol, "volume:", volume, "vol:", volatility)
                 print(f"{symbol} | volume={volume:,.0f} | vol={volatility:.4f} | trades={trade_count}")
@@ -523,6 +537,10 @@ def scan_market_top_symbols(client, limit=10):
                 ma25 = sum(closes[-25:]) / 25
 
                 trend_strength = (ma7 - ma25) / ma25
+                
+                # 🚫 elimina lateralização
+                if abs(trend_strength) < 0.01:
+                    continue
                 
                 # -----------------------------
                 # -----------------------------
@@ -579,6 +597,12 @@ def scan_market_top_symbols(client, limit=10):
 
                 momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.00000001) 
                  
+                # 🚫 evita comprar no topo do pump
+                recent_high = max(closes[-8:])
+
+                if closes[-1] >= recent_high * 0.995:
+                    continue 
+                
                 # ---------------------------------
                 # ANTI-PUMP / MANIPULATION FILTER
 
@@ -628,8 +652,7 @@ def scan_market_top_symbols(client, limit=10):
                 
                 if smart_money_signal:
                     print("🏦 Acumulação institucional detectada:", symbol)
-                
-                SCANNER_SMART_MONEY.append(symbol)
+                    SCANNER_SMART_MONEY.append(symbol)
                 
                 # ajuste baseado no modo de mercado
                 if market_mode == "HIGH_VOLATILITY":
@@ -656,7 +679,9 @@ def scan_market_top_symbols(client, limit=10):
                 
                 if score < 0.00001:
                     continue
-                if score > 0.01:       
+                
+                # 🎯 apenas oportunidades fortes
+                if score > 1.0:       
                    candidates.append((symbol, score))
 
             except Exception:
