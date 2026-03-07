@@ -373,6 +373,9 @@ def scan_market_top_symbols(client, limit=10):
     try:
 
         tickers = client.get_ticker()
+        
+        if not tickers:
+            return []
 
         # 🔥 Ordena por volume e pega apenas top 80
         tickers = sorted(
@@ -387,11 +390,8 @@ def scan_market_top_symbols(client, limit=10):
         candidates = []
         
         market_mode_global = None
-
-        if market_mode == "LOW_ACTIVITY":
-            print("⚠ Mercado com baixa atividade, scanner pausado.")
-            time.sleep(30)
-            return []
+        market_mode = None
+        
 
         for t in tickers:
 
