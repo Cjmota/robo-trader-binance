@@ -741,7 +741,13 @@ parseFloat(document.getElementById("cfg_tp2").value)
 
 TEMPO_ENTRE_TRADES: parseInt(
 document.getElementById("cfg_time").value
-)
+),
+
+RISK: {
+MAX_POSITION_PERCENT: parseFloat(
+document.getElementById("cfg_max_position").value
+) / 100
+}
 
 }
 
