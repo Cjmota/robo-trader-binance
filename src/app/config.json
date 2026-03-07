@@ -4,16 +4,35 @@
     "FALLBACK_ACTIVATED": true,
     "FALLBACK_STRATEGY": "getMovingAverageTradeStrategy",
     "FALLBACK_STRATEGY_ARGS": {},
+    
+    "SCANNER": {
+        "MIN_VOLUME": 1500000,
+        "MIN_TRADES": 50,
+        "MIN_VOLATILITY": 0.002,
+        "MAX_VOLATILITY": 0.25,
+        "SPREAD_LIMIT": 0.003,
+        "PUMP_PROTECTION": 0.08,
+        "SCAN_LIMIT": 120
+    },
+
+    "RISK": {
+        "MAX_TRADES_PER_DAY": 20,
+        "SYMBOL_COOLDOWN": 1800,
+        "LOSS_COOLDOWN": 3600
+    },
+
+    "INTELLIGENCE": {
+        "MOMENTUM_MULTIPLIER": 50,
+        "TREND_STRENGTH_MULTIPLIER": 100,
+        "WHALE_IMBALANCE": 2.0
+    },
+
     "ACCEPTABLE_LOSS_PERCENTAGE": 0,
     "STOP_LOSS_PERCENTAGE": 3.5,
-    "TP_AT_PERCENTAGE": [
-        2,
-        4
-    ],
-    "TP_AMOUNT_PERCENTAGE": [
-        50,
-        50
-    ],
+
+    "TP_AT_PERCENTAGE": [2, 4],
+    "TP_AMOUNT_PERCENTAGE": [50, 50],
+    
     "CANDLE_PERIOD": "Client.KLINE_INTERVAL_5MINUTE",
     "TEMPO_ENTRE_TRADES": 60,
     "DELAY_ENTRE_ORDENS": 10,

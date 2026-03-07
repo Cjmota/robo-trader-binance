@@ -31,6 +31,12 @@ print("API SECRET carregada:", bool(os.getenv("BINANCE_SECRET_KEY")))
 
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app", "config.json")
 
+def load_config():
+    with open(CONFIG_PATH, "r") as f:
+        return json.load(f)
+
+config = load_config()  # 🔥 AGORA O BOT LÊ O JSON
+
 API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_SECRET_KEY")
 TESTNET = False
@@ -42,7 +48,7 @@ bot_thread = None
 TRADE_HISTORY = []
 
 MARKET_MEMORY = {}
-LOSS_COOLDOWN = 3600  # 1 hora
+LOSS_COOLDOWN = config["RISK"]["LOSS_COOLDOWN"]
 
 ADAPTIVE_WEIGHTS = {
     "pre_pump": 3.0,
@@ -54,13 +60,9 @@ ADAPTIVE_WEIGHTS = {
 BINANCE_CLIENT = None
 
 symbol_cooldown = {}
-COOLDOWN_SECONDS = 1800  # 30 minutos
+COOLDOWN_SECONDS = config["RISK"]["SYMBOL_COOLDOWN"]
 
-MAX_TRADES_PER_DAY = 20
-
-def load_config():
-    with open(CONFIG_PATH, "r") as f:
-        return json.load(f)
+MAX_TRADES_PER_DAY = config["RISK"]["MAX_TRADES_PER_DAY"]
 
 def reload_runtime_config(bot):
     new_config = load_config()
@@ -80,7 +82,7 @@ def reload_runtime_config(bot):
     bot.time_to_trade = new_config["TEMPO_ENTRE_TRADES"]
     bot.delay_after_order = new_config["DELAY_ENTRE_ORDENS"]
 
-config = load_config()  # 🔥 AGORA O BOT LÊ O JSON
+
 
 # 🔥 Estratégias dinâmicas vindas do dashboard
 strategy_map = {
@@ -367,12 +369,14 @@ def symbol_to_stock(symbol):
     return symbol
 
 def scan_market_top_symbols(client, limit=10):
-
+    
+    config = load_config()
+    
     print("🔎 Escaneando mercado inteligente PRO...")
 
     try:
 
-        tickers = client.get_ticker()
+        tickers = client.get_ticker() or []
 
         # manter apenas pares USDT
         tickers = [t for t in tickers if t["symbol"].endswith("USDT")]
@@ -385,7 +389,7 @@ def scan_market_top_symbols(client, limit=10):
             tickers,
             key=lambda x: float(x.get("quoteVolume", 0)),
             reverse=True
-        )[:120]
+        )[:config["SCANNER"]["SCAN_LIMIT"]]
 
         if not tickers:
             return []
@@ -420,7 +424,7 @@ def scan_market_top_symbols(client, limit=10):
             
             trade_count = int(t.get("count", 0))
 
-            if trade_count < 50:
+            if trade_count < config["SCANNER"]["MIN_TRADES"]:
                 continue
             
             price_change = float(t.get("priceChangePercent", 0))
@@ -432,14 +436,14 @@ def scan_market_top_symbols(client, limit=10):
 
             if bid > 0 and ask > 0:
                 spread = (ask - bid) / bid
-                if spread > 0.004:
+                if spread > config["SCANNER"]["SPREAD_LIMIT"]:
                     continue
 
             if price == 0:
                 continue
 
             # filtro de liquidez
-            if volume < 1_000_000:
+            if volume < config["SCANNER"]["MIN_VOLUME"]:
                 continue
 
             try:
@@ -454,6 +458,10 @@ def scan_market_top_symbols(client, limit=10):
 
                 closes = [float(c[4]) for c in candles]
                 volumes = [float(c[5]) for c in candles]
+                
+                if volumes[-1] < volumes[-2]:
+                    continue
+                
                 avg_volume = sum(volumes[-20:]) / max(len(volumes[-20:]),1)
                 current_volume = volumes[-1]
                 highs = [float(c[2]) for c in candles]
@@ -501,7 +509,7 @@ def scan_market_top_symbols(client, limit=10):
                 #print(symbol, "volume:", volume, "vol:", volatility)
                 print(f"{symbol} | volume={volume:,.0f} | vol={volatility:.4f} | trades={trade_count}")
                 
-                if volatility > 0.25:
+                if volatility > config["SCANNER"]["MAX_VOLATILITY"]:
                     continue
 
                 # média curta
@@ -542,7 +550,7 @@ def scan_market_top_symbols(client, limit=10):
                 )
 
                 # evita moedas lateralizadas
-                if volatility < 0.002:
+                if volatility < config["SCANNER"]["MIN_VOLATILITY"]:
                     continue
 
                 # evita pump exagerado
@@ -553,6 +561,18 @@ def scan_market_top_symbols(client, limit=10):
                     continue
 
                 momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.00000001) 
+                 
+                # ---------------------------------
+                # ANTI-PUMP / MANIPULATION FILTER
+
+                price_jump = (closes[-1] - closes[-10]) / max(closes[-10], 0.00000001)
+
+                volume_spike_extreme = current_volume > avg_volume * 3
+
+                # se subiu rápido demais com volume exagerado, pode ser topo
+                if price_jump > config["SCANNER"]["PUMP_PROTECTION"]:
+                    print("⚠️ Possível armadilha de pump:", symbol)
+                    continue 
                  
                 dump_risk = (closes[-1] - closes[-3]) / max(closes[-3], 0.00000001)
 
