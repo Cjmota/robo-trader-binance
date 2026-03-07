@@ -382,7 +382,7 @@ def scan_market_top_symbols(client, limit=10):
             tickers,
             key=lambda x: float(x.get("quoteVolume", 0)),
             reverse=True
-        )[:80]
+        )[:120]
 
         if not tickers:
             return []
@@ -416,7 +416,7 @@ def scan_market_top_symbols(client, limit=10):
 
             if bid > 0 and ask > 0:
                 spread = (ask - bid) / bid
-                if spread > 0.003:
+                if spread > 0.002:
                     continue
 
             if price == 0:
@@ -447,14 +447,6 @@ def scan_market_top_symbols(client, limit=10):
                 # MARKET MODE DETECTOR
 
                 market_mode = detect_market_mode(volumes)
-
-                # -----------------------------
-                # MARKET MODE DETECTOR (calculado uma vez)
-
-                if market_mode_global is None:
-                    market_mode_global = detect_market_mode(volumes)
-
-                market_mode = market_mode_global
 
                 # se mercado estiver com liquidez muito baixa ignora
                 if market_mode == "LOW_ACTIVITY":
@@ -491,7 +483,7 @@ def scan_market_top_symbols(client, limit=10):
                 volatility = (max_price - min_price) / min_price
                 
                 #print(symbol, "volume:", volume, "vol:", volatility)
-                print(f"{symbol} | volUSDT={volume:,.0f} | volatility={volatility:.4f}")
+                print(f"{symbol} | volume={volume:,.0f} | vol={volatility:.4f} | trades={trade_count}")
                 
                 if volatility > 0.25:
                     continue
