@@ -209,7 +209,7 @@ def trader_master_loop():
             time.sleep(600)
             continue
         
-        if now < 5:
+        if now < 5 or now >= 21:
             if not last_outside_log:
                 print("⏰ Fora do horário operacional (05h-20h). Aguardando...")
                 last_outside_log = True
@@ -227,7 +227,7 @@ def trader_master_loop():
             
             if not symbols:
                 print("⚠️ Nenhuma oportunidade encontrada.")
-                time.sleep(10)
+                time.sleep(20)
                 continue
 
             for symbol in symbols:
