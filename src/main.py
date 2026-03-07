@@ -373,6 +373,9 @@ def scan_market_top_symbols(client, limit=10):
     try:
 
         tickers = client.get_ticker()
+
+        # manter apenas pares USDT
+        tickers = [t for t in tickers if t["symbol"].endswith("USDT")]
         
         if not tickers:
             return []
@@ -440,7 +443,7 @@ def scan_market_top_symbols(client, limit=10):
                     limit=30
                 )
                 
-                time.sleep(0.1)
+                time.sleep(0.05)
 
                 closes = [float(c[4]) for c in candles]
                 volumes = [float(c[5]) for c in candles]
