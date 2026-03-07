@@ -382,7 +382,7 @@ def scan_market_top_symbols(client, limit=10):
             tickers,
             key=lambda x: float(x.get("quoteVolume", 0)),
             reverse=True
-        )[:40]
+        )[:80]
 
         if not tickers:
             return []
@@ -404,7 +404,7 @@ def scan_market_top_symbols(client, limit=10):
             
             trade_count = int(t.get("count", 0))
 
-            if trade_count < 500:
+            if trade_count < 200:
                 continue
             
             price_change = float(t.get("priceChangePercent", 0))
@@ -423,7 +423,7 @@ def scan_market_top_symbols(client, limit=10):
                 continue
 
             # filtro de liquidez
-            if volume < 10_000_000:
+            if volume < 3_000_000:
                 continue
 
             try:
@@ -490,6 +490,9 @@ def scan_market_top_symbols(client, limit=10):
 
                 volatility = (max_price - min_price) / min_price
                 
+                #print(symbol, "volume:", volume, "vol:", volatility)
+                print(f"{symbol} | volUSDT={volume:,.0f} | volatility={volatility:.4f}")
+                
                 if volatility > 0.25:
                     continue
 
@@ -531,7 +534,7 @@ def scan_market_top_symbols(client, limit=10):
                 )
 
                 # evita moedas lateralizadas
-                if volatility < 0.006:
+                if volatility < 0.003:
                     continue
 
                 # evita pump exagerado
