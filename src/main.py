@@ -573,8 +573,8 @@ def scan_market_top_symbols(client, limit=10):
 
                 liquidity_sweep_signal = sweep_down or sweep_up  
 
-                if closes[-1] > max(closes[-10:]) * 1.10:
-                    continue
+                #if closes[-1] > max(closes[-10:]) * 1.15:
+                #    continue
 
                 score = (
                     math.log(max(volume,1)) *
