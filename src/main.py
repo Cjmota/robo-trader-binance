@@ -271,7 +271,21 @@ def trader_master_loop():
                 print(f"🎯 Testando ativo: {symbol}")
 
                 try:
-                    capital = config["stocks_traded_list"][0]["capital"]
+                    account = BINANCE_CLIENT.get_account()
+
+                    balance = 0
+
+                    for asset in account["balances"]:
+                        if asset["asset"] == "USDT":
+                            balance = float(asset["free"])
+                            break
+
+                    max_position = balance * config["RISK"]["MAX_POSITION_PERCENT"]
+
+                    capital = min(
+                        config["stocks_traded_list"][0]["capital"],
+                        max_position
+                    )
 
                     trader = BinanceTraderBot(
                         stock_code=stock,

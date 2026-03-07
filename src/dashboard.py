@@ -25,6 +25,10 @@ def load_config():
     with open(CONFIG_PATH, "r") as f:
         return json.load(f)
 
+def save_config(config):
+    with open(CONFIG_PATH, "w") as f:
+        json.dump(config, f, indent=4)
+
 # ---------------- HOME ----------------
 @app.route("/")
 def home():
@@ -181,15 +185,17 @@ def get_config():
     return jsonify(load_config())
 
 @app.route("/api/config", methods=["POST"])
-def save_config():
+def update_config():
 
     data = request.json
-
     config = load_config()
 
-    config.update(data)
+    config["RISK"]["MAX_TRADES_PER_DAY"] = int(data["MAX_TRADES_PER_DAY"])
+    config["RISK"]["SYMBOL_COOLDOWN"] = int(data["SYMBOL_COOLDOWN"])
+    config["RISK"]["LOSS_COOLDOWN"] = int(data["LOSS_COOLDOWN"])
 
-    with open(CONFIG_PATH, "w") as f:
-        json.dump(config, f, indent=4)
+    config["RISK"]["MAX_POSITION_PERCENT"] = float(data["MAX_POSITION_PERCENT"]) / 100
 
-    return jsonify({"status":"saved"})
+    save_config(config)
+
+    return {"status": "ok"}

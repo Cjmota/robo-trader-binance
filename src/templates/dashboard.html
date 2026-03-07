@@ -322,9 +322,16 @@ button:disabled {
     <input id="cfg_time" class="form-control">
     </div>
 
+    <div class="col-md-3">
+    <label>Max position (% da conta)</label>
+    <input id="cfg_max_position" class="form-control" type="number" min="1" max="20">
+    </div>
+
     <button class="btn btn-primary mt-4" onclick="saveConfig()">
 💾  Salvar Configurações
     </button>
+
+    
 
 </div> <!-- fecha setingspage -->
 
@@ -714,6 +721,8 @@ document.getElementById("cfg_stoploss").value = data.STOP_LOSS_PERCENTAGE
 document.getElementById("cfg_tp1").value = data.TP_AT_PERCENTAGE[0]
 document.getElementById("cfg_tp2").value = data.TP_AT_PERCENTAGE[1]
 document.getElementById("cfg_time").value = data.TEMPO_ENTRE_TRADES
+document.getElementById("cfg_max_position").value =
+data.RISK.MAX_POSITION_PERCENT * 100
 
 }
 
