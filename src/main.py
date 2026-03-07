@@ -613,8 +613,8 @@ def scan_market_top_symbols(client, limit=10):
                 
                 if score < 0.00001:
                     continue
-                       
-                candidates.append((symbol, score))
+                if score > 0.01:       
+                   candidates.append((symbol, score))
 
             except Exception:
                 continue
