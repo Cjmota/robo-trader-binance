@@ -375,11 +375,11 @@ def symbol_to_stock(symbol):
 def scan_market_top_symbols(client, limit=10):
     
     global SCANNER_SMART_MONEY
-    SCANNER_SMART_MONEY.clear()
-    
     global SCANNER_RANKING
+
+    SCANNER_SMART_MONEY.clear()
     SCANNER_RANKING.clear()
-    
+
     config = load_config()
     
     print("🔎 Escaneando mercado inteligente PRO...")
