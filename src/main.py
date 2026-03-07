@@ -646,11 +646,11 @@ def scan_market_top_symbols(client, limit=10):
                 #    continue
 
                 score = (
-                    math.log(max(volume,1)) *
-                    (volatility ** 0.7) *
-                    (abs(trend_strength) * 100) *
+                    math.log(max(volume,1), 10) *
+                    (volatility ** 0.4) *
+                    (abs(trend_strength) * 120) *
                     min(abs(price_change), 8) *
-                    (abs(momentum) * 50) *
+                    (abs(momentum) * 120) *
                     (3 if smart_money_signal else 1) *
                     (ADAPTIVE_WEIGHTS["pre_pump"] if pre_pump_signal else 1) *
                     (ADAPTIVE_WEIGHTS["squeeze"] if squeeze_signal else 1) *
