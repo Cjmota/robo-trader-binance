@@ -408,6 +408,13 @@ def scan_market_top_symbols(client, limit=10):
 
             if not symbol.endswith("USDT"):
                 continue
+            
+            # 🚫 Ignorar stablecoins e pares sintéticos
+            if symbol.startswith(("USDC","FDUSD","EUR","USD","RLUSD")):
+                continue    
+            # 🚫 Ignorar tokens alavancados
+            if symbol.endswith(("UPUSDT","DOWNUSDT","BULLUSDT","BEARUSDT")):
+                continue    
 
             volume = float(t["quoteVolume"])
             
@@ -535,8 +542,8 @@ def scan_market_top_symbols(client, limit=10):
                 )
 
                 # evita moedas lateralizadas
-                #if volatility < 0.015:
-                #    continue
+                if volatility < 0.002:
+                    continue
 
                 # evita pump exagerado
                 if abs(price_change) > 20:
@@ -566,7 +573,7 @@ def scan_market_top_symbols(client, limit=10):
 
                 liquidity_sweep_signal = sweep_down or sweep_up  
 
-                if closes[-1] > max(closes[-10:]) * 1.05:
+                if closes[-1] > max(closes[-10:]) * 1.10:
                     continue
 
                 score = (
