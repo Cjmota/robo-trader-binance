@@ -531,6 +531,10 @@ def scan_market_top_symbols(client, limit=10):
                 #print(symbol, "volume:", volume, "vol:", volatility)
                 print(f"{symbol} | volume={volume:,.0f} | vol={volatility:.4f} | trades={trade_count}")
                 
+                print("CANDIDATE:", symbol, "score:", score)
+                
+                
+                
                 if volatility > config["SCANNER"]["MAX_VOLATILITY"]:
                     continue
 
@@ -654,6 +658,13 @@ def scan_market_top_symbols(client, limit=10):
                     (ADAPTIVE_WEIGHTS["sweep"] if liquidity_sweep_signal else 1)
                 )
                 
+                print(
+                    f"CANDIDATE → {symbol} | score={score:.3f} | "
+                    f"trend={trend_strength:.4f} | "
+                    f"momentum={momentum:.4f} | "
+                    f"volatility={volatility:.4f}"
+                )
+                
                 if smart_money_signal:
                     print("🏦 Acumulação institucional detectada:", symbol)
                     SCANNER_SMART_MONEY.append(symbol)
@@ -678,8 +689,6 @@ def scan_market_top_symbols(client, limit=10):
                     if total >= 3:
                         winrate = wins / total
                         score *= (1 + winrate)
-                
-                print("CANDIDATE:", symbol, "score:", score)
                 
                 if score < 0.00001:
                     continue
