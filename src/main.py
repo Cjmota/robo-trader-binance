@@ -394,6 +394,12 @@ def scan_market_top_symbols(client, limit=10):
         
 
         for t in tickers:
+            
+            symbol = t["symbol"]
+            volume = float(t.get("quoteVolume", 0))
+            trade_count = int(t.get("count", 0))
+
+            print("SCAN:", symbol, volume, trade_count)
 
             symbol = t["symbol"]
 
@@ -404,7 +410,7 @@ def scan_market_top_symbols(client, limit=10):
             
             trade_count = int(t.get("count", 0))
 
-            if trade_count < 200:
+            if trade_count < 50:
                 continue
             
             price_change = float(t.get("priceChangePercent", 0))
@@ -416,15 +422,15 @@ def scan_market_top_symbols(client, limit=10):
 
             if bid > 0 and ask > 0:
                 spread = (ask - bid) / bid
-                if spread > 0.003:
+                if spread > 0.004:
                     continue
 
             if price == 0:
                 continue
 
             # filtro de liquidez
-            #if volume < 1_500_000:
-            #    continue
+            if volume < 1_000_000:
+                continue
 
             try:
 
@@ -450,7 +456,7 @@ def scan_market_top_symbols(client, limit=10):
 
                 # se mercado estiver com liquidez muito baixa ignora
                 if market_mode == "LOW_ACTIVITY":
-                    continue
+                    pass
 
                 # se estiver baixa liquidez reduz score depois
                 low_liquidity_mode = market_mode == "LOW_LIQUIDITY"
@@ -526,8 +532,8 @@ def scan_market_top_symbols(client, limit=10):
                 )
 
                 # evita moedas lateralizadas
-                if volatility < 0.015:
-                    continue
+                #if volatility < 0.015:
+                #    continue
 
                 # evita pump exagerado
                 if abs(price_change) > 20:
@@ -540,8 +546,8 @@ def scan_market_top_symbols(client, limit=10):
                  
                 dump_risk = (closes[-1] - closes[-3]) / max(closes[-3], 0.00000001)
 
-                if dump_risk < -0.04:
-                    continue
+                #if dump_risk < -0.04:
+                #    continue
                 
                 # -----------------------------
                 # LIQUIDITY SWEEP DETECTOR
