@@ -498,7 +498,7 @@ def scan_market_top_symbols(client, limit=10):
                 volume_previous = sum(volumes[-10:-5]) / max(len(volumes[-10:-5]),1)
 
                 if volume_previous == 0:
-                    volume_acceleration = 1
+                    volume_acceleration = 0
                 else:
                     volume_acceleration = volume_recent / volume_previous
                     
@@ -528,7 +528,6 @@ def scan_market_top_symbols(client, limit=10):
                 if volatility < 0.008:
                     continue
                 
-                #print(symbol, "volume:", volume, "vol:", volatility)
                 print(f"{symbol} | volume={volume:,.0f} | vol={volatility:.4f} | trades={trade_count}")
                         
                 if volatility > config["SCANNER"]["MAX_VOLATILITY"]:
