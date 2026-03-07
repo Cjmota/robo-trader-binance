@@ -96,6 +96,9 @@ class BinanceTraderBot:
         self.last_closed_order_id = None
         self.current_day = datetime.now().date()
         
+        # limite de trades por dia
+        self.max_daily_trades = 40
+        
         # 🎯 Modo híbrido de realização parcial
         self.partial_take_profit_levels = [1.0, 2.0]  # %
         self.partial_take_profit_amounts = [30, 30]   # % da posição
@@ -133,6 +136,15 @@ class BinanceTraderBot:
         
         self.last_orderbook_check = 0
         self.cached_orderbook = None
+        
+        self.last_trade_time = 0
+        self.trade_cooldown = 30  # segundos
+
+        self.max_daily_loss = -10
+        
+        self.hourly_trades = 0
+        self.last_hour = datetime.now().hour
+        self.max_hourly_trades = 8
 
         for attempt in range(5):
             try:
@@ -222,6 +234,9 @@ class BinanceTraderBot:
                     interval=interval,
                     limit=100
                 )
+
+                if not candles:
+                    return False
 
                 df = pd.DataFrame(candles)
 
@@ -729,6 +744,8 @@ class BinanceTraderBot:
                     type=ORDER_TYPE_MARKET,  # Ordem de Mercado
                     quantity=quantity,
                 )
+
+                self.last_trade_time = time.time()
 
                 self.actual_trade_position = True  # Define posição como comprada
                 createLogOrder(order_buy)  # Cria um log
@@ -1330,6 +1347,16 @@ class BinanceTraderBot:
                 return
 
             self.updateDailyProfit()
+            
+            # 🛑 Stop diário de perda
+            if self.daily_profit <= self.max_daily_loss:
+                print("🛑 Stop diário de perda atingido.")
+                return
+
+            # 🚫 Limite de trades diário
+            if self.daily_trades >= self.max_daily_trades:
+                print("🚫 Limite diário de trades atingido.")
+                return
 
             if pump_signal and not self.actual_trade_position and regime == "EXPLOSIVE":
                 print("🚀 Pump confirmado em regime explosivo.")
@@ -1397,8 +1424,6 @@ class BinanceTraderBot:
 
             liquidation_signal = self.detectLiquidationMove()
 
-            strategy_signal = self.getFinalDecisionStrategy()
-
             # 🔥 TODOS OS DETECTORES PRIMEIRO
            
             trap_signal = self.detectMarketMakerTrap()
@@ -1408,6 +1433,8 @@ class BinanceTraderBot:
             spoof_signal = self.detectSpoofing()
             
             vacuum_signal = self.detectLiquidityVacuum()
+            
+            strategy_signal = self.getFinalDecisionStrategy()
             
             score = 0
 
@@ -1477,9 +1504,25 @@ class BinanceTraderBot:
             else:
                 signal = strategy_signal
         
+            depth = self.getCachedOrderBook()
+
+            best_bid = float(depth["bids"][0][0])
+            best_ask = float(depth["asks"][0][0])
+
+            spread = (best_ask - best_bid) / best_bid
+
+            if spread > 0.002:
+                print("⚠️ Spread alto. Evitando trade.")
+                return
+        
             # ---------------------------------------------
             # COMPRA
             if signal in [True, "BUY"] and score >= 4:
+
+                # ⏸️ Cooldown entre trades
+                if time.time() - self.last_trade_time < self.trade_cooldown:
+                    print("⏸️ Cooldown ativo. Aguardando próximo trade.")
+                    return
 
                 # 🔎 Filtros institucionais antes da entrada
                 if self.detectFakeBreakout():
@@ -1499,11 +1542,21 @@ class BinanceTraderBot:
                     compression_signal
                 )
 
-                self.capital = capital_to_use
+                quantity = capital_to_use / self.stock_data["close_price"].iloc[-1]
 
                 if not self.actual_trade_position:
                     print("🚀 Entrada confirmada.")
                     self.buyLimitedOrder()
+                    
+                current_hour = datetime.now().hour
+
+                if current_hour != self.last_hour:
+                    self.hourly_trades = 0
+                    self.last_hour = current_hour
+
+                if self.hourly_trades >= self.max_hourly_trades:
+                    print("⏸️ Limite de trades por hora atingido.")
+                    return                
 
             # ---------------------------------------------
             # VENDA
@@ -1751,8 +1804,8 @@ class BinanceTraderBot:
         close = self.stock_data["close_price"].iloc[-1]
         prev = self.stock_data["close_price"].iloc[-2]
 
-        if prev == 0:
-            return None
+        if prev == 0 or avg_volume == 0:
+            return False
 
         price_change = (close - prev) / prev
 
@@ -1806,6 +1859,8 @@ class BinanceTraderBot:
         close = self.stock_data["close_price"].iloc[-1]
         prev = self.stock_data["close_price"].iloc[-2]
 
+        if prev == 0:
+            return None
         price_change = (close - prev) / prev
 
         if volume > avg_volume * 3 and abs(price_change) > 0.01:
@@ -1831,6 +1886,9 @@ class BinanceTraderBot:
             avg_volume = volumes.rolling(20).mean().iloc[-1]
             current_volume = volumes.iloc[-1]
 
+            if len(closes) < 30:
+                return False
+            
             recent_high = closes.iloc[-30:-1].max()
 
             volume_spike = avg_volume > 0 and current_volume > avg_volume * 2
@@ -1861,11 +1919,10 @@ class BinanceTraderBot:
 
         try:
 
-            depth = self.getCachedOrderBook()
-            
+            bids, asks = self.getSafeOrderBook()
 
-            bids = depth["bids"]
-            asks = depth["asks"]
+            if not bids or not asks:
+                return None
 
             bid_volume = sum(float(b[1]) for b in bids[:10])
             ask_volume = sum(float(a[1]) for a in asks[:10])
@@ -1896,10 +1953,17 @@ class BinanceTraderBot:
 
         try:
 
-            depth = self.getCachedOrderBook()
+            bids, asks = self.getSafeOrderBook()
 
-            bids = depth["bids"]
-            asks = depth["asks"]
+            if not bids or not asks:
+                return
+
+            best_bid = float(bids[0][0])
+            best_ask = float(asks[0][0])
+
+            if not bids or not asks:
+                print("⚠️ Orderbook vazio. Ignorando detector de liquidez.")
+                return None
 
             bid_wall = max(float(b[1]) for b in bids[:15])
             ask_wall = max(float(a[1]) for a in asks[:15])
@@ -1941,10 +2005,12 @@ class BinanceTraderBot:
             return depth
 
         except Exception as e:
-
             print("Erro ao obter orderbook:", e)
 
-            return self.cached_orderbook
+            if self.cached_orderbook:
+                return self.cached_orderbook
+
+            return {"bids": [], "asks": []}
         
     def detectMarketRegime(self):
 
@@ -2071,8 +2137,12 @@ class BinanceTraderBot:
 
             depth = self.getCachedOrderBook()
 
-            bids = depth["bids"][:10]
-            asks = depth["asks"][:10]
+            bids = depth.get("bids", [])[:10]
+            asks = depth.get("asks", [])[:10]
+
+            if not bids or not asks:
+                print("⚠️ Orderbook vazio. Ignorando spoofing.")
+                return None
 
             bid_volume = sum(float(b[1]) for b in bids)
             ask_volume = sum(float(a[1]) for a in asks)
@@ -2107,15 +2177,16 @@ class BinanceTraderBot:
 
         try:
 
-            depth = self.getCachedOrderBook()
-
-            bids = depth["bids"][:10]
-            asks = depth["asks"][:10]
+            bids, asks = self.getSafeOrderBook()
+            
+            if not bids or not asks:
+                return None
 
             bid_volume = sum(float(b[1]) for b in bids)
             ask_volume = sum(float(a[1]) for a in asks)
 
-            close_price = self.stock_data["close_price"].iloc[-1]
+            if self.stock_data.empty:
+                return None
 
             total_liquidity = bid_volume + ask_volume
 
@@ -2248,3 +2319,18 @@ class BinanceTraderBot:
             print("Erro no detector de compressão:", e)
 
             return False
+    
+    def getSafeOrderBook(self):
+
+        depth = self.getCachedOrderBook()
+
+        if not depth:
+            return [], []
+
+        bids = depth.get("bids", [])
+        asks = depth.get("asks", [])
+
+        if not bids or not asks:
+            return [], []
+
+        return bids, asks
