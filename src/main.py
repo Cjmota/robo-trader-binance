@@ -608,7 +608,8 @@ def scan_market_top_symbols(client, limit=10):
                     if total >= 3:
                         winrate = wins / total
                         score *= (1 + winrate)
-                        
+                
+                print("CANDIDATE:", symbol, "score:", score)        
                 candidates.append((symbol, score))
 
             except Exception:
