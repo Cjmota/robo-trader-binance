@@ -193,6 +193,16 @@ def trader_master_loop():
     
     while BOT_RUNNING:
         
+        try:
+            if current_trader:
+                try:
+                    reload_runtime_config(current_trader)
+                except Exception as e:
+                    print("Erro ao recarregar config:", e)
+                
+        except:
+            pass
+        
         # limpeza da memória
         if len(MARKET_MEMORY) > 200:
             MARKET_MEMORY.clear()
@@ -253,7 +263,7 @@ def trader_master_loop():
                     continue
                 
                 # 🔒 Evita repetir o mesmo ativo
-                if symbol == last_traded_symbol:
+                if symbol == last_traded_symbol and time.time() - symbol_cooldown.get(symbol,0) < COOLDOWN_SECONDS:
                     continue    
                 
                 stock = symbol.replace("USDT", "")
@@ -261,11 +271,12 @@ def trader_master_loop():
                 print(f"🎯 Testando ativo: {symbol}")
 
                 try:
+                    capital = config["stocks_traded_list"][0]["capital"]
 
                     trader = BinanceTraderBot(
                         stock_code=stock,
                         operation_code=symbol,
-                        traded_quantity=20,
+                        traded_quantity=capital,
                         traded_percentage=100,
                         candle_period=CANDLE_PERIOD,
                         api_key=API_KEY,
@@ -283,7 +294,6 @@ def trader_master_loop():
                         fallback_strategy=FALLBACK_STRATEGY,
                         fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
                     )
-
                     if not trader.updateAllData():
                         continue
 
@@ -463,10 +473,10 @@ def scan_market_top_symbols(client, limit=10):
                 candles = client.get_klines(
                     symbol=symbol,
                     interval=Client.KLINE_INTERVAL_5MINUTE,
-                    limit=30
+                    limit=50
                 )
                 
-                time.sleep(0.05)
+                time.sleep(0.15)
 
                 closes = [float(c[4]) for c in candles]
                 volumes = [float(c[5]) for c in candles]
@@ -513,13 +523,13 @@ def scan_market_top_symbols(client, limit=10):
 
                 min_price = min(lows)
                 max_price = max(highs)
-
-                if min_price == 0:
-                    continue
                 
                 # evita moedas ultrabaratas      
                 # 🚫 evita microcaps perigosas
                 if price < 0.0005:
+                    continue
+
+                if min_price == 0:
                     continue
 
                 volatility = (max_price - min_price) / min_price
@@ -692,7 +702,8 @@ def scan_market_top_symbols(client, limit=10):
                 if score > 1.0:       
                    candidates.append((symbol, score))
 
-            except Exception:
+            except Exception as e:
+                print("Erro no símbolo:", symbol, e)
                 continue
 
         candidates.sort(key=lambda x: x[1], reverse=True)
