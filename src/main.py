@@ -579,9 +579,9 @@ def scan_market_top_symbols(client, limit=10):
                 score = (
                     math.log(max(volume,1)) *
                     (volatility ** 0.7) *
-                    abs(trend_strength) *
+                    (abs(trend_strength) * 100) *
                     abs(price_change) *
-                    abs(momentum) *
+                    (abs(momentum) * 50) *
                     (ADAPTIVE_WEIGHTS["pre_pump"] if pre_pump_signal else 1) *
                     (ADAPTIVE_WEIGHTS["squeeze"] if squeeze_signal else 1) *
                     (ADAPTIVE_WEIGHTS["orderflow"] if orderflow_signal else 1) *
@@ -609,7 +609,11 @@ def scan_market_top_symbols(client, limit=10):
                         winrate = wins / total
                         score *= (1 + winrate)
                 
-                print("CANDIDATE:", symbol, "score:", score)        
+                print("CANDIDATE:", symbol, "score:", score)
+                
+                if score < 0.00001:
+                    continue
+                       
                 candidates.append((symbol, score))
 
             except Exception:
