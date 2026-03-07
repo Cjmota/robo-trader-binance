@@ -14,6 +14,8 @@ from src.modules.BinanceTraderBot import BinanceTraderBot
 from binance.client import Client
 from src.Models.StockStartModel import StockStartModel
 
+from src.utils.market_mode import detect_market_mode
+
 from src.strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
 from src.strategies.moving_average import getMovingAverageTradeStrategy
 from src.strategies.rsi_strategy import getRsiTradeStrategy
@@ -383,6 +385,13 @@ def scan_market_top_symbols(client, limit=10):
             return []
 
         candidates = []
+        
+        market_mode_global = None
+
+        if market_mode == "LOW_ACTIVITY":
+            print("⚠ Mercado com baixa atividade, scanner pausado.")
+            time.sleep(30)
+            return []
 
         for t in tickers:
 
@@ -435,6 +444,26 @@ def scan_market_top_symbols(client, limit=10):
                 lows = [float(c[3]) for c in candles]
 
                 # -----------------------------
+                # MARKET MODE DETECTOR
+
+                market_mode = detect_market_mode(volumes)
+
+                # -----------------------------
+                # MARKET MODE DETECTOR (calculado uma vez)
+
+                if market_mode_global is None:
+                    market_mode_global = detect_market_mode(volumes)
+
+                market_mode = market_mode_global
+
+                # se mercado estiver com liquidez muito baixa ignora
+                if market_mode == "LOW_ACTIVITY":
+                    continue
+
+                # se estiver baixa liquidez reduz score depois
+                low_liquidity_mode = market_mode == "LOW_LIQUIDITY"
+
+                # -----------------------------
                 # ORDER FLOW ACCELERATION
 
                 volume_recent = sum(volumes[-5:]) / max(len(volumes[-5:]),1)
@@ -469,8 +498,6 @@ def scan_market_top_symbols(client, limit=10):
 
                 # média longa
                 ma25 = sum(closes[-25:]) / 25
-                
-                
 
                 trend_strength = (ma7 - ma25) / ma25
                 
@@ -549,6 +576,13 @@ def scan_market_top_symbols(client, limit=10):
                     (ADAPTIVE_WEIGHTS["orderflow"] if orderflow_signal else 1) *
                     (ADAPTIVE_WEIGHTS["sweep"] if liquidity_sweep_signal else 1)
                 )
+                
+                # ajuste baseado no modo de mercado
+                if market_mode == "HIGH_VOLATILITY":
+                    score *= 1.2
+
+                if low_liquidity_mode:
+                    score *= 0.7
                 
                 score *= (1.5 if accumulation_signal else 1)
                 
