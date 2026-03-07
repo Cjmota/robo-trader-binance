@@ -377,6 +377,9 @@ def scan_market_top_symbols(client, limit=10):
     global SCANNER_SMART_MONEY
     SCANNER_SMART_MONEY.clear()
     
+    global SCANNER_RANKING
+    SCANNER_RANKING.clear()
+    
     config = load_config()
     
     print("🔎 Escaneando mercado inteligente PRO...")
@@ -452,6 +455,9 @@ def scan_market_top_symbols(client, limit=10):
             # filtro de liquidez
             if volume < config["SCANNER"]["MIN_VOLUME"]:
                 continue
+            # 🚫 evita moedas sem liquidez real
+            if volume < 3_000_000:
+                continue
 
             try:
 
@@ -493,12 +499,12 @@ def scan_market_top_symbols(client, limit=10):
                 volume_previous = sum(volumes[-10:-5]) / max(len(volumes[-10:-5]),1)
 
                 if volume_previous == 0:
-                    volume_acceleration = 0
+                    volume_acceleration = 1
                 else:
                     volume_acceleration = volume_recent / volume_previous
                     
                     # 🚫 elimina mercado sem fluxo
-                    if volume_acceleration < 1.2:
+                    if volume_acceleration < 0.8:
                         continue
 
                 orderflow_signal = volume_acceleration > 1.6
@@ -511,17 +517,16 @@ def scan_market_top_symbols(client, limit=10):
 
                 if min_price == 0:
                     continue
-                # evita moedas ultrabaratas    
-                if min_price < 0.0000005:
-                    
-                    # 🚫 evita microcaps perigosas
-                    if price < 0.0005:
-                       continue
+                
+                # evita moedas ultrabaratas      
+                # 🚫 evita microcaps perigosas
+                if price < 0.0005:
+                    continue
 
                 volatility = (max_price - min_price) / min_price
                 
                 # 🚫 elimina moedas mortas
-                if volatility < 0.02:
+                if volatility < 0.012:
                     continue
                 
                 #print(symbol, "volume:", volume, "vol:", volatility)
@@ -539,7 +544,7 @@ def scan_market_top_symbols(client, limit=10):
                 trend_strength = (ma7 - ma25) / ma25
                 
                 # 🚫 elimina lateralização
-                if abs(trend_strength) < 0.01:
+                if abs(trend_strength) < 0.006:
                     continue
                 
                 # -----------------------------
@@ -641,7 +646,7 @@ def scan_market_top_symbols(client, limit=10):
                     math.log(max(volume,1)) *
                     (volatility ** 0.7) *
                     (abs(trend_strength) * 100) *
-                    abs(price_change) *
+                    min(abs(price_change), 8) *
                     (abs(momentum) * 50) *
                     (3 if smart_money_signal else 1) *
                     (ADAPTIVE_WEIGHTS["pre_pump"] if pre_pump_signal else 1) *
