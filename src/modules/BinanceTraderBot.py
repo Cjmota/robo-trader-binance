@@ -1328,6 +1328,8 @@ class BinanceTraderBot:
             
             accumulation_signal = self.detectSilentAccumulation()
             
+            iceberg_signal = self.detectIcebergOrders()
+            
             sweep_signal = self.detectLiquiditySweepReversal()
             whale_signal = self.detectWhalePressure()
             
@@ -1441,6 +1443,9 @@ class BinanceTraderBot:
             score = 0
             if accumulation_signal:
                 score += 4
+
+            if iceberg_signal:
+                score += 3
 
             if trap_signal:
                 score += 3
@@ -2406,5 +2411,45 @@ class BinanceTraderBot:
         except Exception as e:
 
             print("Erro detector acumulação:", e)
+
+            return False
+        
+    def detectIcebergOrders(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 30:
+                return False
+
+            # Range de preço curto
+            price_range = (
+                closes.iloc[-15:].max() - closes.iloc[-15:].min()
+            ) / closes.iloc[-15:].min()
+
+            # Volume médio
+            avg_volume = volumes.iloc[-25:-5].mean()
+            recent_volume = volumes.iloc[-5:].mean()
+
+            volume_spike = recent_volume > avg_volume * 1.8
+
+            # candles pequenos = absorção
+            candle_size = abs(closes.iloc[-1] - closes.iloc[-2])
+            small_candle = candle_size < closes.iloc[-1] * 0.001
+
+            if price_range < 0.01 and volume_spike and small_candle:
+
+                print("🐋 ICEBERG ORDER DETECTADA")
+                print(f"Volume spike: {recent_volume/avg_volume:.2f}x")
+
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no detector iceberg:", e)
 
             return False
