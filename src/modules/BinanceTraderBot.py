@@ -1440,7 +1440,7 @@ class BinanceTraderBot:
             
             score = 0
             if accumulation_signal:
-                score += 3
+                score += 4
 
             if trap_signal:
                 score += 3
@@ -2353,27 +2353,51 @@ class BinanceTraderBot:
 
             closes = self.stock_data["close_price"]
             volumes = self.stock_data["volume"]
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
 
-            if len(closes) < 25:
+            if len(closes) < 30:
                 return False
 
-            # range curto (compressão)
-            recent_range = (
-                closes.iloc[-15:].max() - closes.iloc[-15:].min()
-            ) / closes.iloc[-15:].min()
+            # -------------------------
+            # 1️⃣ Compressão de preço
 
-            # volume crescente
+            price_range = (
+                closes.iloc[-20:].max() - closes.iloc[-20:].min()
+            ) / closes.iloc[-20:].min()
+
+            compression = price_range < 0.015
+
+            # -------------------------
+            # 2️⃣ Crescimento progressivo de volume
+
             avg_volume = volumes.iloc[-20:-5].mean()
             recent_volume = volumes.iloc[-5:].mean()
 
-            volume_growth = recent_volume > avg_volume * 1.4
+            volume_growth = recent_volume > avg_volume * 1.5
 
-            # preço levemente ascendente
-            momentum = (closes.iloc[-1] - closes.iloc[-5]) / closes.iloc[-5]
+            # -------------------------
+            # 3️⃣ Pressão de compra
 
-            if recent_range < 0.012 and volume_growth and momentum > 0:
+            buy_pressure = closes.iloc[-1] > closes.iloc[-2]
 
-                print("🏦 ACUMULAÇÃO INSTITUCIONAL DETECTADA")
+            # -------------------------
+            # 4️⃣ ATR baixo (mercado comprimido)
+
+            atr = (highs - lows).rolling(14).mean().iloc[-1]
+            atr_pct = atr / closes.iloc[-1]
+
+            low_volatility = atr_pct < 0.004
+
+            # -------------------------
+            # DECISÃO FINAL
+
+            if compression and volume_growth and buy_pressure and low_volatility:
+
+                print("🏦 ACUMULAÇÃO INSTITUCIONAL FORTE DETECTADA")
+
+                print(f"Range: {price_range*100:.2f}%")
+                print(f"Volume growth: {recent_volume/avg_volume:.2f}x")
 
                 return True
 
