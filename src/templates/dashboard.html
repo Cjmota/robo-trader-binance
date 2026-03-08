@@ -471,9 +471,6 @@
                 }
             }
 
-            setInterval(updateStatus, 2000);
-            updateStatus();
-
             function toggleSidebar() {
                 let sidebar = document.getElementById("sidebar");
                 let main = document.getElementById("mainContent");
@@ -580,13 +577,6 @@
                 let res = await fetch("/trades");
                 let trades = await res.json();
 
-                if (!trades || trades.length === 0) {
-                    document.getElementById("statTrades").innerText = 0;
-                    document.getElementById("statWinrate").innerText = "0%";
-                    document.getElementById("statProfitFactor").innerText = 0;
-                    return;
-                }
-
                 let total = trades.length;
 
                 let profits = trades.map(t => t.profit);
@@ -610,6 +600,11 @@
                 // 🔥 Curva acumulada
                 let cumulative = [];
                 let running = 0;
+
+                if(!data.ranking || data.ranking.length === 0){
+                    table.innerHTML = "<tr><td colspan='4'>Sem oportunidades</td></tr>"
+                    return
+                }    
 
                 profits.forEach(p => {
                     running += p;
@@ -797,17 +792,31 @@
                     let html = ""
                     smart.innerHTML = ""
 
+                    if(!data.ranking || data.ranking.length === 0){
+                        table.innerHTML = "<tr><td colspan='4'>Sem oportunidades</td></tr>"
+                        return
+                    }
+
                     data.ranking.forEach((r, i) => {
-                    
+                        
                         let star = i === 0 ? "⭐ " : ""
                         let highlight = i === 0 ? "style='color:#22c55e;font-weight:bold'" : ""
+
+                        // 🔥 FORMATAÇÃO DO VOLUME
+                        let vol = r.volume
+
+                        if(vol > 1e9){
+                            vol = (vol/1e9).toFixed(2) + "B"
+                        }else{
+                            vol = (vol/1e6).toFixed(2) + "M"
+                        }
 
                         html += `
                         <tr ${highlight}>
                             <td>${star}${r.symbol}</td>
-                            <td>${r.score}</td>
+                            <td>${r.score.toFixed(2)}</td>
                             <td>${r.momentum}</td>
-                            <td>${r.volume}</td>
+                            <td>${vol}</td>
                         </tr>
                         `
                     })

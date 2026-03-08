@@ -1326,6 +1326,8 @@ class BinanceTraderBot:
             volume_spike = self.detectPump()
             pump_signal = volume_spike
             
+            accumulation_signal = self.detectSilentAccumulation()
+            
             sweep_signal = self.detectLiquiditySweepReversal()
             whale_signal = self.detectWhalePressure()
             
@@ -1437,6 +1439,8 @@ class BinanceTraderBot:
             strategy_signal = self.getFinalDecisionStrategy()
             
             score = 0
+            if accumulation_signal:
+                score += 3
 
             if trap_signal:
                 score += 3
@@ -1487,6 +1491,14 @@ class BinanceTraderBot:
 
             elif vacuum_signal:
                 signal = vacuum_signal
+
+            elif accumulation_signal and not self.actual_trade_position:
+
+                print("🔥 Entrada antecipada por acumulação")
+
+                self.buyMarketOrder()
+
+                return
 
             # institucional
             elif whale_signal == "BUY" and volume_spike:
@@ -2334,3 +2346,41 @@ class BinanceTraderBot:
             return [], []
 
         return bids, asks
+    
+def detectSilentAccumulation(self):
+
+    try:
+
+        closes = self.stock_data["close_price"]
+        volumes = self.stock_data["volume"]
+
+        if len(closes) < 25:
+            return False
+
+        # range curto (compressão)
+        recent_range = (
+            closes.iloc[-15:].max() - closes.iloc[-15:].min()
+        ) / closes.iloc[-15:].min()
+
+        # volume crescente
+        avg_volume = volumes.iloc[-20:-5].mean()
+        recent_volume = volumes.iloc[-5:].mean()
+
+        volume_growth = recent_volume > avg_volume * 1.4
+
+        # preço levemente ascendente
+        momentum = (closes.iloc[-1] - closes.iloc[-5]) / closes.iloc[-5]
+
+        if recent_range < 0.012 and volume_growth and momentum > 0:
+
+            print("🏦 ACUMULAÇÃO INSTITUCIONAL DETECTADA")
+
+            return True
+
+        return False
+
+    except Exception as e:
+
+        print("Erro detector acumulação:", e)
+
+        return False

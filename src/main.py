@@ -417,22 +417,35 @@ def scan_market_top_symbols(client, limit=10):
         if not tickers:
             return []
 
-        # 🔥 Ordena por volume e pega apenas top 80
+        # pega top 200 por volume
         tickers = sorted(
             tickers,
             key=lambda x: float(x.get("quoteVolume", 0)),
             reverse=True
-        )[:config["SCANNER"]["SCAN_LIMIT"]]
+        )[:200]
+
+        fast_candidates = []
+
+        # filtro rapido --------------------------------------------- #
+        for t in tickers:
+
+            price_change = float(t.get("priceChangePercent",0))
+            volume = float(t.get("quoteVolume",0))
+
+            # filtro rápido
+            if volume > 500000 and abs(price_change) < 12:
+                fast_candidates.append(t)
+
+        tickers = fast_candidates[:40]
+        # ---------------------------------------------------------- #
 
         if not tickers:
             return []
 
         candidates = []
         
-        market_mode_global = None
         market_mode = None
         
-
         for t in tickers:
             
             symbol = t["symbol"]
@@ -476,12 +489,9 @@ def scan_market_top_symbols(client, limit=10):
                 continue
 
             # filtro de liquidez
-            if volume < config["SCANNER"]["MIN_VOLUME"]:
+            if volume < max(config["SCANNER"]["MIN_VOLUME"], 3000000):
                 continue
-            # 🚫 evita moedas sem liquidez real
-            if volume < 3_000_000:
-                continue
-
+            
             try:
 
                 candles = client.get_klines(
@@ -490,11 +500,21 @@ def scan_market_top_symbols(client, limit=10):
                     limit=50
                 )
                 
-                time.sleep(0.15)
-
+                time.sleep(0.02)
+                
+                # cria closes e volumes
                 closes = [float(c[4]) for c in candles]
                 volumes = [float(c[5]) for c in candles]
                 
+                # proteção contra candles insuficientes
+                if len(closes) < 30 or len(volumes) < 30:
+                    logging.warning(f"Candles insuficientes para {symbol}")
+                    continue
+                
+                vol_acceleration = volumes[-1] / max(volumes[-5],1)
+                    
+                recent_high = max(closes[-8:])
+
                 if len(volumes) > 2 and volumes[-1] < volumes[-2]:
                     continue
                 
@@ -502,6 +522,15 @@ def scan_market_top_symbols(client, limit=10):
                 current_volume = volumes[-1]
                 highs = [float(c[2]) for c in candles]
                 lows = [float(c[3]) for c in candles]
+                
+                if len(highs) < 30 or len(lows) < 30:
+                    continue
+
+                volume_trend_short = volumes[-1] > volumes[-2] > volumes[-3]
+
+                price_range = (
+                    max(closes[-12:]) - min(closes[-12:])
+                ) / min(closes[-12:])
 
                 # -----------------------------
                 # MARKET MODE DETECTOR
@@ -510,7 +539,7 @@ def scan_market_top_symbols(client, limit=10):
 
                 # se mercado estiver com liquidez muito baixa ignora
                 if market_mode == "LOW_ACTIVITY":
-                    pass
+                    continue
 
                 # se estiver baixa liquidez reduz score depois
                 low_liquidity_mode = market_mode == "LOW_LIQUIDITY"
@@ -590,11 +619,9 @@ def scan_market_top_symbols(client, limit=10):
 
                 price_range = (max(closes[-15:]) - min(closes[-15:])) / max(min(closes[-15:]), 0.00000001)
 
-                volume_trend = volumes[-1] > volumes[-5]
-
                 smart_money_signal = (
                     price_range < 0.025 and
-                    volume_trend and
+                    volume_trend_short and
                     closes[-1] > closes[-3]
                 )
                 
@@ -624,9 +651,6 @@ def scan_market_top_symbols(client, limit=10):
 
                 momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.00000001) 
                  
-                # 🚫 evita comprar no topo do pump
-                recent_high = max(closes[-8:])
-
                 if closes[-1] >= recent_high * 1.01:
                     continue 
                 
@@ -636,6 +660,9 @@ def scan_market_top_symbols(client, limit=10):
                 price_jump = (closes[-1] - closes[-10]) / max(closes[-10], 0.00000001)
 
                 volume_spike_extreme = current_volume > avg_volume * 3
+                
+                if volume_spike_extreme and price_jump > 0.08:
+                    continue
 
                 # se subiu rápido demais com volume exagerado, pode ser topo
                 if price_jump > config["SCANNER"]["PUMP_PROTECTION"]:
@@ -643,9 +670,16 @@ def scan_market_top_symbols(client, limit=10):
                     continue 
                  
                 dump_risk = (closes[-1] - closes[-3]) / max(closes[-3], 0.00000001)
-
-                #if dump_risk < -0.04:
-                #    continue
+                
+                dump_volume = volumes[-1] > avg_volume * 1.5
+                
+                # proteção contra início de dump
+                if dump_risk < -0.03 and dump_volume:
+                    print(f"⚠️ Dump forte detectado em {symbol}")
+                    continue
+                
+                if closes[-1] < closes[-2] < closes[-3] < closes[-4]:
+                    continue
                 
                 # -----------------------------
                 # LIQUIDITY SWEEP DETECTOR
@@ -661,21 +695,37 @@ def scan_market_top_symbols(client, limit=10):
 
                 liquidity_sweep_signal = sweep_down or sweep_up  
 
-                #if closes[-1] > max(closes[-10:]) * 1.15:
-                #    continue
+                if volumes[-1] < avg_volume * 0.5:
+                    continue
+
+                price_flat = (
+                    max(closes[-10:]) - min(closes[-10:])
+                ) / min(closes[-10:]) < 0.02       
 
                 score = (
                     math.log(max(volume,1), 10) *
                     (volatility ** 0.4) *
                     (abs(trend_strength) * 120) *
                     min(abs(price_change), 8) *
-                    (abs(momentum) * 120) *
+                    (abs(momentum) * 260) *
                     (3 if smart_money_signal else 1) *
                     (ADAPTIVE_WEIGHTS["pre_pump"] if pre_pump_signal else 1) *
                     (ADAPTIVE_WEIGHTS["squeeze"] if squeeze_signal else 1) *
                     (ADAPTIVE_WEIGHTS["orderflow"] if orderflow_signal else 1) *
                     (ADAPTIVE_WEIGHTS["sweep"] if liquidity_sweep_signal else 1)
                 )
+                
+                if volume_trend_short and price_flat:
+                    score *= 1.5 
+                
+                if volume_trend_short and price_range < 0.018:
+                    score *= 1.7
+                
+                if vol_acceleration > 2:
+                    score *= 1.6
+                    
+                if closes[-1] > recent_high:
+                    score *= 1.4  
                 
                 print(
                     f"CANDIDATE → {symbol} | score={score:.3f} | "
@@ -714,24 +764,43 @@ def scan_market_top_symbols(client, limit=10):
                 
                 # 🎯 apenas oportunidades fortes
                 if score > 1.0:       
-                   candidates.append((symbol, score))
+                   candidates.append({
+                       "symbol": symbol,
+                       "score": score,
+                       "momentum": momentum,
+                       "volume": volume
+                   })
 
+            # log de erro do scaner
             except Exception as e:
+
+                logging.error(
+                    f"Erro analisando {symbol}: {e}",
+                    exc_info=True
+                )
+
                 print("Erro no símbolo:", symbol, e)
+
                 continue
 
-        candidates.sort(key=lambda x: x[1], reverse=True)
+        candidates.sort(
+            key=lambda x: x["score"],
+            reverse=True
+        )
 
-        SCANNER_RANKING[:] = candidates[:10]
-
-        best = [s[0] for s in candidates[:limit]]
+        SCANNER_RANKING[:] = [
+            (c["symbol"], c["score"], c["momentum"], c["volume"])
+            for c in candidates[:10]
+        ]
+        
+        best = [c["symbol"] for c in candidates[:limit]]
 
         if not best and len(candidates) > 0:
-            best = [candidates[0][0]]
+            best = [candidates[0]["symbol"]]    
         
         print("🔥 TOP OPORTUNIDADES:", best)
 
-        time.sleep(2)
+        time.sleep(0.5)
 
         return best
 
