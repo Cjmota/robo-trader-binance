@@ -2347,40 +2347,40 @@ class BinanceTraderBot:
 
         return bids, asks
     
-def detectSilentAccumulation(self):
+    def detectSilentAccumulation(self):
 
-    try:
+        try:
 
-        closes = self.stock_data["close_price"]
-        volumes = self.stock_data["volume"]
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
 
-        if len(closes) < 25:
+            if len(closes) < 25:
+                return False
+
+            # range curto (compressão)
+            recent_range = (
+                closes.iloc[-15:].max() - closes.iloc[-15:].min()
+            ) / closes.iloc[-15:].min()
+
+            # volume crescente
+            avg_volume = volumes.iloc[-20:-5].mean()
+            recent_volume = volumes.iloc[-5:].mean()
+
+            volume_growth = recent_volume > avg_volume * 1.4
+
+            # preço levemente ascendente
+            momentum = (closes.iloc[-1] - closes.iloc[-5]) / closes.iloc[-5]
+
+            if recent_range < 0.012 and volume_growth and momentum > 0:
+
+                print("🏦 ACUMULAÇÃO INSTITUCIONAL DETECTADA")
+
+                return True
+
             return False
 
-        # range curto (compressão)
-        recent_range = (
-            closes.iloc[-15:].max() - closes.iloc[-15:].min()
-        ) / closes.iloc[-15:].min()
+        except Exception as e:
 
-        # volume crescente
-        avg_volume = volumes.iloc[-20:-5].mean()
-        recent_volume = volumes.iloc[-5:].mean()
+            print("Erro detector acumulação:", e)
 
-        volume_growth = recent_volume > avg_volume * 1.4
-
-        # preço levemente ascendente
-        momentum = (closes.iloc[-1] - closes.iloc[-5]) / closes.iloc[-5]
-
-        if recent_range < 0.012 and volume_growth and momentum > 0:
-
-            print("🏦 ACUMULAÇÃO INSTITUCIONAL DETECTADA")
-
-            return True
-
-        return False
-
-    except Exception as e:
-
-        print("Erro detector acumulação:", e)
-
-        return False
+            return False
