@@ -303,8 +303,7 @@ def trader_master_loop():
                 print(f"🎯 Testando ativo: {symbol}")
 
                 try:
-
-                    account = account = BINANCE_CLIENT.get_account(BINANCE_CLIENT.get_account)
+                    account = safe_binance_call(BINANCE_CLIENT.get_account)
                     
                     if not account:
                         continue
