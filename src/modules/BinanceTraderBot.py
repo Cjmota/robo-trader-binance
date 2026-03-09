@@ -144,7 +144,16 @@ class BinanceTraderBot:
         
         self.hourly_trades = 0
         self.last_hour = datetime.now().hour
-        self.max_hourly_trades = 8
+        self.max_hourly_trades = 6
+        
+        self.last_account_update = 0
+        self.cached_account = None
+        
+        self.orders_cache = None
+        self.orders_cache_time = 0
+
+        self.daily_orders_cache = None
+        self.daily_orders_time = 0
 
         for attempt in range(5):
             try:
@@ -180,7 +189,13 @@ class BinanceTraderBot:
         # fmt: on
 
     def trailingStopTrigger(self):
-        if not self.actual_trade_position:
+        if not self.actual_trade_position or self.last_buy_price <= 0:
+            return False
+
+        if self.last_stock_account_balance <= 0:
+            return False
+
+        if self.stock_data is None or self.stock_data.empty:
             return False
 
         close_price = self.stock_data["close_price"].iloc[-1]
@@ -204,7 +219,7 @@ class BinanceTraderBot:
             print(f"📈 Trailing Stop atualizado: {self.trailing_stop_price:.4f}")
 
         # Se perder o trailing → vende
-        if close_price <= self.trailing_stop_price:
+        if self.trailing_stop_price > 0 and close_price <= self.trailing_stop_price:
             print("🔴 Trailing Stop acionado! Vendendo posição...")
             self.cancelAllOrders()
             time.sleep(1)
@@ -308,9 +323,9 @@ class BinanceTraderBot:
             # 6️⃣ Últimos preços executados
             self.last_buy_price = self.getLastBuyPrice(verbose)
             self.last_sell_price = self.getLastSellPrice(verbose)
-
+            
             # 7️⃣ Reset do índice de take profit se não estiver posicionado
-            if not self.actual_trade_position:
+            if not self.actual_trade_position and self.last_stock_account_balance * close_price < 5:
                 self.take_profit_index = 0
 
             return True
@@ -324,8 +339,17 @@ class BinanceTraderBot:
 
     # Busca infos atualizada da conta Binance
     def getUpdatedAccountData(self):
-        return self.client_binance.get_account()  # Busca infos da conta
 
+        if self.cached_account and time.time() - self.last_account_update < 10:
+            return self.cached_account
+
+        data = self.client_binance.get_account()
+
+        self.cached_account = data
+        self.last_account_update = time.time()
+
+        return data
+    
     # Busca o último balanço da conta, na stock escolhida.
     def getLastStockAccountBalance(self):
 
@@ -444,10 +468,12 @@ class BinanceTraderBot:
     ):
         try:
             # Obtém o histórico de ordens do par configurado
-            all_orders = self.client_binance.get_all_orders(
-                symbol=self.operation_code,
-                limit=100,
-            )
+            if hasattr(self, "orders_cache") and time.time() - self.orders_cache_time < 10:
+                all_orders = self.orders_cache
+            else:
+                all_orders = self.client_binance.get_all_orders(symbol=self.operation_code, limit=100)
+                self.orders_cache = all_orders
+                self.orders_cache_time = time.time()
 
             # Filtra apenas as ordens de compra executadas (FILLED)
             executed_buy_orders = [order for order in all_orders if order["side"] == "BUY" and order["status"] == "FILLED"]
@@ -491,10 +517,12 @@ class BinanceTraderBot:
     ):
         try:
             # Obtém o histórico de ordens do par configurado
-            all_orders = self.client_binance.get_all_orders(
-                symbol=self.operation_code,
-                limit=100,
-            )
+            if hasattr(self, "orders_cache") and time.time() - self.orders_cache_time < 10:
+                all_orders = self.orders_cache
+            else:
+                all_orders = self.client_binance.get_all_orders(symbol=self.operation_code, limit=100)
+                self.orders_cache = all_orders
+                self.orders_cache_time = time.time()
 
             # Filtra apenas as ordens de venda executadas (FILLED)
             executed_sell_orders = [order for order in all_orders if order["side"] == "SELL" and order["status"] == "FILLED"]
@@ -735,7 +763,7 @@ class BinanceTraderBot:
                 MIN_NOTIONAL = 5  # padrão Binance spot
 
                 if qty_float < self.step_size or notional_value < MIN_NOTIONAL:
-                    print("⚠️ Quantidade muito pequena para vender (poeira). Ignorando...")
+                    print("⚠️ Quantidade muito pequena para comprar (poeira). Ignorando...")
                     return False
 
                 order_buy = self.client_binance.create_order(
@@ -744,6 +772,10 @@ class BinanceTraderBot:
                     type=ORDER_TYPE_MARKET,  # Ordem de Mercado
                     quantity=quantity,
                 )
+                
+                self.highest_price_since_entry = close_price
+                self.trailing_stop_price = 0
+                self.break_even_activated = False
 
                 self.last_trade_time = time.time()
 
@@ -765,7 +797,7 @@ class BinanceTraderBot:
 
     # Compra por um preço máximo (Ordem Limitada)
     # [NOVA] Define o valor usando RSI e Volume Médio
-    def buyLimitedOrder(self, price=0):
+    def buyLimitedOrder(self, quantity=None, price=0):
         close_price = self.stock_data["close_price"].iloc[-1]
         volume = self.stock_data["volume"].iloc[-1]
         avg_volume = self.stock_data["volume"].rolling(window=20).mean().iloc[-1]
@@ -773,7 +805,7 @@ class BinanceTraderBot:
 
         # 🔥 USAR SALDO USDT DISPONÍVEL AUTOMATICAMENTE
         try:
-            account = self.client_binance.get_account()
+            account = self.getUpdatedAccountData()
             usdt_balance = 0.0
 
             for asset in account["balances"]:
@@ -810,7 +842,10 @@ class BinanceTraderBot:
         capital_to_use = min(self.capital, usdt_balance)  # nunca usar mais que saldo real
         usable_balance = capital_to_use * SAFETY_MARGIN
 
-        raw_quantity = usable_balance / float(close_price)
+        if quantity is None:
+            raw_quantity = usable_balance / float(close_price)
+        else:
+            raw_quantity = float(quantity)
 
         # Ajusta para o mínimo notional da Binance
         quantity = self.adjust_quantity_to_min_notional(raw_quantity, close_price)
@@ -842,7 +877,8 @@ class BinanceTraderBot:
             self.highest_price_since_entry = close_price
             self.trailing_stop_price = 0.0
             self.break_even_activated = False
-            self.actual_trade_position = True
+            if order_buy and order_buy.get("status") in ["FILLED", "PARTIALLY_FILLED"]:
+                self.actual_trade_position = True
             self.partial_tp_index = 0
             print(f"\nOrdem COMPRA limitada enviada com sucesso:")
 
@@ -918,6 +954,10 @@ class BinanceTraderBot:
 
                 # 🔄 Atualiza saldo real após execução
                 self.updateAllData(verbose=False)
+                
+                self.highest_price_since_entry = 0
+                self.trailing_stop_price = 0
+                self.break_even_activated = False
 
                 remaining_balance = self.last_stock_account_balance
 
@@ -1310,15 +1350,37 @@ class BinanceTraderBot:
     # Função principal e a única que deve ser execuda em loop, quando o
     # robô estiver funcionando normalmente
     def execute(self):
+                
         try:
+            
+            #resetar contador por hora    
+            current_hour = datetime.now().hour
+
+            if current_hour != self.last_hour:
+                self.hourly_trades = 0
+                self.last_hour = current_hour
+
+                       
             print("------------------------------------------------")
             print(f"🟢 Executado {datetime.now().strftime('(%H:%M:%S) %d-%m-%Y')}\n")
 
             # Atualiza todos os dados
             if not self.updateAllData(verbose=True):
-                print("⚠️ Falha na atualização dos dados. Pulando ciclo...")
-                time.sleep(2)
+                print("⚠️ Falha na atualização dos dados.")
                 return
+            
+            # proteção contra poucos candles
+            if self.stock_data is None or len(self.stock_data) < 50:
+                print("⚠️ Dados insuficientes de candles.")
+                return
+
+            # filtro de volume mínimo
+            avg_volume = self.stock_data["volume"].iloc[-20:].mean()
+
+            if avg_volume < 10000:
+                print("⚠️ Volume muito baixo. Ignorando ativo.")
+                return          
+            
             
             # 🔎 Detectar regime de mercado
             regime = self.detectMarketRegime()
@@ -1391,7 +1453,10 @@ class BinanceTraderBot:
 
                         if not self.stock_data.empty:
                             close_price = self.stock_data["close_price"].iloc[-1]
-
+                            if close_price <= 0:
+                                print("⚠️ Preço inválido.")
+                                return  
+                              
                             quantity_half = self.last_stock_account_balance * 0.5
                             value_half = quantity_half * close_price
 
@@ -1416,8 +1481,14 @@ class BinanceTraderBot:
                 print("🔥 Entrada institucional antecipada")
 
                 if not self.actual_trade_position:
+                    print("🚀 Entrada confirmada.")
                     self.buyMarketOrder()
+                    self.hourly_trades += 1
 
+                return
+
+            if not self.btcTrendFilter():
+                print("⚠️ BTC em tendência de baixa. Evitando altcoins.")
                 return
 
             # ---------------------------------------------
@@ -1499,11 +1570,9 @@ class BinanceTraderBot:
 
             elif accumulation_signal and not self.actual_trade_position:
 
-                print("🔥 Entrada antecipada por acumulação")
+                print("🔥 Sinal de acumulação detectado")
 
-                self.buyMarketOrder()
-
-                return
+                signal = "BUY"
 
             # institucional
             elif whale_signal == "BUY" and volume_spike:
@@ -1523,18 +1592,26 @@ class BinanceTraderBot:
         
             depth = self.getCachedOrderBook()
 
+            if not depth["bids"] or not depth["asks"]:
+                print("⚠️ Orderbook vazio. Pulando ciclo.")
+                return
+
             best_bid = float(depth["bids"][0][0])
             best_ask = float(depth["asks"][0][0])
 
             spread = (best_ask - best_bid) / best_bid
 
-            if spread > 0.002:
+            if spread > 0.003:
                 print("⚠️ Spread alto. Evitando trade.")
                 return
         
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and score >= 5 and self.tradeQualityFilter():
+            if signal in [True, "BUY"] and score >= 8 and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
+
+                if self.hourly_trades >= self.max_hourly_trades:
+                    print("⏸️ Limite de trades por hora atingido.")
+                    return     
 
                 # ⏸️ Cooldown entre trades
                 if time.time() - self.last_trade_time < self.trade_cooldown:
@@ -1558,28 +1635,28 @@ class BinanceTraderBot:
                     volume_spike,
                     compression_signal
                 )
+                
+                price = self.stock_data["close_price"].iloc[-1]
 
-                quantity = capital_to_use / self.stock_data["close_price"].iloc[-1]
+                if price <= 0:
+                    return
+                                 
+                quantity = capital_to_use / price
 
                 if not self.actual_trade_position:
                     print("🚀 Entrada confirmada.")
-                    self.buyLimitedOrder()
-                    
-                current_hour = datetime.now().hour
-
-                if current_hour != self.last_hour:
-                    self.hourly_trades = 0
-                    self.last_hour = current_hour
-
-                if self.hourly_trades >= self.max_hourly_trades:
-                    print("⏸️ Limite de trades por hora atingido.")
-                    return                
+                    self.buyLimitedOrder(quantity=quantity)
+                    self.hourly_trades += 1
+                    self.last_trade_time = time.time()
+                                             
 
             # ---------------------------------------------
             # VENDA
             elif signal in [False, "SELL"]:
 
-                if self.actual_trade_position:
+                close_price = self.stock_data["close_price"].iloc[-1]
+
+                if self.actual_trade_position and self.last_stock_account_balance * close_price >= 5:
                     print("⚠️ Saída confirmada.")
                     self.sellMarketOrder()
 
@@ -1653,7 +1730,12 @@ class BinanceTraderBot:
                 self.last_closed_order_id = None
                 self.current_day = today
 
-            orders = self.client_binance.get_all_orders(symbol=self.operation_code, limit=50)
+            if hasattr(self, "daily_orders_cache") and time.time() - self.daily_orders_time < 20:
+                orders = self.daily_orders_cache
+            else:
+                orders = self.client_binance.get_all_orders(symbol=self.operation_code, limit=50)
+                self.daily_orders_cache = orders
+                self.daily_orders_time = time.time()
 
             # Filtra vendas executadas hoje
             filled_sells = [
@@ -1819,6 +1901,8 @@ class BinanceTraderBot:
         avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
 
         close = self.stock_data["close_price"].iloc[-1]
+        if len(self.stock_data) < 2:
+            return False
         prev = self.stock_data["close_price"].iloc[-2]
 
         if prev == 0 or avg_volume == 0:
@@ -1826,7 +1910,7 @@ class BinanceTraderBot:
 
         price_change = (close - prev) / prev
 
-        if volume > avg_volume * 2 and price_change > 0.005:
+        if volume > avg_volume * 2 and price_change > 0.001:
 
             print("🚀 POSSÍVEL PUMP DETECTADO")
 
@@ -1871,9 +1955,17 @@ class BinanceTraderBot:
     def detectLiquidationMove(self):
 
         volume = self.stock_data["volume"].iloc[-1]
+        
+        if len(self.stock_data) < 30:
+            return False
+        
         avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
 
         close = self.stock_data["close_price"].iloc[-1]
+        
+        if len(self.stock_data) < 2:
+            return None
+        
         prev = self.stock_data["close_price"].iloc[-2]
 
         if prev == 0:
@@ -2210,7 +2302,7 @@ class BinanceTraderBot:
             print(f"🌪️ Liquidity Vacuum check: {total_liquidity:.4f}")
 
             # Liquidez muito baixa
-            if total_liquidity < 5:
+            if total_liquidity < 1000:
 
                 print("🌪️ Vácuo de liquidez detectado!")
 
@@ -2507,3 +2599,27 @@ class BinanceTraderBot:
             print("Erro no tradeQualityFilter:", e)
 
             return False
+    
+    def btcTrendFilter(self):
+
+        if hasattr(self, "btc_cache") and hasattr(self, "btc_cache_time") and time.time() - self.btc_cache_time < 120:
+            return self.btc_cache
+
+        candles = self.client_binance.get_klines(
+            symbol="BTCUSDT",
+            interval="5m",
+            limit=50
+        )
+
+        df = pd.DataFrame(candles)
+        df["close"] = pd.to_numeric(df[4])
+
+        ma20 = df["close"].rolling(20).mean().iloc[-1]
+        price = df["close"].iloc[-1]
+
+        result = price > ma20
+
+        self.btc_cache = result
+        self.btc_cache_time = time.time()
+
+        return result
