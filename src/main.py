@@ -54,6 +54,8 @@ MARKET_MEMORY = {}
 SCANNER_RANKING = []   # 🔥 ranking do scanner para dashboard
 SCANNER_SMART_MONEY = []
 
+config = load_config()
+
 LOSS_COOLDOWN = config["RISK"]["LOSS_COOLDOWN"]
 
 ADAPTIVE_WEIGHTS = {
@@ -88,7 +90,32 @@ def reload_runtime_config(bot):
     bot.time_to_trade = new_config["TEMPO_ENTRE_TRADES"]
     bot.delay_after_order = new_config["DELAY_ENTRE_ORDENS"]
 
+def safe_binance_call(func, *args, retries=3, delay=2, **kwargs):
+    """
+    Executa chamadas da Binance com retry automático
+    """
 
+    for attempt in range(retries):
+
+        try:
+            return func(*args, **kwargs)
+
+        except Exception as e:
+
+            print(f"⚠️ Binance erro: {e}")
+
+            if attempt < retries - 1:
+
+                sleep_time = delay * (attempt + 1)
+
+                print(f"🔁 Tentando novamente em {sleep_time}s...")
+                time.sleep(sleep_time)
+
+            else:
+
+                print("❌ Falha definitiva na chamada da Binance")
+
+                return None
 
 # 🔥 Estratégias dinâmicas vindas do dashboard
 strategy_map = {
@@ -277,7 +304,10 @@ def trader_master_loop():
 
                 try:
 
-                    account = BINANCE_CLIENT.get_account()
+                    account = account = BINANCE_CLIENT.get_account(BINANCE_CLIENT.get_account)
+                    
+                    if not account:
+                        continue
 
                     balance = 0
 
@@ -481,11 +511,15 @@ def analyze_symbol(client, t, config):
         volume = float(t["quoteVolume"])
         price_change = float(t.get("priceChangePercent", 0))
 
-        candles = client.get_klines(
+        candles = safe_binance_call(
+            client.get_klines,
             symbol=symbol,
             interval=Client.KLINE_INTERVAL_5MINUTE,
             limit=50
         )
+        
+        if not candles:
+            return None
 
         closes = [float(c[4]) for c in candles]
         volumes = [float(c[5]) for c in candles]
@@ -530,14 +564,15 @@ def scan_market_top_symbols(client, limit=10):
 
     SCANNER_SMART_MONEY.clear()
     SCANNER_RANKING.clear()
-
-    config = load_config()
     
     print("🔎 Escaneando mercado inteligente PRO...")
 
     try:
 
-        tickers = client.get_ticker() or []
+        tickers = safe_binance_call(client.get_ticker)
+
+        if not tickers:
+            return []
 
         # manter apenas pares USDT
         tickers = [t for t in tickers if t["symbol"].endswith("USDT")]
