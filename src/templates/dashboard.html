@@ -584,7 +584,7 @@
                 let wins = profits.filter(p => p > 0);
                 let losses = profits.filter(p => p < 0);
 
-                let winrate = (wins.length / total) * 100;
+                let winrate = total > 0 ? (wins.length / total) * 100 : 0;
 
                 let grossProfit = wins.reduce((a, b) => a + b, 0);
                 let grossLoss = Math.abs(losses.reduce((a, b) => a + b, 0));
