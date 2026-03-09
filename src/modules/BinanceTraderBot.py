@@ -1534,7 +1534,7 @@ class BinanceTraderBot:
         
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and score >= 4:
+            if signal in [True, "BUY"] and score >= 5 and self.tradeQualityFilter():
 
                 # ⏸️ Cooldown entre trades
                 if time.time() - self.last_trade_time < self.trade_cooldown:
@@ -2451,5 +2451,59 @@ class BinanceTraderBot:
         except Exception as e:
 
             print("Erro no detector iceberg:", e)
+
+            return False
+        
+    def tradeQualityFilter(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 30:
+                return False
+
+            # -------------------------
+            # 1️⃣ tendência mínima
+
+            ma20 = closes.rolling(20).mean().iloc[-1]
+            ma50 = closes.rolling(50).mean().iloc[-1]
+
+            trend_strength = abs(ma20 - ma50) / closes.iloc[-1]
+
+            # -------------------------
+            # 2️⃣ volatilidade mínima
+
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+
+            atr = (highs - lows).rolling(14).mean().iloc[-1]
+            atr_pct = atr / closes.iloc[-1]
+
+            # -------------------------
+            # 3️⃣ volume mínimo
+
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            volume_ok = current_volume > avg_volume * 0.8
+
+            # -------------------------
+            # DECISÃO
+
+            if trend_strength > 0.0015 and atr_pct > 0.002 and volume_ok:
+
+                print("✅ Trade passou no filtro de qualidade")
+
+                return True
+
+            print("⛔ Trade bloqueado pelo filtro de qualidade")
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no tradeQualityFilter:", e)
 
             return False

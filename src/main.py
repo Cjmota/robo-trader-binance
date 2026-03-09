@@ -396,7 +396,83 @@ def symbol_to_stock(symbol):
 
     return symbol
 
+def calculateSmartScore(closes, volumes, highs, lows, price_change):
+
+    try:
+
+        if len(closes) < 30:
+            return 0
+
+        # momentum
+        momentum = (closes[-1] - closes[-6]) / max(closes[-6], 0.00000001)
+
+        # volume spike
+        avg_volume = sum(volumes[-20:]) / len(volumes[-20:])
+        volume_score = volumes[-1] / max(avg_volume, 1)
+
+        # volatilidade
+        max_price = max(highs[-20:])
+        min_price = min(lows[-20:])
+        volatility = (max_price - min_price) / max(min_price, 0.0000001)
+
+        # tendência
+        ma7 = sum(closes[-7:]) / 7
+        ma25 = sum(closes[-25:]) / 25
+
+        trend_strength = abs(ma7 - ma25) / max(ma25, 0.0000001)
+
+        score = (
+            abs(momentum) * 40 +
+            volume_score * 25 +
+            volatility * 20 +
+            trend_strength * 15 +
+            min(abs(price_change), 10)
+        )
+
+        return score
+
+    except:
+        return 0
+    
+def detectExplosionSignal(closes, volumes, highs, lows):
+
+    try:
+
+        if len(closes) < 25:
+            return False
+
+        # compressão de preço
+        price_range = (
+            max(closes[-15:]) - min(closes[-15:])
+        ) / max(min(closes[-15:]), 0.0000001)
+
+        compression = price_range < 0.012
+
+        # aceleração de volume
+        avg_volume = sum(volumes[-20:]) / len(volumes[-20:])
+        recent_volume = sum(volumes[-3:]) / 3
+
+        volume_acceleration = recent_volume > avg_volume * 1.8
+
+        # momentum positivo
+        momentum = (closes[-1] - closes[-4]) / max(closes[-4], 0.0000001)
+
+        breakout_pressure = momentum > 0.003
+
+        if compression and volume_acceleration and breakout_pressure:
+
+            print("🚀 POSSÍVEL EXPLOSÃO DETECTADA")
+
+            return True
+
+        return False
+
+    except:
+        return False
+
 def scan_market_top_symbols(client, limit=10):
+    
+    start_scan_time = time.time()
     
     global SCANNER_SMART_MONEY, SCANNER_RANKING
 
@@ -422,7 +498,7 @@ def scan_market_top_symbols(client, limit=10):
             tickers,
             key=lambda x: float(x.get("quoteVolume", 0)),
             reverse=True
-        )[:200]
+        )[:120]
 
         fast_candidates = []
 
@@ -651,6 +727,22 @@ def scan_market_top_symbols(client, limit=10):
 
                 momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.00000001) 
                  
+                # 🔥 SMART SCORE (novo ranking institucional)
+                smart_score = calculateSmartScore(
+                    closes,
+                    volumes,
+                    highs,
+                    lows,
+                    price_change
+                )
+                
+                explosion_signal = detectExplosionSignal(
+                    closes,
+                    volumes,
+                    highs,
+                    lows
+                )
+                
                 if closes[-1] >= recent_high * 1.01:
                     continue 
                 
@@ -715,6 +807,12 @@ def scan_market_top_symbols(client, limit=10):
                     (ADAPTIVE_WEIGHTS["sweep"] if liquidity_sweep_signal else 1)
                 )
                 
+                # 🔥 aplica ranking inteligente
+                score *= (1 + smart_score * 0.05)
+                
+                if explosion_signal:
+                    score *= 2.2
+                
                 if volume_trend_short and price_flat:
                     score *= 1.5 
                 
@@ -728,7 +826,7 @@ def scan_market_top_symbols(client, limit=10):
                     score *= 1.4  
                 
                 print(
-                    f"CANDIDATE → {symbol} | score={score:.3f} | "
+                    f"CANDIDATE → {symbol} | score={score:.3f} | explosion={explosion_signal}"
                     f"trend={trend_strength:.4f} | "
                     f"momentum={momentum:.4f} | "
                     f"volatility={volatility:.4f}"
@@ -799,6 +897,8 @@ def scan_market_top_symbols(client, limit=10):
             best = [candidates[0]["symbol"]]    
         
         print("🔥 TOP OPORTUNIDADES:", best)
+        
+        print(f"⏱️ Scan completo em {time.time() - start_scan_time:.2f}s")
 
         time.sleep(0.5)
 
@@ -808,8 +908,10 @@ def scan_market_top_symbols(client, limit=10):
 
         print("Erro no scanner:", e)
 
-        return []            
-                   
+        return []   
+             
+    
+               
 # Inicia o robô principal
 if __name__ == "__main__":
     print("🤖 Master Trader iniciado (modo multi-moedas inteligente).")
