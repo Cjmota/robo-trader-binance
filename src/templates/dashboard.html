@@ -601,11 +601,6 @@
                 let cumulative = [];
                 let running = 0;
 
-                if(!data.ranking || data.ranking.length === 0){
-                    table.innerHTML = "<tr><td colspan='4'>Sem oportunidades</td></tr>"
-                    return
-                }   
-
                 profits.forEach(p => {
                     running += p;
                     cumulative.push(running);
