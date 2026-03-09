@@ -1502,6 +1502,8 @@ class BinanceTraderBot:
             # 🔥 TODOS OS DETECTORES PRIMEIRO
            
             trap_signal = self.detectMarketMakerTrap()
+            
+            grab_signal = self.detectLiquidityGrab()
 
             compression_signal = self.detectVolatilityCompression()
 
@@ -1564,6 +1566,9 @@ class BinanceTraderBot:
             # stop hunt
             elif sweep_signal:
                 signal = sweep_signal
+            
+            elif grab_signal:
+                signal = grab_signal
 
             elif vacuum_signal:
                 signal = vacuum_signal
@@ -1631,6 +1636,7 @@ class BinanceTraderBot:
                     signal,
                     sweep_signal,
                     trap_signal,
+                    grab_signal,
                     whale_signal,
                     volume_spike,
                     compression_signal
@@ -2367,7 +2373,7 @@ class BinanceTraderBot:
             print("Erro no detector de Market Maker Trap:", e)
             return None    
         
-    def calculatePositionSize(self, signal, sweep_signal, trap_signal, whale_signal, volume_spike, compression_signal):
+    def calculatePositionSize(self, signal, sweep_signal, trap_signal, grab_signal, whale_signal, volume_spike, compression_signal):
         """
         Define o tamanho da posição baseado na força do setup.
         """
@@ -2381,6 +2387,10 @@ class BinanceTraderBot:
         elif sweep_signal:
             print("💰 Setup forte: Liquidity Sweep")
             return base_capital * 0.9
+        
+        elif grab_signal:
+            print("💰 Setup forte: Liquidity Grab")
+            return base_capital * 0.85
 
         elif whale_signal and volume_spike:
             print("💰 Setup institucional detectado")
@@ -2617,9 +2627,54 @@ class BinanceTraderBot:
         ma20 = df["close"].rolling(20).mean().iloc[-1]
         price = df["close"].iloc[-1]
 
-        result = price > ma20
+        ma50 = df["close"].rolling(50).mean().iloc[-1]
+
+        result = price > ma20 or price > ma50
 
         self.btc_cache = result
         self.btc_cache_time = time.time()
 
         return result
+    
+    def detectLiquidityGrab(self):
+
+        try:
+
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 30:
+                return None
+
+            recent_low = lows.iloc[-2]
+            previous_low = lows.iloc[-20:-2].min()
+
+            recent_high = highs.iloc[-2]
+            previous_high = highs.iloc[-20:-2].max()
+
+            close = closes.iloc[-1]
+
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            # 🧲 Liquidity grab no fundo
+            if recent_low < previous_low and close > previous_low and current_volume > avg_volume * 1.3:
+
+                print("🧲 LIQUIDITY GRAB DETECTADO (reversão de alta)")
+                return "BUY"
+
+            # 🧲 Liquidity grab no topo
+            if recent_high > previous_high and close < previous_high and current_volume > avg_volume * 1.3:
+
+                print("🧲 LIQUIDITY GRAB DETECTADO (reversão de baixa)")
+                return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de liquidity grab:", e)
+
+            return None
