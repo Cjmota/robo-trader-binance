@@ -1,5 +1,6 @@
 # fmt: off
 import os
+import json
 import time
 import logging
 import math
@@ -28,6 +29,7 @@ load_dotenv()
 api_key = os.getenv("BINANCE_API_KEY")
 secret_key = os.getenv("BINANCE_SECRET_KEY")
 
+STATE_FILE = "bot_state.json"
 
 # ------------------------------------------------------------------
 
@@ -83,8 +85,8 @@ class BinanceTraderBot:
         
         self.capital = traded_quantity  # valor em USDT configurado por ativo
         
-        self.trailing_activation = 0.005      # ativa com +0.5% lucro
-        self.trailing_stop_percent = 0.01     # trailing de 1%
+        self.trailing_activation = 0.01      # ativa com +0.5% lucro
+        self.trailing_stop_percent = 0.005     # trailing de 1%
         self.trailing_stop_price = 0.0
         self.highest_price_since_entry = 0.0
         
@@ -100,8 +102,8 @@ class BinanceTraderBot:
         self.max_daily_trades = 40
         
         # 🎯 Modo híbrido de realização parcial
-        self.partial_take_profit_levels = [1.0, 2.0]  # %
-        self.partial_take_profit_amounts = [30, 30]   # % da posição
+        self.partial_take_profit_levels = [0.8, 1.6, 3.0]  # %
+        self.partial_take_profit_amounts = [30, 30, 30]   # % da posição
         self.partial_tp_index = 0
 
         # fmt: off
@@ -195,7 +197,11 @@ class BinanceTraderBot:
 
         self.setStepSizeAndTickSize() # Seta o time_step e step_size da classe (só precisa executar 1x)
 
+        self.loadBotState()
+
         # fmt: on
+        
+        
 
     def trailingStopTrigger(self):
         if not self.actual_trade_position or self.last_buy_price <= 0:
@@ -337,11 +343,15 @@ class BinanceTraderBot:
             if not self.actual_trade_position and self.last_stock_account_balance * close_price < 5:
                 self.take_profit_index = 0
 
+            self.reconcilePositionWithWallet()
+            
             return True
 
         except Exception as e:
             print(f"❌ Erro geral ao atualizar dados: {e}")
             return False
+        
+    
     
     
     # GETS Principais
@@ -789,6 +799,7 @@ class BinanceTraderBot:
                 self.last_trade_time = time.time()
 
                 self.actual_trade_position = True  # Define posição como comprada
+                self.saveBotState()
                 createLogOrder(order_buy)  # Cria um log
                 print(f"\nOrdem de COMPRA a mercado enviada com sucesso:")
                 print(order_buy)
@@ -963,7 +974,8 @@ class BinanceTraderBot:
 
                 # 🔄 Atualiza saldo real após execução
                 self.updateAllData(verbose=False)
-                
+                self.saveBotState()
+                                
                 self.highest_price_since_entry = 0
                 self.trailing_stop_price = 0
                 self.break_even_activated = False
@@ -2831,3 +2843,68 @@ class BinanceTraderBot:
 
         except:
             return False
+    
+    def saveBotState(self):
+        """
+        Salva o estado atual da posição para recuperar após reinício.
+        """
+        try:
+
+            state = {
+                "actual_trade_position": self.actual_trade_position,
+                "last_buy_price": self.last_buy_price,
+                "partial_tp_index": self.partial_tp_index,
+                "trailing_stop_price": self.trailing_stop_price,
+                "highest_price_since_entry": self.highest_price_since_entry
+            }
+
+            with open(STATE_FILE, "w") as f:
+                json.dump(state, f)
+
+        except Exception as e:
+            print("Erro ao salvar estado do robô:", e)
+    
+    def loadBotState(self):
+
+        try:
+
+            if not os.path.exists(STATE_FILE):
+                return
+
+            with open(STATE_FILE) as f:
+                state = json.load(f)
+
+            self.actual_trade_position = state.get("actual_trade_position", False)
+            self.last_buy_price = state.get("last_buy_price", 0)
+            self.partial_tp_index = state.get("partial_tp_index", 0)
+            self.trailing_stop_price = state.get("trailing_stop_price", 0)
+            self.highest_price_since_entry = state.get("highest_price_since_entry", 0)
+
+            print("♻️ Estado do robô recuperado com sucesso")
+
+        except Exception as e:
+            print("Erro ao carregar estado do robô:", e)
+    
+    def reconcilePositionWithWallet(self):
+
+        try:
+
+            close_price = self.stock_data["close_price"].iloc[-1]
+            balance_value = self.last_stock_account_balance * close_price
+
+            if balance_value >= 5:
+
+                self.actual_trade_position = True
+
+                if self.last_buy_price == 0:
+                    self.last_buy_price = close_price
+
+                print("📊 Posição detectada na carteira")
+
+            else:
+
+                self.actual_trade_position = False
+
+        except Exception as e:
+
+            print("Erro ao reconciliar posição:", e)
