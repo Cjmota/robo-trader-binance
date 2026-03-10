@@ -1518,6 +1518,20 @@ class BinanceTraderBot:
             # ---------------------------------------------
             # EXECUTAR ESTRATÉGIA   
             
+            spread = 0
+            volume_spike = False
+            
+            depth = self.getCachedOrderBook()
+
+            if not depth["bids"] or not depth["asks"]:
+                print("⚠️ Orderbook vazio. Pulando ciclo.")
+                return
+
+            best_bid = float(depth["bids"][0][0])
+            best_ask = float(depth["asks"][0][0])
+
+            spread = (best_ask - best_bid) / best_bid
+            
             liquidity_signal = self.detectLiquidityWall()
 
             liquidation_signal = self.detectLiquidationMove()
@@ -1627,16 +1641,7 @@ class BinanceTraderBot:
             else:
                 signal = strategy_signal
         
-            depth = self.getCachedOrderBook()
-
-            if not depth["bids"] or not depth["asks"]:
-                print("⚠️ Orderbook vazio. Pulando ciclo.")
-                return
-
-            best_bid = float(depth["bids"][0][0])
-            best_ask = float(depth["asks"][0][0])
-
-            spread = (best_ask - best_bid) / best_bid
+            
 
             if spread > 0.002:
                 print("⚠️ Spread alto. Evitando trade.")
