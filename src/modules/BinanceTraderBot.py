@@ -110,7 +110,16 @@ class BinanceTraderBot:
         self.operation_code = operation_code  # Código negociado/moeda (ex:'BTCBRL')
         self.traded_quantity = traded_quantity  # Quantidade incial que será operada
         self.traded_percentage = traded_percentage  # Porcentagem do total da carteira, que será negociada        
-        self.candle_period = candle_period  # Período levado em consideração para operação (ex: 15min)        
+        self.candle_period = str(candle_period).strip().lower()  # Período levado em consideração para operação (ex: 15min)        
+
+        VALID_INTERVALS = [
+            "1m","3m","5m","15m","30m",
+            "1h","2h","4h","6h","8h","12h",
+            "1d","3d","1w"
+        ]
+
+        if self.candle_period not in VALID_INTERVALS:
+            raise ValueError(f"Intervalo inválido enviado ao bot: {self.candle_period}")
 
         self.fallback_activated = fallback_activated  # Define se a estratégia de Fallback será usada (ela pode entrar comprada em mercados subindo)
         self.acceptable_loss_percentage = acceptable_loss_percentage / 100 # % Máxima que o bot aceita perder quando vender
@@ -390,8 +399,8 @@ class BinanceTraderBot:
         # Busca dados na binance dos últimos 1000 períodos
         candles = self.client_binance.get_klines(
             symbol=self.operation_code,
-            interval=self.candle_period,
-            limit=1000,
+            interval=str(self.candle_period).strip(),
+            limit=200,
         )
 
         # Transforma um um DataFrame Pandas
@@ -1758,35 +1767,47 @@ class BinanceTraderBot:
             if hasattr(self, "daily_orders_cache") and time.time() - self.daily_orders_time < 20:
                 orders = self.daily_orders_cache
             else:
-                orders = self.client_binance.get_all_orders(symbol=self.operation_code, limit=50)
+                orders = self.client_binance.get_all_orders(
+                    symbol=self.operation_code,
+                    limit=200
+                )
                 self.daily_orders_cache = orders
                 self.daily_orders_time = time.time()
 
-            # Filtra vendas executadas hoje
+            # Filtra vendas executadas
             filled_sells = [
                 o for o in orders
                 if o["side"] == "SELL" and o["status"] == "FILLED"
             ]
 
             for order in filled_sells:
+
                 order_time = datetime.utcfromtimestamp(order["time"] / 1000).date()
 
                 if order_time == today:
+
                     order_id = order["orderId"]
 
-                    # Evita contar a mesma ordem duas vezes
+                    # evita duplicação
                     if order_id != self.last_closed_order_id:
-                        sell_value = float(order["cummulativeQuoteQty"])
-                        buy_price = self.last_buy_price
+
                         qty = float(order["executedQty"])
 
-                        if buy_price > 0:
-                            cost = qty * buy_price
-                            profit = sell_value - cost
+                        if qty <= 0:
+                            continue
 
-                            self.daily_profit += profit
-                            self.daily_trades += 1
-                            self.last_closed_order_id = order_id
+                        sell_value = float(order["cummulativeQuoteQty"])
+
+                        if self.last_buy_price <= 0:
+                            continue
+
+                        cost = qty * self.last_buy_price
+
+                        profit = sell_value - cost
+
+                        self.daily_profit += profit
+                        self.daily_trades += 1
+                        self.last_closed_order_id = order_id
 
         except Exception as e:
             print(f"Erro ao atualizar lucro diário: {e}")
