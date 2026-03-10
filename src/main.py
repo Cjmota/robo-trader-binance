@@ -466,6 +466,43 @@ def calculateSmartScore(closes, volumes, highs, lows, price_change):
     except:
         return 0
     
+def detectInstitutionalAccumulation(closes, volumes, highs, lows):
+
+        try:
+
+            if len(closes) < 30:
+                return False
+
+            # compressão de preço
+            price_range = (
+                max(closes[-20:]) - min(closes[-20:])
+            ) / max(min(closes[-20:]), 0.0000001)
+
+            compression = price_range < 0.015
+
+            # crescimento de volume
+            avg_volume = sum(volumes[-25:-5]) / 20
+            recent_volume = sum(volumes[-5:]) / 5
+
+            volume_growth = recent_volume > avg_volume * 1.4
+
+            # volatilidade
+            atr = sum([h - l for h, l in zip(highs[-14:], lows[-14:])]) / 14
+            atr_pct = atr / closes[-1]
+
+            low_volatility = atr_pct < 0.004
+
+            if compression and volume_growth and low_volatility:
+
+                print("🏦 ACUMULAÇÃO INSTITUCIONAL DETECTADA")
+
+                return True
+
+            return False
+
+        except:
+            return False    
+
 def detectExplosionSignal(closes, volumes, highs, lows):
 
     try:
@@ -516,7 +553,7 @@ def analyze_symbol(client, t, config):
             interval=Client.KLINE_INTERVAL_5MINUTE,
             limit=50
         )
-        
+
         if not candles:
             return None
 
@@ -538,7 +575,17 @@ def analyze_symbol(client, t, config):
             price_change
         )
 
-        score = smart_score * math.log10(max(volume,1))
+        accumulation_signal = detectInstitutionalAccumulation(
+            closes,
+            volumes,
+            highs,
+            lows
+        )
+
+        score = smart_score * (1 + math.log10(max(volume,1)))
+
+        if accumulation_signal:
+            score *= 1.4
 
         return {
             "symbol": symbol,
@@ -574,7 +621,7 @@ def scan_market_top_symbols(client, limit=10):
 
     try:
 
-        tickers = safe_binance_call(client.get_ticker)
+        tickers = safe_binance_call(client.get_ticker_24hr)
 
         if not tickers or not isinstance(tickers, list):
             return []

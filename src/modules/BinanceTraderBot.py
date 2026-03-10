@@ -2789,3 +2789,40 @@ class BinanceTraderBot:
         print(f"🎯 Probabilidade do trade: {probability:.2f}")
 
         return probability
+    
+    def detectInstitutionalAccumulation(closes, volumes, highs, lows):
+
+        try:
+
+            if len(closes) < 30:
+                return False
+
+            # compressão de preço
+            price_range = (
+                max(closes[-20:]) - min(closes[-20:])
+            ) / max(min(closes[-20:]), 0.0000001)
+
+            compression = price_range < 0.015
+
+            # crescimento de volume
+            avg_volume = sum(volumes[-25:-5]) / 20
+            recent_volume = sum(volumes[-5:]) / 5
+
+            volume_growth = recent_volume > avg_volume * 1.4
+
+            # volatilidade
+            atr = sum([h - l for h, l in zip(highs[-14:], lows[-14:])]) / 14
+            atr_pct = atr / closes[-1]
+
+            low_volatility = atr_pct < 0.004
+
+            if compression and volume_growth and low_volatility:
+
+                print("🏦 ACUMULAÇÃO INSTITUCIONAL DETECTADA")
+
+                return True
+
+            return False
+
+        except:
+            return False
