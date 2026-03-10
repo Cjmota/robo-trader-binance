@@ -1390,7 +1390,7 @@ class BinanceTraderBot:
 
             avg_quote_volume = quote_volume.iloc[-20:].mean()
 
-            if avg_quote_volume < 200000:
+            if avg_quote_volume < 100000:
                 print("⚠️ Liquidez em USDT muito baixa.")
                 return                    
             
