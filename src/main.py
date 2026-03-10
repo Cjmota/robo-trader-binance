@@ -377,18 +377,33 @@ def trader_master_loop():
 
                 symbol_cooldown[last_traded_symbol] = time.time()
 
-                if hasattr(current_trader, "last_trade_profit"):
+                profit = getattr(current_trader, "last_trade_profit", 0)
 
-                    profit = current_trader.last_trade_profit
+                TRADE_HISTORY.append({
+                    "timestamp": time.time(),
+                    "asset": current_trader.operation_code,
+                    "profit": profit
+                })
 
-                    TRADE_HISTORY.append({
-                        "timestamp": time.time(),
-                        "asset": current_trader.operation_code,
-                        "profit": profit
-                    })
+                update_market_memory(current_trader.operation_code, profit)
 
-                    update_market_memory(current_trader.operation_code, profit)
+                current_trader = None
+                last_traded_symbol = None
 
+                time.sleep(15)
+
+                profit = getattr(current_trader, "last_trade_profit", 0)
+
+                TRADE_HISTORY.append({
+                    "timestamp": time.time(),
+                    "asset": current_trader.operation_code,
+                    "profit": profit,
+                    "strategy": current_trader.main_strategy.__name__,
+                    "capital": current_trader.traded_quantity
+                })
+
+                update_market_memory(current_trader.operation_code, profit)
+                
                 current_trader = None
                 last_traded_symbol = None
 
@@ -634,17 +649,27 @@ def scan_market_top_symbols(client, limit=10):
 
         tickers = [t for t in tickers if float(t.get("quoteVolume",0)) > 100000]
 
-        # pega top 200 por volume
-        tickers = sorted(
-            tickers,
-            key=lambda x: float(x.get("quoteVolume", 0)),
-            reverse=True
-        )[:config["SCANNER"]["SCAN_LIMIT"]]
+        # ranking rápido
+        fast_candidates = []
+
+        for t in tickers:
+
+            volume = float(t.get("quoteVolume",0))
+            change = abs(float(t.get("priceChangePercent",0)))
+
+            score = volume * (1 + change / 100)
+
+            fast_candidates.append((t, score))
+
+        fast_candidates.sort(key=lambda x: x[1], reverse=True)
+
+        # pegar apenas 60 moedas
+        tickers = [x[0] for x in fast_candidates[:60]]
 
         # filtro rapido --------------------------------------------- #
         candidates = []
 
-        with ThreadPoolExecutor(max_workers=4) as executor:
+        with ThreadPoolExecutor(max_workers=8) as executor:
 
             results = list(
                 executor.map(
