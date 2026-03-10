@@ -43,7 +43,7 @@
     "TP_AT_PERCENTAGE": [2, 4],
     "TP_AMOUNT_PERCENTAGE": [50, 50],
 
-    "CANDLE_PERIOD": "Client.KLINE_INTERVAL_5MINUTE",
+    "CANDLE_PERIOD": "5m",
     "TEMPO_ENTRE_TRADES": 60,
     "DELAY_ENTRE_ORDENS": 10,
     "stocks_traded_list": [
