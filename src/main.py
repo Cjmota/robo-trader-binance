@@ -621,7 +621,7 @@ def scan_market_top_symbols(client, limit=10):
 
     try:
 
-        tickers = safe_binance_call(client.get_ticker_24hr)
+        tickers = safe_binance_call(client.get_ticker)
 
         if not tickers or not isinstance(tickers, list):
             return []
