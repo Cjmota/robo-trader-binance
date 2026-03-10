@@ -1374,6 +1374,10 @@ class BinanceTraderBot:
                 
         try:
             
+            if self.actual_trade_position:
+                profit, pct = self.getCurrentOperationProfit()
+                print(f"📊 Posição aberta | PnL: {profit:.4f} USDT ({pct:.2f}%)")
+            
             #resetar contador por hora    
             current_hour = datetime.now().hour
 
@@ -1393,18 +1397,7 @@ class BinanceTraderBot:
             # proteção contra poucos candles
             if self.stock_data is None or len(self.stock_data) < 50:
                 print("⚠️ Dados insuficientes de candles.")
-                return
-
-            # filtro de volume mínimo
-            avg_volume = self.stock_data["volume"].iloc[-20:].mean()
-
-            quote_volume = self.stock_data["close_price"] * self.stock_data["volume"]
-
-            avg_quote_volume = quote_volume.iloc[-20:].mean()
-
-            if avg_quote_volume < 100000:
-                print("⚠️ Liquidez em USDT muito baixa.")
-                return                    
+                return          
             
             # 🔎 Detectar regime de mercado
             regime = self.detectMarketRegime()
@@ -1423,9 +1416,29 @@ class BinanceTraderBot:
             
             multi_trend_ok = self.getTrendMultiTimeframe()
             
-            if self.actual_trade_position and not self.stock_data.empty:
+            if self.actual_trade_position:
                 if self.trailingStopTrigger():
                     return
+            
+                if self.detectPumpExhaustion():
+
+                    print("📉 Pump perdendo força → saindo da posição")
+
+                    self.cancelAllOrders()
+                    time.sleep(1)
+                    self.sellMarketOrder()
+
+                    return    
+
+                if self.detectWhaleExit():
+
+                    print("🐋 Baleias vendendo → saída antecipada")
+
+                    self.cancelAllOrders()
+                    time.sleep(1)
+                    self.sellMarketOrder()
+
+                    return    
 
             # break even
             if self.breakEvenTrigger():
@@ -1433,6 +1446,18 @@ class BinanceTraderBot:
             
             if self.partialTakeProfitHybrid():
                 return
+            
+            # filtro de volume mínimo
+            avg_volume = self.stock_data["volume"].iloc[-20:].mean()
+
+            quote_volume = self.stock_data["close_price"] * self.stock_data["volume"]
+
+            avg_quote_volume = quote_volume.iloc[-20:].mean()
+
+            if avg_quote_volume < 100000 and not self.actual_trade_position:
+                print("⚠️ Liquidez em USDT muito baixa.")
+                return 
+            
 
             # 🧹 Limpeza automática de poeira
             if self.cleanDustPosition():
@@ -1448,6 +1473,16 @@ class BinanceTraderBot:
             # 🚫 Limite de trades diário
             if self.daily_trades >= self.max_daily_trades:
                 print("🚫 Limite diário de trades atingido.")
+                return
+
+            smart_money_signal = self.detectSmartMoneyAccumulation()
+
+            if smart_money_signal and not self.actual_trade_position:
+
+                print("🏦 Entrada antecipada Smart Money")
+
+                self.buyMarketOrder()
+
                 return
 
             # 🚀 Entrada antecipada (pré-pump)
@@ -1526,14 +1561,17 @@ class BinanceTraderBot:
                 print("⚠️ BTC em tendência de baixa. Evitando altcoins.")
                 return
 
+
+
             # ---------------------------------------------
             # ---------------------------------------------
             # EXECUTAR ESTRATÉGIA   
             
             spread = 0
-            volume_spike = False
             
             depth = self.getCachedOrderBook()
+
+            orderflow_signal = self.detectOrderFlowImbalance()
 
             if not depth["bids"] or not depth["asks"]:
                 print("⚠️ Orderbook vazio. Pulando ciclo.")
@@ -1548,10 +1586,12 @@ class BinanceTraderBot:
 
             liquidation_signal = self.detectLiquidationMove()
 
-            # 🔥 TODOS OS DETECTORES PRIMEIRO
+            # 🔥 DETECTORES
            
             trap_signal = self.detectMarketMakerTrap()
             
+            liquidity_trap_signal = self.detectLiquidityTrap()
+                        
             grab_signal = self.detectLiquidityGrab()
 
             compression_signal = self.detectVolatilityCompression()
@@ -1561,6 +1601,10 @@ class BinanceTraderBot:
             vacuum_signal = self.detectLiquidityVacuum()
             
             strategy_signal = self.getFinalDecisionStrategy()
+            
+            volatility_expansion = self.detectVolatilityExpansion()
+            
+            momentum_acceleration = self.detectMomentumAcceleration()
             
             score = 0
             if accumulation_signal:
@@ -1580,6 +1624,7 @@ class BinanceTraderBot:
 
             if whale_signal == "BUY" and volume_spike:
                 score += 3
+                
             elif whale_signal == "BUY":
                 score += 1
 
@@ -1591,7 +1636,19 @@ class BinanceTraderBot:
 
             if multi_trend_ok:
                 score += 2
+            
+            if volatility_expansion:
+                score += 2
+                
+            if orderflow_signal == "BUY":
+                score += 2
 
+            if orderflow_signal == "SELL":
+                score += 1
+
+            if momentum_acceleration:
+                score += 2
+            
             print(f"📊 Score de entrada: {score}")
             
             probability = self.calculateTradeProbability(
@@ -1620,6 +1677,9 @@ class BinanceTraderBot:
             # market maker trap
             elif trap_signal:
                 signal = trap_signal
+                
+            elif liquidity_trap_signal:
+                signal = liquidity_trap_signal
 
             # stop hunt
             elif sweep_signal:
@@ -1648,6 +1708,10 @@ class BinanceTraderBot:
             # liquidação
             elif liquidation_signal:
                 signal = liquidation_signal
+                
+            elif orderflow_signal:
+                print("📊 Ordem Flow dominante detectado")
+                signal = orderflow_signal
 
             # fallback estratégia
             else:
@@ -1681,14 +1745,13 @@ class BinanceTraderBot:
                     print("🏦 Absorção detectada, aguardando confirmação")
                     return
                 
-                capital_to_use = self.calculatePositionSize(
-                    signal,
+                capital_to_use = self.calculateAdaptivePositionSize(
+                    score, 
+                    probability,
                     sweep_signal,
                     trap_signal,
-                    grab_signal,
                     whale_signal,
-                    volume_spike,
-                    compression_signal
+                    volume_spike
                 )
                 
                 price = self.stock_data["close_price"].iloc[-1]
@@ -2908,3 +2971,329 @@ class BinanceTraderBot:
         except Exception as e:
 
             print("Erro ao reconciliar posição:", e)
+            
+    def detectPumpExhaustion(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 20:
+                return False
+
+            # preço fazendo novo topo
+            current_price = closes.iloc[-1]
+            recent_high = closes.iloc[-10:-1].max()
+
+            # volume atual
+            current_volume = volumes.iloc[-1]
+
+            # volume médio recente
+            avg_volume = volumes.iloc[-10:-1].mean()
+
+            # condição de exaustão
+            price_breaking_high = current_price >= recent_high
+
+            volume_falling = current_volume < avg_volume * 0.7
+
+            if price_breaking_high and volume_falling:
+
+                print("⚠️ EXAUSTÃO DE PUMP DETECTADA")
+
+                print(f"Preço topo: {current_price}")
+                print(f"Volume atual: {current_volume}")
+                print(f"Volume médio: {avg_volume}")
+
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no detector de exaustão:", e)
+
+            return False
+    
+        
+    def detectWhaleExit(self):
+
+        try:
+
+            bids, asks = self.getSafeOrderBook()
+
+            if not bids or not asks:
+                return False
+
+            # volume total próximo
+            bid_volume = sum(float(b[1]) for b in bids[:10])
+            ask_volume = sum(float(a[1]) for a in asks[:10])
+
+            # maior parede
+            largest_ask = max(float(a[1]) for a in asks[:10])
+            largest_bid = max(float(b[1]) for b in bids[:10])
+
+            imbalance = ask_volume / bid_volume if bid_volume > 0 else 0
+
+            print(f"🐋 Whale Exit check:")
+            print(f" - Ask volume: {ask_volume}")
+            print(f" - Bid volume: {bid_volume}")
+            print(f" - Imbalance: {imbalance:.2f}")
+
+            # pressão forte de venda
+            if imbalance > 1.8 and largest_ask > largest_bid * 2:
+
+                print("🐋 POSSÍVEL SAÍDA DE BALEIAS DETECTADA")
+
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no detector de Whale Exit:", e)
+
+            return False
+        
+    def detectSmartMoneyAccumulation(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 40:
+                return False
+
+            # range do preço
+            recent_range = (closes.iloc[-20:].max() - closes.iloc[-20:].min()) / closes.iloc[-20:].min()
+
+            # crescimento de volume
+            avg_volume = volumes.iloc[-30:-10].mean()
+            recent_volume = volumes.iloc[-10:].mean()
+
+            volume_growth = recent_volume > avg_volume * 1.4
+
+            # volatilidade
+            atr = (highs - lows).rolling(14).mean().iloc[-1]
+            atr_pct = atr / closes.iloc[-1]
+
+            low_volatility = atr_pct < 0.004
+
+            # pressão compradora lenta
+            higher_lows = lows.iloc[-5:].min() > lows.iloc[-15:-5].min()
+
+            print("🏦 Smart Money Check:")
+            print(f"Range: {recent_range*100:.2f}%")
+            print(f"Volume growth: {recent_volume/avg_volume:.2f}x")
+            print(f"ATR: {atr_pct*100:.2f}%")
+
+            if recent_range < 0.02 and volume_growth and low_volatility and higher_lows:
+
+                print("🏦 SMART MONEY ACCUMULATION DETECTADA")
+
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no detector Smart Money:", e)
+
+            return False
+        
+    def detectLiquidityTrap(self):
+
+        try:
+
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 30:
+                return None
+
+            # níveis recentes
+            recent_high = highs.iloc[-20:-1].max()
+            recent_low = lows.iloc[-20:-1].min()
+
+            current_high = highs.iloc[-1]
+            current_low = lows.iloc[-1]
+            current_close = closes.iloc[-1]
+
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            print("🪤 Liquidity Trap check")
+
+            # -------------------------
+            # Bear trap (entrada BUY)
+
+            if current_low < recent_low and current_close > recent_low and current_volume > avg_volume * 1.3:
+
+                print("🪤 BEAR TRAP DETECTADA")
+
+                return "BUY"
+
+            # -------------------------
+            # Bull trap (entrada SELL)
+
+            if current_high > recent_high and current_close < recent_high and current_volume > avg_volume * 1.3:
+
+                print("🪤 BULL TRAP DETECTADA")
+
+                return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de Liquidity Trap:", e)
+
+            return None
+        
+    def detectVolatilityExpansion(self):
+
+        try:
+
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 30:
+                return False
+
+            # ATR atual
+            atr_current = (highs - lows).rolling(14).mean().iloc[-1]
+
+            # ATR anterior
+            atr_previous = (highs - lows).rolling(14).mean().iloc[-5]
+
+            if closes.iloc[-1] == 0:
+                return False
+
+            atr_current_pct = atr_current / closes.iloc[-1]
+            atr_previous_pct = atr_previous / closes.iloc[-1]
+
+            # volume
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            volatility_expanding = atr_current_pct > atr_previous_pct * 1.5
+            volume_support = current_volume > avg_volume * 1.2
+
+            print("⚡ Volatility Expansion Check")
+            print(f"ATR atual: {atr_current_pct*100:.3f}%")
+            print(f"ATR anterior: {atr_previous_pct*100:.3f}%")
+
+            if volatility_expanding and volume_support:
+
+                print("⚡ EXPANSÃO DE VOLATILIDADE DETECTADA")
+
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no detector de volatilidade:", e)
+
+            return False
+        
+    def calculateAdaptivePositionSize(
+        self,
+        score,
+        probability,
+        sweep_signal,
+        trap_signal,
+        whale_signal,
+        volume_spike
+    ):
+
+        base_capital = self.capital
+
+        capital = base_capital * 0.4
+
+        if sweep_signal:
+            capital = base_capital * 0.7
+
+        if trap_signal:
+            capital = base_capital * 0.9
+
+        if whale_signal == "BUY" and volume_spike:
+            capital = base_capital * 1.0
+
+        if probability > 0.85 and score >= 8:
+            capital = min(capital, self.capital)
+
+        print(f"💰 Capital adaptativo: {capital:.2f} USDT")
+
+        return capital
+    
+    def detectOrderFlowImbalance(self):
+
+        try:
+
+            bids, asks = self.getSafeOrderBook()
+
+            if not bids or not asks:
+                return None
+
+            bid_pressure = sum(float(b[0]) * float(b[1]) for b in bids[:20])
+            ask_pressure = sum(float(a[0]) * float(a[1]) for a in asks[:20])
+
+            if ask_pressure == 0:
+                return None
+
+            imbalance = bid_pressure / ask_pressure
+
+            # histórico
+            if not hasattr(self, "last_imbalance"):
+                self.last_imbalance = imbalance
+
+            delta = imbalance - self.last_imbalance
+
+            self.last_imbalance = imbalance
+
+            print(f"📊 OrderFlow: {imbalance:.2f} | Δ {delta:.2f}")
+
+            # pressão crescente
+            if imbalance > 1.5 and delta > 0.15:
+                print("🟢 PRESSÃO COMPRADORA CRESCENTE")
+                return "BUY"
+
+            # pressão vendedora
+            if imbalance < 0.7 and delta < -0.15:
+                print("🔴 PRESSÃO VENDEDORA CRESCENTE")
+                return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no OrderFlow:", e)
+            return None
+        
+    def detectMomentumAcceleration(self):
+
+        closes = self.stock_data["close_price"]
+
+        if len(closes) < 10:
+            return False
+
+        r1 = (closes.iloc[-1] - closes.iloc[-2]) / closes.iloc[-2]
+        r2 = (closes.iloc[-2] - closes.iloc[-3]) / closes.iloc[-3]
+
+        acceleration = r1 - r2
+
+        print(f"⚡ Momentum acceleration: {acceleration:.5f}")
+
+        if acceleration > 0.001:
+            print("⚡ Momentum acelerando")
+            return True
+
+        return False
