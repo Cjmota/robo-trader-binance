@@ -162,7 +162,7 @@ TP_AMOUNT_PERCENTAGE =  [50, 50, 100]   # Vende [A%, B%]
 # ⌛ AJUSTES DE TEMPO
 
 # Périodo do candle análisado
-CANDLE_PERIOD = getattr(Client, config["CANDLE_PERIOD"].split(".")[-1])
+CANDLE_PERIOD = config["CANDLE_PERIOD"]
 
 TEMPO_ENTRE_TRADES = config["TEMPO_ENTRE_TRADES"]            # Tempo que o bot espera para verificar o mercado (em segundos)
 DELAY_ENTRE_ORDENS = config["DELAY_ENTRE_ORDENS"]           # Tempo que o bot espera depois de realizar uma ordem de compra ou venda (ajuda a diminuir trades de borda)
@@ -269,8 +269,6 @@ def trader_master_loop():
 
         # 🔎 procurar oportunidades
         if current_trader is None:
-
-            print("🔎 Procurando melhor oportunidade...")
 
             symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=3)
 
@@ -396,7 +394,8 @@ def trader_master_loop():
                 time.sleep(15)
 
         cooldown = max(15, TEMPO_ENTRE_TRADES)
-        time.sleep(cooldown)
+        sleep_time = max(10, cooldown)
+        time.sleep(sleep_time)
 
     print("🛑 Loop do robô finalizado.")
 
@@ -555,11 +554,17 @@ def analyze_symbol(client, t, config):
 def analyze_symbol_wrapper(t):
     return analyze_symbol(BINANCE_CLIENT, t, config)
 
+LAST_SCAN = 0
+SCAN_CACHE = []
+
 def scan_market_top_symbols(client, limit=10):
     
-    start_scan_time = time.time()
+    global LAST_SCAN, SCAN_CACHE, SCANNER_SMART_MONEY, SCANNER_RANKING, config
     
-    global SCANNER_SMART_MONEY, SCANNER_RANKING, config
+    if time.time() - LAST_SCAN < 30 and SCAN_CACHE:
+        return SCAN_CACHE
+    
+    start_scan_time = time.time()
 
     SCANNER_SMART_MONEY.clear()
     SCANNER_RANKING.clear()
@@ -570,7 +575,7 @@ def scan_market_top_symbols(client, limit=10):
 
         tickers = safe_binance_call(client.get_ticker)
 
-        if not tickers:
+        if not tickers or not isinstance(tickers, list):
             return []
 
         # manter apenas pares USDT
@@ -578,6 +583,8 @@ def scan_market_top_symbols(client, limit=10):
         
         if not tickers:
             return []
+
+        tickers = [t for t in tickers if float(t.get("quoteVolume",0)) > 100000]
 
         # pega top 200 por volume
         tickers = sorted(
@@ -589,7 +596,7 @@ def scan_market_top_symbols(client, limit=10):
         # filtro rapido --------------------------------------------- #
         candidates = []
 
-        with ThreadPoolExecutor(max_workers=6) as executor:
+        with ThreadPoolExecutor(max_workers=4) as executor:
 
             results = list(
                 executor.map(
@@ -636,6 +643,9 @@ def scan_market_top_symbols(client, limit=10):
         print(f"⏱️ Scan completo em {time.time() - start_scan_time:.2f}s")
 
         time.sleep(0.5)
+
+        SCAN_CACHE = best
+        LAST_SCAN = time.time()
 
         return best
 

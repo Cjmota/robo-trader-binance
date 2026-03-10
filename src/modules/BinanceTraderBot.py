@@ -747,7 +747,7 @@ class BinanceTraderBot:
 
                 if quantity is None:
                     close_price = self.stock_data["close_price"].iloc[-1]
-                    quantity = self.capital / close_price
+                    quantity = (self.capital * 0.95) / close_price
                 else:
                     quantity = self.adjust_to_step(
                         quantity,
@@ -1377,16 +1377,21 @@ class BinanceTraderBot:
             # filtro de volume mínimo
             avg_volume = self.stock_data["volume"].iloc[-20:].mean()
 
-            if avg_volume < 10000:
-                print("⚠️ Volume muito baixo. Ignorando ativo.")
-                return          
-            
+            quote_volume = self.stock_data["close_price"] * self.stock_data["volume"]
+
+            avg_quote_volume = quote_volume.iloc[-20:].mean()
+
+            if avg_quote_volume < 200000:
+                print("⚠️ Liquidez em USDT muito baixa.")
+                return                    
             
             # 🔎 Detectar regime de mercado
             regime = self.detectMarketRegime()
             
             volume_spike = self.detectPump()
             pump_signal = volume_spike
+            
+            pre_pump_signal = self.detectPrePump()
             
             accumulation_signal = self.detectSilentAccumulation()
             
@@ -1422,6 +1427,15 @@ class BinanceTraderBot:
             # 🚫 Limite de trades diário
             if self.daily_trades >= self.max_daily_trades:
                 print("🚫 Limite diário de trades atingido.")
+                return
+
+            # 🚀 Entrada antecipada (pré-pump)
+            if pre_pump_signal and not self.actual_trade_position and regime in ["TREND", "EXPLOSIVE"]:
+
+                print("🔥 Entrada antecipada detectada (pré-pump)")
+
+                self.buyMarketOrder()
+                self.hourly_trades += 1
                 return
 
             if pump_signal and not self.actual_trade_position and regime == "EXPLOSIVE":
@@ -1529,8 +1543,10 @@ class BinanceTraderBot:
             if vacuum_signal:
                 score += 2
 
-            if whale_signal == "BUY":
-                score += 2
+            if whale_signal == "BUY" and volume_spike:
+                score += 3
+            elif whale_signal == "BUY":
+                score += 1
 
             if volume_spike:
                 score += 1
@@ -1606,13 +1622,13 @@ class BinanceTraderBot:
 
             spread = (best_ask - best_bid) / best_bid
 
-            if spread > 0.003:
+            if spread > 0.002:
                 print("⚠️ Spread alto. Evitando trade.")
                 return
         
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and score >= 8 and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
+            if signal in [True, "BUY"] and score >= 6 and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
 
                 if self.hourly_trades >= self.max_hourly_trades:
                     print("⏸️ Limite de trades por hora atingido.")
@@ -1651,7 +1667,10 @@ class BinanceTraderBot:
 
                 if not self.actual_trade_position:
                     print("🚀 Entrada confirmada.")
-                    self.buyLimitedOrder(quantity=quantity)
+                    if regime == "EXPLOSIVE":
+                        self.buyMarketOrder(quantity=quantity)
+                    else:
+                        self.buyLimitedOrder(quantity=quantity)
                     self.hourly_trades += 1
                     self.last_trade_time = time.time()
                                              
@@ -1923,6 +1942,51 @@ class BinanceTraderBot:
             return True
 
         return False
+    
+    def detectPrePump(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 30:
+                return False
+
+            current_price = closes.iloc[-1]
+            prev_price = closes.iloc[-2]
+
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            # crescimento de volume
+            volume_growth = current_volume > avg_volume * 1.8
+
+            # movimento ainda pequeno
+            price_change = abs((current_price - prev_price) / prev_price)
+
+            # compressão de preço
+            recent_range = (closes.iloc[-20:].max() - closes.iloc[-20:].min()) / closes.iloc[-20:].min()
+
+            # pressão compradora
+            buy_pressure = current_price > prev_price
+
+            if volume_growth and price_change < 0.01 and recent_range < 0.015 and buy_pressure:
+
+                print("🚀 POSSÍVEL PRÉ-PUMP DETECTADO")
+
+                print(f"Volume growth: {current_volume/avg_volume:.2f}x")
+                print(f"Price change: {price_change*100:.2f}%")
+
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no detector de pré-pump:", e)
+
+            return False
 
     def isLowVolatility(self):
 
