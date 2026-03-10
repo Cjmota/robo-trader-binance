@@ -1568,6 +1568,13 @@ class BinanceTraderBot:
 
             print(f"📊 Score de entrada: {score}")
             
+            probability = self.calculateTradeProbability(
+                score,
+                regime,
+                spread,
+                volume_spike
+            )
+            
             # normalizar sinal
             if strategy_signal in ["Comprar", "BUY", True]:
                 strategy_signal = "BUY"
@@ -1637,7 +1644,7 @@ class BinanceTraderBot:
         
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and score >= 6 and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
+            if signal in [True, "BUY"] and probability >= 0.65 and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
 
                 if self.hourly_trades >= self.max_hourly_trades:
                     print("⏸️ Limite de trades por hora atingido.")
@@ -2763,3 +2770,22 @@ class BinanceTraderBot:
             print("Erro no detector de liquidity grab:", e)
 
             return None
+        
+    def calculateTradeProbability(self, score, regime, spread, volume_spike):
+
+        probability = score / 10
+
+        if regime == "SIDEWAYS":
+            probability -= 0.25
+
+        if spread > 0.0015:
+            probability -= 0.15
+
+        if not volume_spike:
+            probability -= 0.10
+
+        probability = max(0, min(probability, 1))
+
+        print(f"🎯 Probabilidade do trade: {probability:.2f}")
+
+        return probability
