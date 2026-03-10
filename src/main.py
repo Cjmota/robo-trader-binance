@@ -478,7 +478,7 @@ def detectInstitutionalAccumulation(closes, volumes, highs, lows):
                 max(closes[-20:]) - min(closes[-20:])
             ) / max(min(closes[-20:]), 0.0000001)
 
-            compression = price_range < 0.015
+            compression = price_range < 0.001
 
             # crescimento de volume
             avg_volume = sum(volumes[-25:-5]) / 20
