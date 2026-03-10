@@ -690,6 +690,10 @@
                     updateHeatmap();
                 }
 
+                if (page === "trades") {
+                    updateTradesTable()
+                }
+
             }
 
             setInterval(() => {
@@ -914,6 +918,50 @@ ${c.symbol}<br>${c.change}%
                 })
 
             }
+
+            async function updateTradesTable() {
+
+                try {
+
+                    let res = await fetch("/trades")
+                    let trades = await res.json()
+
+                    let table = document.getElementById("tradesTable")
+
+                    if (!trades || trades.length === 0) {
+                        table.innerHTML = "<tr><td colspan='6'>Sem trades ainda</td></tr>"
+                        return
+                    }
+
+                    let html = ""
+
+                    trades.slice().reverse().forEach(t => {
+
+                        let color = t.profit > 0 ? "#22c55e" : "#ef4444"
+
+                        html += `
+                        <tr>
+                            <td>${t.time || "-"}</td>
+                            <td>${t.symbol || "-"}</td>
+                            <td>${t.side || "-"}</td>
+                            <td>${t.entry || "-"}</td>
+                            <td>${t.exit || "-"}</td>
+                            <td style="color:${color}">${t.profit}</td>
+                        </tr>
+                        `
+                    })
+
+                    table.innerHTML = html
+
+                } catch(e) {
+
+                    console.log("Erro ao carregar trades:", e)
+
+                }
+
+            }
+
+            setInterval(updateTradesTable, 4000)    
 
             setInterval(updateHeatmap, 5000)
 

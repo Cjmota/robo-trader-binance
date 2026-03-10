@@ -1910,7 +1910,11 @@ class BinanceTraderBot:
             
             main.TRADE_HISTORY.append({
                 "time": datetime.now().strftime("%H:%M:%S"),
-                "profit": round(pnl_usdt, 4)
+                "symbol": self.operation_code,
+                "side": "SELL",
+                "entry": self.last_buy_price,
+                "exit": sell_price,
+                "profit": round(pnl_usdt,4)
             })
             
             pnl_pct = ((sell_price - self.last_buy_price) / self.last_buy_price) * 100
