@@ -55,6 +55,7 @@ SCANNER_RANKING = []   # 🔥 ranking do scanner para dashboard
 SCANNER_SMART_MONEY = []
 
 config = load_config()
+config["CANDLE_PERIOD"] = str(config["CANDLE_PERIOD"]).strip()
 
 LOSS_COOLDOWN = config["RISK"]["LOSS_COOLDOWN"]
 
