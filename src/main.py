@@ -392,23 +392,6 @@ def trader_master_loop():
 
                 time.sleep(15)
 
-                profit = getattr(current_trader, "last_trade_profit", 0)
-
-                TRADE_HISTORY.append({
-                    "timestamp": time.time(),
-                    "asset": current_trader.operation_code,
-                    "profit": profit,
-                    "strategy": current_trader.main_strategy.__name__,
-                    "capital": current_trader.traded_quantity
-                })
-
-                update_market_memory(current_trader.operation_code, profit)
-                
-                current_trader = None
-                last_traded_symbol = None
-
-                time.sleep(15)
-
         cooldown = max(15, TEMPO_ENTRE_TRADES)
         sleep_time = max(10, cooldown)
         time.sleep(sleep_time)
