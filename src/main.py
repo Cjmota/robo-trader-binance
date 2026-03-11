@@ -233,7 +233,8 @@ def trader_master_loop():
     global CURRENT_TRADER, BOT_RUNNING, BINANCE_CLIENT, last_traded_symbol
 
     last_outside_log = False
-
+    last_trade_logged = False
+    
     try:
         if BINANCE_CLIENT is None:
             BINANCE_CLIENT = Client(API_KEY, API_SECRET)
@@ -381,20 +382,27 @@ def trader_master_loop():
 
             current_trader.execute()
 
-            if not current_trader.actual_trade_position:
+            if not current_trader.actual_trade_position and not last_trade_logged:
 
                 print("⚠️ Nenhuma posição aberta. Aplicando cooldown...")
 
-                symbol_cooldown[last_traded_symbol] = time.time()
+                if last_traded_symbol:
+                    symbol_cooldown[last_traded_symbol] = time.time()
 
-                profit = getattr(current_trader, "last_trade_profit", 0)
+                entry = getattr(current_trader, "last_buy_price", 0)
+                exit_price = getattr(current_trader, "last_sell_price", 0)
+                qty = getattr(current_trader, "last_stock_account_balance", 0)
+
+                profit = (exit_price - entry) * qty
+
+                last_trade_logged = True
 
                 TRADE_HISTORY.append({
                     "time": datetime.now(br_tz).strftime("%H:%M:%S"),
                     "symbol": current_trader.operation_code,
                     "side": "SELL",
-                    "entry": getattr(current_trader, "last_buy_price", 0),
-                    "exit": getattr(current_trader, "last_sell_price", 0),
+                    "entry": round(entry, 2),
+                    "exit": round(exit_price, 2),
                     "profit": round(profit, 4)
                 })
 
@@ -402,7 +410,7 @@ def trader_master_loop():
 
                 current_trader = None
                 last_traded_symbol = None
-
+                
                 time.sleep(15)
 
         cooldown = max(15, TEMPO_ENTRE_TRADES)
@@ -557,6 +565,35 @@ def analyze_symbol(client, t, config):
         symbol = t["symbol"]
         volume = float(t["quoteVolume"])
         price_change = float(t.get("priceChangePercent", 0))
+        
+        if abs(price_change) < 0.15:
+            return None
+        
+        # 🔎 filtro de spread do orderbook
+        book = safe_binance_call(client.get_order_book, symbol=symbol, limit=5)
+
+        if not book:
+            return None
+
+        if not book.get("bids") or not book.get("asks"):
+            return None
+
+        bid = float(book["bids"][0][0])
+        ask = float(book["asks"][0][0])
+
+        spread = (ask - bid) / bid
+
+        bid_vol = sum(float(b[1]) for b in book["bids"][:5])
+        ask_vol = sum(float(a[1]) for a in book["asks"][:5])
+
+        imbalance = bid_vol / max(ask_vol, 1)
+
+        if imbalance < 0.7:
+            return None
+
+        # ignora moedas com spread alto
+        if spread > 0.002:   # 0.2%
+            return None
 
         candles = safe_binance_call(
             client.get_klines,
@@ -609,7 +646,7 @@ def analyze_symbol(client, t, config):
 
     except Exception as e:
 
-        logging.error(f"Erro analisando {t['symbol']}: {e}")
+        logging.error(f"Erro analisando {t.get('symbol','UNKNOWN')}: {e}")
         return None
 
 def analyze_symbol_wrapper(t):
@@ -621,6 +658,9 @@ def analyze_symbol_wrapper(t):
 
         print(f"Erro ao analisar {t}: {e}")
         return None
+
+LAST_SCAN = 0
+SCAN_CACHE = []
 
 def scan_market_top_symbols(client, limit=10):
 
@@ -678,10 +718,12 @@ def scan_market_top_symbols(client, limit=10):
         filtered.sort(key=lambda x: x[1], reverse=True)
 
         # pegar top 30
-        symbols = [t for t, _ in filtered[:30]]
+        symbols = [t for t, _ in filtered[:20]]
 
         # análise paralela
-        with ThreadPoolExecutor(max_workers=8) as executor:
+        max_workers = min(8, os.cpu_count() or 1)
+            
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
             results = list(executor.map(analyze_symbol_wrapper, symbols))
 
         candidates = [
