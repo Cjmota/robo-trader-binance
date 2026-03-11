@@ -98,6 +98,9 @@ class BinanceTraderBot:
         self.last_closed_order_id = None
         self.current_day = datetime.now().date()
         
+        self.trades_cache = None
+        self.trades_cache_time = 0
+        
         # limite de trades por dia
         self.max_daily_trades = 40
         
@@ -198,7 +201,7 @@ class BinanceTraderBot:
         self.setStepSizeAndTickSize() # Seta o time_step e step_size da classe (só precisa executar 1x)
 
         self.loadBotState()
-
+        
         # fmt: on
         
         
@@ -1590,6 +1593,8 @@ class BinanceTraderBot:
            
             trap_signal = self.detectMarketMakerTrap()
             
+            stop_hunt_signal = self.detectStopHunt()
+            
             liquidity_trap_signal = self.detectLiquidityTrap()
                         
             grab_signal = self.detectLiquidityGrab()
@@ -1605,6 +1610,8 @@ class BinanceTraderBot:
             volatility_expansion = self.detectVolatilityExpansion()
             
             momentum_acceleration = self.detectMomentumAcceleration()
+            
+            delta_signal = self.detectVolumeDelta()
             
             score = 0
             if accumulation_signal:
@@ -1644,10 +1651,19 @@ class BinanceTraderBot:
                 score += 2
 
             if orderflow_signal == "SELL":
-                score += 1
+                score -= 1
 
             if momentum_acceleration:
                 score += 2
+            
+            if not self.marketRiskFilter():
+                return
+        
+            if delta_signal == "BUY":
+                score += 2
+
+            if delta_signal == "SELL":
+                score += 1
             
             print(f"📊 Score de entrada: {score}")
             
@@ -1677,6 +1693,10 @@ class BinanceTraderBot:
             # market maker trap
             elif trap_signal:
                 signal = trap_signal
+            
+            elif stop_hunt_signal:
+                print("🎯 Stop hunt institucional detectado")
+                signal = stop_hunt_signal
                 
             elif liquidity_trap_signal:
                 signal = liquidity_trap_signal
@@ -1691,7 +1711,7 @@ class BinanceTraderBot:
             elif vacuum_signal:
                 signal = vacuum_signal
 
-            elif accumulation_signal and not self.actual_trade_position:
+            elif accumulation_signal and multi_trend_ok and not self.actual_trade_position:
 
                 print("🔥 Sinal de acumulação detectado")
 
@@ -1725,7 +1745,7 @@ class BinanceTraderBot:
         
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and probability >= 0.65 and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
+            if signal in [True, "BUY"] and probability >= 0.75 and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
 
                 if self.hourly_trades >= self.max_hourly_trades:
                     print("⏸️ Limite de trades por hora atingido.")
@@ -2874,7 +2894,7 @@ class BinanceTraderBot:
 
         return probability
     
-    def detectInstitutionalAccumulation(closes, volumes, highs, lows):
+    def detectInstitutionalAccumulation(self, closes, volumes, highs, lows):
 
         try:
 
@@ -2959,18 +2979,21 @@ class BinanceTraderBot:
             close_price = self.stock_data["close_price"].iloc[-1]
             balance_value = self.last_stock_account_balance * close_price
 
-            if balance_value >= 5:
+            MIN_POSITION_VALUE = 5
 
+            if balance_value >= MIN_POSITION_VALUE:
                 self.actual_trade_position = True
+            else:
+                self.actual_trade_position = False
 
                 if self.last_buy_price == 0:
                     self.last_buy_price = close_price
 
-                print("📊 Posição detectada na carteira")
+                    print("📊 Posição detectada na carteira")
 
-            else:
+                else:
 
-                self.actual_trade_position = False
+                    self.actual_trade_position = False
 
         except Exception as e:
 
@@ -3301,3 +3324,149 @@ class BinanceTraderBot:
             return True
 
         return False
+    
+    def resetForNewSymbol(self):
+
+        self.last_buy_price = 0
+        self.last_sell_price = 0
+        self.actual_trade_position = False
+        self.trailing_stop_price = 0
+        self.highest_price_since_entry = 0
+        
+    def marketRiskFilter(self):
+
+        if self.market_cache and time.time() - self.market_cache_time < 120:
+            return self.market_cache
+
+        btc = self.client_binance.get_klines(
+            symbol="BTCUSDT",
+            interval="5m",
+            limit=50
+        )
+
+        eth = self.client_binance.get_klines(
+            symbol="ETHUSDT",
+            interval="5m",
+            limit=50
+        )
+
+        btc_df = pd.DataFrame(btc)
+        eth_df = pd.DataFrame(eth)
+
+        btc_df["close"] = pd.to_numeric(btc_df[4])
+        eth_df["close"] = pd.to_numeric(eth_df[4])
+
+        btc_ma = btc_df["close"].rolling(20).mean().iloc[-1]
+        eth_ma = eth_df["close"].rolling(20).mean().iloc[-1]
+
+        btc_price = btc_df["close"].iloc[-1]
+        eth_price = eth_df["close"].iloc[-1]
+
+        result = not (btc_price < btc_ma and eth_price < eth_ma)
+
+        self.market_cache = result
+        self.market_cache_time = time.time()
+
+        return result
+
+    def detectVolumeDelta(self):
+
+        try:
+
+            if hasattr(self, "trades_cache") and time.time() - self.trades_cache_time < 5:
+                trades = self.trades_cache
+            else:
+                trades = self.client_binance.get_recent_trades(
+                    symbol=self.operation_code,
+                    limit=200
+                )
+                self.trades_cache = trades
+                self.trades_cache_time = time.time()
+
+            buy_volume = 0
+            sell_volume = 0
+
+            for t in trades:
+
+                qty = float(t["qty"])
+
+                if t["isBuyerMaker"]:
+                    sell_volume += qty
+                else:
+                    buy_volume += qty
+
+            delta = buy_volume - sell_volume
+
+            print(f"📊 Volume Delta: {delta:.4f}")
+
+            if delta > 0:
+                return "BUY"
+
+            if delta < 0:
+                return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no volume delta:", e)
+            return None
+        
+    def detectStopHunt(self):
+
+        try:
+
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 40:
+                return None
+
+            # níveis de liquidez
+            liquidity_high = highs.iloc[-30:-5].max()
+            liquidity_low = lows.iloc[-30:-5].min()
+
+            current_high = highs.iloc[-1]
+            current_low = lows.iloc[-1]
+            current_close = closes.iloc[-1]
+
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            print("🎯 Stop Hunt Check")
+
+            # stop hunt de vendedores (break de topo)
+            if current_high > liquidity_high and current_volume > avg_volume * 1.4:
+
+                print("🐋 STOP HUNT ACIMA DO TOPO")
+
+                if current_close > liquidity_high:
+                    print("🚀 Continuação de alta provável")
+                    return "BUY"
+
+                else:
+                    print("⚠️ Fake breakout detectado")
+                    return "SELL"
+
+            # stop hunt de compradores (break de fundo)
+            if current_low < liquidity_low and current_volume > avg_volume * 1.4:
+
+                print("🐋 STOP HUNT ABAIXO DO FUNDO")
+
+                if current_close < liquidity_low:
+                    print("🔻 Continuação de baixa provável")
+                    return "SELL"
+
+                else:
+                    print("⚠️ Reversão após stop hunt")
+                    return "BUY"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de Stop Hunt:", e)
+
+            return None

@@ -207,9 +207,31 @@ thread_lock = threading.Lock()
 
 
 def trader_master_loop():
+    
+    current_trader = BinanceTraderBot(
+        stock_code="BTC",
+        operation_code="BTCUSDT",
+        traded_quantity=config["stocks_traded_list"][0]["capital"],
+        traded_percentage=100,
+        candle_period=CANDLE_PERIOD,
+        api_key=API_KEY,
+        api_secret=API_SECRET,
+        testnet=TESTNET,
+        time_to_trade=TEMPO_ENTRE_TRADES,
+        delay_after_order=DELAY_ENTRE_ORDENS,
+        acceptable_loss_percentage=ACCEPTABLE_LOSS_PERCENTAGE,
+        stop_loss_percentage=STOP_LOSS_PERCENTAGE,
+        fallback_activated=FALLBACK_ACTIVATED,
+        take_profit_at_percentage=TP_AT_PERCENTAGE,
+        take_profit_amount_percentage=TP_AMOUNT_PERCENTAGE,
+        main_strategy=MAIN_STRATEGY,
+        main_strategy_args=MAIN_STRATEGY_ARGS,
+        fallback_strategy=FALLBACK_STRATEGY,
+        fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
+    )  
+        
     global CURRENT_TRADER, BOT_RUNNING, BINANCE_CLIENT, last_traded_symbol
 
-    current_trader = None
     last_outside_log = False
 
     try:
@@ -321,32 +343,21 @@ def trader_master_loop():
                         max_position
                     )
 
-                    trader = BinanceTraderBot(
-                        stock_code=stock,
-                        operation_code=symbol,
-                        traded_quantity=capital,
-                        traded_percentage=100,
-                        candle_period=CANDLE_PERIOD,
-                        api_key=API_KEY,
-                        api_secret=API_SECRET,
-                        testnet=TESTNET,
-                        time_to_trade=TEMPO_ENTRE_TRADES,
-                        delay_after_order=DELAY_ENTRE_ORDENS,
-                        acceptable_loss_percentage=ACCEPTABLE_LOSS_PERCENTAGE,
-                        stop_loss_percentage=STOP_LOSS_PERCENTAGE,
-                        fallback_activated=FALLBACK_ACTIVATED,
-                        take_profit_at_percentage=TP_AT_PERCENTAGE,
-                        take_profit_amount_percentage=TP_AMOUNT_PERCENTAGE,
-                        main_strategy=MAIN_STRATEGY,
-                        main_strategy_args=MAIN_STRATEGY_ARGS,
-                        fallback_strategy=FALLBACK_STRATEGY,
-                        fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
-                    )
+                    # 🔁 troca o ativo do robô
+                    current_trader.stock_code = stock
+                    current_trader.operation_code = symbol
+                    current_trader.traded_quantity = capital
 
-                    if not trader.updateAllData():
+                    # resetar estado
+                    current_trader.resetForNewSymbol()
+
+                    # atualizar filtros da Binance
+                    current_trader.setStepSizeAndTickSize()
+                        
+                    if not current_trader.updateAllData():
                         continue
 
-                    decision = trader.getFinalDecisionStrategy()
+                    decision = current_trader.getFinalDecisionStrategy()
                     decision_str = str(decision).upper()
 
                     print(f"🔎 Decisão da estratégia: {decision_str}")
@@ -357,7 +368,6 @@ def trader_master_loop():
 
                         symbol_cooldown[symbol] = time.time()
                         last_traded_symbol = symbol
-                        current_trader = trader
                         break
 
                 except Exception as e:
@@ -580,7 +590,9 @@ def analyze_symbol(client, t, config):
             lows
         )
 
-        score = smart_score * (1 + math.log10(max(volume,1)))
+        volume_weight = min(volume / 10000000, 5)
+
+        score = smart_score * (1 + volume_weight)
 
         if accumulation_signal:
             score *= 1.4
@@ -627,6 +639,20 @@ def scan_market_top_symbols(client, limit=10):
         # manter apenas pares USDT
         tickers = [t for t in tickers if t["symbol"].endswith("USDT")]
         
+        STABLE_FILTER = [
+            "USDCUSDT",
+            "FDUSDUSDT",
+            "TUSDUSDT",
+            "BUSDUSDT",
+            "USDPUSDT",
+            "RLUSDUSDT"
+        ]
+
+        tickers = [
+            t for t in tickers
+            if t["symbol"].endswith("USDT") and t["symbol"] not in STABLE_FILTER
+        ]
+        
         if not tickers:
             return []
 
@@ -647,7 +673,7 @@ def scan_market_top_symbols(client, limit=10):
         fast_candidates.sort(key=lambda x: x[1], reverse=True)
 
         # pegar apenas 60 moedas
-        tickers = [x[0] for x in fast_candidates[:60]]
+        tickers = [x[0] for x in fast_candidates[:30]]
 
         # filtro rapido --------------------------------------------- #
         candidates = []
@@ -666,7 +692,7 @@ def scan_market_top_symbols(client, limit=10):
             if r is None:
                 continue
 
-            if r["score"] > 1.0:
+            if r["score"] > 2.5:
 
                 candidates.append(r)
         
