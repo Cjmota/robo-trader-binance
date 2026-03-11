@@ -90,6 +90,11 @@ class BinanceTraderBot:
         self.trailing_stop_price = 0.0
         self.highest_price_since_entry = 0.0
         
+        # Controle de posição atual
+        self.actual_trade_position = None
+        self.entry_price = 0.0
+        self.position_quantity = 0.0
+        
         self.sideways_counter = 0
         self.sideways_limit = 3  # nº de ciclos tolerados em lateralização
         
