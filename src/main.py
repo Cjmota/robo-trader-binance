@@ -619,115 +619,86 @@ LAST_SCAN = 0
 SCAN_CACHE = []
 
 def scan_market_top_symbols(client, limit=10):
-    
-    global LAST_SCAN, SCAN_CACHE, SCANNER_SMART_MONEY, SCANNER_RANKING, config
-    
+
+    global LAST_SCAN, SCAN_CACHE, SCANNER_SMART_MONEY, SCANNER_RANKING
+
     if time.time() - LAST_SCAN < 30 and SCAN_CACHE:
         return SCAN_CACHE
-    
+
     start_scan_time = time.time()
 
     SCANNER_SMART_MONEY.clear()
     SCANNER_RANKING.clear()
-    
+
     print("🔎 Escaneando mercado inteligente PRO...")
 
     try:
 
         tickers = safe_binance_call(client.get_ticker)
 
-        if not tickers or not isinstance(tickers, list):
-            return []
-
-        # manter apenas pares USDT
-        tickers = [t for t in tickers if t["symbol"].endswith("USDT")]
-        
-        STABLE_FILTER = [
-            "USDCUSDT",
-            "FDUSDUSDT",
-            "TUSDUSDT",
-            "BUSDUSDT",
-            "USDPUSDT",
-            "RLUSDUSDT"
-        ]
-
-        #tickers = [
-        #    t for t in tickers
-        #    if t["symbol"].endswith("USDT") and t["symbol"] not in STABLE_FILTER
-        #]
-        
         if not tickers:
             return []
 
-        tickers = [t for t in tickers if float(t.get("quoteVolume",0)) > 1000000]
+        STABLE_FILTER = {
+            "USDCUSDT","FDUSDUSDT","TUSDUSDT",
+            "BUSDUSDT","USDPUSDT","RLUSDUSDT"
+        }
 
-        # ranking rápido
-        fast_candidates = []
+        # filtro inicial rápido
+        filtered = []
 
         for t in tickers:
 
+            symbol = t["symbol"]
+
+            if not symbol.endswith("USDT"):
+                continue
+
+            if symbol in STABLE_FILTER:
+                continue
+
             volume = float(t.get("quoteVolume",0))
+
+            if volume < 1_000_000:
+                continue
+
             change = abs(float(t.get("priceChangePercent",0)))
 
             score = volume * (1 + change / 100)
 
-            fast_candidates.append((t, score))
+            filtered.append((symbol, score))
 
-        fast_candidates.sort(key=lambda x: x[1], reverse=True)
+        if not filtered:
+            return []
 
-        # pegar apenas 60 moedas
-        tickers = [x[0] for x in fast_candidates[:30]]
+        filtered.sort(key=lambda x: x[1], reverse=True)
 
-        # filtro rapido --------------------------------------------- #
-        candidates = []
+        # pegar top 30
+        symbols = [x[0] for x in filtered[:30]]
 
+        # análise paralela
         with ThreadPoolExecutor(max_workers=8) as executor:
+            results = list(executor.map(analyze_symbol_wrapper, symbols))
 
-            results = list(
-                executor.map(
-                    analyze_symbol_wrapper,
-                    tickers
-                )
-            )
+        candidates = [
+            r for r in results
+            if r and r["score"] > 2.5
+        ]
 
-        for r in results:
-
-            if r is None:
-                continue
-
-            if r["score"] > 2.5:
-
-                candidates.append(r)
-        
-        candidates.sort(
-            key=lambda x: x["score"],
-            reverse=True
-        )
-
-        # ---------------------------------------------------------- #
+        candidates.sort(key=lambda x: x["score"], reverse=True)
 
         if not candidates:
             return []
-        
-        market_mode = None
-        
-        # Tirei parte grande do scaner daqui#-------------------------------------------------------
 
         SCANNER_RANKING[:] = [
             (c["symbol"], c["score"], c["momentum"], c["volume"])
             for c in candidates[:10]
         ]
-        
+
         best = [c["symbol"] for c in candidates[:limit]]
 
-        if not best and len(candidates) > 0:
-            best = [candidates[0]["symbol"]]    
-        
         print("🔥 TOP OPORTUNIDADES:", best)
-        
         print(f"⏱️ Scan completo em {time.time() - start_scan_time:.2f}s")
-
-        #time.sleep(0.5)
 
         SCAN_CACHE = best
         LAST_SCAN = time.time()
@@ -737,7 +708,6 @@ def scan_market_top_symbols(client, limit=10):
     except Exception as e:
 
         print("Erro no scanner:", e)
-
         return []   
              
     
