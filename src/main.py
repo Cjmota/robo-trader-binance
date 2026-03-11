@@ -651,15 +651,15 @@ def scan_market_top_symbols(client, limit=10):
             "RLUSDUSDT"
         ]
 
-        tickers = [
-            t for t in tickers
-            if t["symbol"].endswith("USDT") and t["symbol"] not in STABLE_FILTER
-        ]
+        #tickers = [
+        #    t for t in tickers
+        #    if t["symbol"].endswith("USDT") and t["symbol"] not in STABLE_FILTER
+        #]
         
         if not tickers:
             return []
 
-        tickers = [t for t in tickers if float(t.get("quoteVolume",0)) > 100000]
+        tickers = [t for t in tickers if float(t.get("quoteVolume",0)) > 1000000]
 
         # ranking rápido
         fast_candidates = []
@@ -727,7 +727,7 @@ def scan_market_top_symbols(client, limit=10):
         
         print(f"⏱️ Scan completo em {time.time() - start_scan_time:.2f}s")
 
-        time.sleep(0.5)
+        #time.sleep(0.5)
 
         SCAN_CACHE = best
         LAST_SCAN = time.time()

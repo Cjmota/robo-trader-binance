@@ -1,12 +1,21 @@
 import pandas as pd
 
+
 def scan_market_pro(client):
 
     print("🔎 Escaneando mercado inteligente PRO...")
 
-    tickers = client.get_ticker()
+    try:
+        tickers = client.get_ticker()
+    except Exception as e:
+        print("Erro ao obter tickers:", e)
+        return []
 
-    results = []
+    candidates = []
+
+    # -------------------------------------------------
+    # FILTRO 1 — LIQUIDEZ E MOVIMENTO
+    # -------------------------------------------------
 
     for ticker in tickers:
 
@@ -15,6 +24,38 @@ def scan_market_pro(client):
         if not symbol.endswith("USDT"):
             continue
 
+        # evitar stablecoins
+        if symbol.startswith(("USDC", "BUSD", "TUSD", "FDUSD")):
+            continue
+
+        try:
+
+            quote_volume = float(ticker.get("quoteVolume", 0))
+            price_change = abs(float(ticker.get("priceChangePercent", 0)))
+
+        except:
+            continue
+
+        # filtro liquidez mínima
+        if quote_volume < 2_000_000:
+            continue
+
+        # filtro volatilidade mínima
+        if price_change < 0.5:
+            continue
+
+        candidates.append(symbol)
+
+    print(f"📊 Ativos candidatos após filtro: {len(candidates)}")
+
+    results = []
+
+    # -------------------------------------------------
+    # FILTRO 2 — ANÁLISE DE CANDLE
+    # -------------------------------------------------
+
+    for symbol in candidates[:80]:  # limite segurança API
+
         try:
 
             candles = client.get_klines(
@@ -22,6 +63,9 @@ def scan_market_pro(client):
                 interval="5m",
                 limit=50
             )
+
+            if not candles:
+                continue
 
             df = pd.DataFrame(candles)
 
@@ -34,15 +78,24 @@ def scan_market_pro(client):
             avg_volume = volumes.iloc[-20:].mean()
             current_volume = volumes.iloc[-1]
 
+            if avg_volume == 0:
+                continue
+
             volume_growth = current_volume > avg_volume * 1.5
 
             price_change = (closes.iloc[-1] - closes.iloc[-2]) / closes.iloc[-2]
 
-            recent_range = (closes.iloc[-20:].max() - closes.iloc[-20:].min()) / closes.iloc[-20:].min()
+            recent_range = (
+                closes.iloc[-20:].max() - closes.iloc[-20:].min()
+            ) / closes.iloc[-20:].min()
 
             volatility = closes.pct_change().std()
 
             score = 0
+
+            # -------------------------------------------------
+            # SCORE
+            # -------------------------------------------------
 
             if volume_growth:
                 score += 3
@@ -67,8 +120,12 @@ def scan_market_pro(client):
                     "volume": current_volume
                 })
 
-        except:
+        except Exception:
             continue
+
+    # -------------------------------------------------
+    # RANKING
+    # -------------------------------------------------
 
     results = sorted(results, key=lambda x: x["score"], reverse=True)
 

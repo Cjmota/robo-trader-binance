@@ -4,6 +4,7 @@ import json
 import time
 import logging
 import math
+import threading
 from datetime import datetime
 from dotenv import load_dotenv
 import pandas as pd
@@ -67,8 +68,10 @@ class BinanceTraderBot:
         acceptable_loss_percentage=0.5,
         stop_loss_percentage=3.5,
         fallback_activated=True,
-        take_profit_at_percentage=[],
-        take_profit_amount_percentage=[],
+        
+        take_profit_at_percentage=None,
+        take_profit_amount_percentage=None,
+        
         main_strategy=None,
         main_strategy_args=None,
         fallback_strategy=None,
@@ -113,7 +116,7 @@ class BinanceTraderBot:
         self.partial_take_profit_levels = [0.8, 1.6, 3.0]  # %
         self.partial_take_profit_amounts = [30, 30, 30]   # % da posição
         self.partial_tp_index = 0
-
+        
         # fmt: off
 
         self.stock_code = stock_code  # Código princial da stock negociada (ex: 'BTC')
@@ -135,8 +138,8 @@ class BinanceTraderBot:
         self.acceptable_loss_percentage = acceptable_loss_percentage / 100 # % Máxima que o bot aceita perder quando vender
         self.stop_loss_percentage = stop_loss_percentage / 100 # % Máxima de loss que ele aceita, em caso de não vender na ordem limitada
 
-        self.take_profit_at_percentage = take_profit_at_percentage # Quanto de valorização para pegar lucro. (Array exemplo: [2, 5, 10])
-        self.take_profit_amount_percentage = take_profit_amount_percentage # Quanto da quantidade tira de lucro. (Array exemplo: [25, 25, 40])
+        self.take_profit_at_percentage = take_profit_at_percentage or [] # Quanto de valorização para pegar lucro. (Array exemplo: [2, 5, 10])
+        self.take_profit_amount_percentage = take_profit_amount_percentage or [] # Quanto da quantidade tira de lucro. (Array exemplo: [25, 25, 40])
 
         self.main_strategy = main_strategy # Estratégia principal
         self.main_strategy_args = main_strategy_args # (opcional) Argumentos da estratégia principal
@@ -156,10 +159,12 @@ class BinanceTraderBot:
         self.last_orderbook_check = 0
         self.cached_orderbook = None
         
+        self.lock = threading.Lock()
+        
         self.last_trade_time = 0
         self.trade_cooldown = 30  # segundos
 
-        self.max_daily_loss = -10
+        self.max_daily_loss = 10
         
         self.hourly_trades = 0
         self.last_hour = datetime.now().hour
@@ -173,6 +178,9 @@ class BinanceTraderBot:
 
         self.daily_orders_cache = None
         self.daily_orders_time = 0
+        
+        self.market_cache = None
+        self.market_cache_time = 0
 
         for attempt in range(5):
             try:
@@ -181,14 +189,21 @@ class BinanceTraderBot:
                     api_secret=self.api_secret,
                     testnet=self.testnet
                 )
+
+                # teste simples de conexão
+                self.client_binance.get_server_time()
+
+                print("✅ Conectado à Binance")
                 break
-            except ConnectionError as e:
+
+            except Exception as e:
                 print(f"⚠️ Falha ao conectar Binance (tentativa {attempt+1}/5)")
                 time.sleep(3)
+
         else:
-            print("❌ Não foi possível conectar à Binance. Verifique internet/DNS.")
-            raise
-        
+            raise Exception("❌ Não foi possível conectar à Binance")
+                
+                
         # Break-even configurável por ativo
         self.break_even_map = {
             "BTC": 1.2 / 100,
@@ -313,6 +328,7 @@ class BinanceTraderBot:
             print(f"Erro ao verificar tendência multi-timeframe: {e}")
 
             return False
+        
     # Atualiza todos os dados da conta
     def updateAllData(self, verbose=False):
         try:
@@ -1474,7 +1490,7 @@ class BinanceTraderBot:
             self.updateDailyProfit()
             
             # 🛑 Stop diário de perda
-            if self.daily_profit <= self.max_daily_loss:
+            if self.daily_profit <= -self.max_daily_loss:
                 print("🛑 Stop diário de perda atingido.")
                 return
 
@@ -2306,19 +2322,20 @@ class BinanceTraderBot:
 
         try:
 
-            # usa cache por 5 segundos
-            if self.cached_orderbook and time.time() - self.last_orderbook_check < 5:
-                return self.cached_orderbook
+            with self.lock:
 
-            depth = self.client_binance.get_order_book(
-                symbol=self.operation_code,
-                limit=50
-            )
+                if self.cached_orderbook and time.time() - self.last_orderbook_check < 5:
+                    return self.cached_orderbook
 
-            self.cached_orderbook = depth
-            self.last_orderbook_check = time.time()
+                depth = self.client_binance.get_order_book(
+                    symbol=self.operation_code,
+                    limit=50
+                )
 
-            return depth
+                self.cached_orderbook = depth
+                self.last_orderbook_check = time.time()
+
+                return depth
 
         except Exception as e:
             print("Erro ao obter orderbook:", e)
@@ -3475,3 +3492,14 @@ class BinanceTraderBot:
             print("Erro no detector de Stop Hunt:", e)
 
             return None
+    
+    def reconnect(self):
+        try:
+            self.client_binance = BinanceClient(
+                api_key=self.api_key,
+                api_secret=self.api_secret,
+                testnet=self.testnet
+            )
+            print("🔌 Reconectado à Binance")
+        except Exception as e:
+            print("❌ Falha ao reconectar:", e)
