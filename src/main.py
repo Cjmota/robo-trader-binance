@@ -51,6 +51,7 @@ TRADE_HISTORY = []
 
 MARKET_MEMORY = {}
 
+
 SCANNER_RANKING = []   # 🔥 ranking do scanner para dashboard
 SCANNER_SMART_MONEY = []
 
@@ -156,8 +157,11 @@ ACCEPTABLE_LOSS_PERCENTAGE = config["ACCEPTABLE_LOSS_PERCENTAGE"]# (Em base 100%
 STOP_LOSS_PERCENTAGE = config["STOP_LOSS_PERCENTAGE"]  # (Em base 100%) % Máxima de loss que ele aceita para vender à mercado independente      
 
 # Ajustes de TAKE PROFIT (Em base 100%)                        
-TP_AT_PERCENTAGE =      [2, 4, 8]       # Em [X%, Y%]                       
-TP_AMOUNT_PERCENTAGE =  [50, 50, 100]   # Vende [A%, B%]
+#TP_AT_PERCENTAGE = [2, 4, 8]       # Em [X%, Y%]                       
+#TP_AMOUNT_PERCENTAGE = [50, 50, 100]   # Vende [A%, B%]
+
+TP_AT_PERCENTAGE = config["TP_AT_PERCENTAGE"]
+TP_AMOUNT_PERCENTAGE = config["TP_AMOUNT_PERCENTAGE"]
 
 # ------------------------------------------------------------------
 # ⌛ AJUSTES DE TEMPO
@@ -216,6 +220,7 @@ def trader_master_loop():
         candle_period=CANDLE_PERIOD,
         api_key=API_KEY,
         api_secret=API_SECRET,
+        config=config,
         testnet=TESTNET,
         time_to_trade=TEMPO_ENTRE_TRADES,
         delay_after_order=DELAY_ENTRE_ORDENS,
@@ -292,7 +297,7 @@ def trader_master_loop():
             last_outside_log = False
 
         # 🔎 procurar oportunidades
-        if current_trader is None:
+            current_trader = None
 
             symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=3)
 
@@ -339,10 +344,12 @@ def trader_master_loop():
 
                     max_position = balance * config["RISK"]["MAX_POSITION_PERCENT"]
 
-                    capital = min(
-                        config["stocks_traded_list"][0]["capital"],
-                        max_position
+                    capital_config = next(
+                        s["capital"] for s in config["stocks_traded_list"]
+                        if s["operationCode"] == symbol
                     )
+                    
+                    capital = min(capital_config, max_position)
 
                     # 🔁 troca o ativo do robô
                     current_trader.stock_code = stock
@@ -393,7 +400,10 @@ def trader_master_loop():
                 exit_price = getattr(current_trader, "last_sell_price", 0)
                 qty = getattr(current_trader, "last_stock_account_balance", 0)
 
-                profit = (exit_price - entry) * qty
+                if entry and exit_price and qty:
+                    profit = (exit_price - entry) * qty
+                else:
+                    profit = 0
 
                 last_trade_logged = True
 
@@ -450,6 +460,11 @@ def symbol_to_stock(symbol):
 def calculateSmartScore(closes, volumes, highs, lows, price_change):
 
     try:
+        
+        int_cfg = config["INTELLIGENCE"]
+
+        MOMENTUM_MULTIPLIER = int_cfg["MOMENTUM_MULTIPLIER"]
+        TREND_STRENGTH_MULTIPLIER = int_cfg["TREND_STRENGTH_MULTIPLIER"]
 
         if len(closes) < 30:
             return 0
@@ -473,10 +488,10 @@ def calculateSmartScore(closes, volumes, highs, lows, price_change):
         trend_strength = abs(ma7 - ma25) / max(ma25, 0.0000001)
 
         score = (
-            abs(momentum) * 40 +
+            abs(momentum) * MOMENTUM_MULTIPLIER +
             volume_score * 25 +
             volatility * 20 +
-            trend_strength * 15 +
+            trend_strength * TREND_STRENGTH_MULTIPLIER +
             min(abs(price_change), 10)
         )
 
@@ -559,19 +574,48 @@ def detectExplosionSignal(closes, volumes, highs, lows):
         return False
 
 def analyze_symbol(client, t, config):
+    
+    int_cfg = config["INTELLIGENCE"]
+    WHALE_IMBALANCE = int_cfg["WHALE_IMBALANCE"]
+    
+    scanner_cfg = config["SCANNER"]
 
+    MIN_VOLATILITY = scanner_cfg["MIN_VOLATILITY"]
+    MAX_VOLATILITY = scanner_cfg["MAX_VOLATILITY"]
+    
+    SPREAD_LIMIT = config["SCANNER"]["SPREAD_LIMIT"]
+    
     try:
 
         symbol = t["symbol"]
         volume = float(t["quoteVolume"])
         price_change = float(t.get("priceChangePercent", 0))
         
-        if abs(price_change) < 0.15:
+        # ignora moedas paradas
+        if abs(price_change) < 0.3:
+            return None
+        
+        if abs(price_change) > config["SCANNER"]["PUMP_PROTECTION"] * 100:
             return None
         
         # 🔎 filtro de spread do orderbook
-        book = safe_binance_call(client.get_order_book, symbol=symbol, limit=5)
+        global ORDERBOOK_CACHE, ORDERBOOK_CACHE_TIME
 
+        now = time.time()
+
+        if now - ORDERBOOK_CACHE_TIME > 5:
+            ORDERBOOK_CACHE = {}
+            ORDERBOOK_CACHE_TIME = now
+
+        if symbol not in ORDERBOOK_CACHE:
+            ORDERBOOK_CACHE[symbol] = safe_binance_call(
+                client.get_order_book,
+                symbol=symbol,
+                limit=5
+            )
+
+        book = ORDERBOOK_CACHE.get(symbol)
+        
         if not book:
             return None
 
@@ -588,11 +632,14 @@ def analyze_symbol(client, t, config):
 
         imbalance = bid_vol / max(ask_vol, 1)
 
-        if imbalance < 0.7:
+        if imbalance < WHALE_IMBALANCE:
             return None
 
         # ignora moedas com spread alto
-        if spread > 0.002:   # 0.2%
+        #if spread > 0.002:   # 0.2%
+        #   return None 
+        
+        if spread > SPREAD_LIMIT:
             return None
 
         candles = safe_binance_call(
@@ -609,6 +656,21 @@ def analyze_symbol(client, t, config):
         volumes = [float(c[5]) for c in candles]
         highs = [float(c[2]) for c in candles]
         lows = [float(c[3]) for c in candles]
+
+        # calcular volatilidade
+        max_price = max(highs[-20:])
+        min_price = min(lows[-20:])
+
+        if min_price == 0:
+            return None
+
+        volatility = (max_price - min_price) / min_price
+        
+        if volatility < MIN_VOLATILITY:
+            return None
+
+        if volatility > MAX_VOLATILITY:
+            return None
 
         if len(closes) < 30:
             return None
@@ -662,6 +724,9 @@ def analyze_symbol_wrapper(t):
 LAST_SCAN = 0
 SCAN_CACHE = []
 
+ORDERBOOK_CACHE = {}
+ORDERBOOK_CACHE_TIME = 0
+
 def scan_market_top_symbols(client, limit=10):
 
     global LAST_SCAN, SCAN_CACHE, SCANNER_SMART_MONEY, SCANNER_RANKING
@@ -689,6 +754,8 @@ def scan_market_top_symbols(client, limit=10):
         }
 
         # filtro inicial rápido
+        MIN_VOLUME = config["SCANNER"]["MIN_VOLUME"]
+                
         filtered = []
 
         for t in tickers:
@@ -700,10 +767,14 @@ def scan_market_top_symbols(client, limit=10):
 
             if symbol in STABLE_FILTER:
                 continue
-
+                       
             volume = float(t.get("quoteVolume",0))
+            trades = int(t.get("count",0))
 
-            if volume < 1_000_000:
+            if volume < MIN_VOLUME:
+                continue
+
+            if trades < config["SCANNER"]["MIN_TRADES"]:
                 continue
 
             change = abs(float(t.get("priceChangePercent",0)))
@@ -716,6 +787,10 @@ def scan_market_top_symbols(client, limit=10):
             return []
 
         filtered.sort(key=lambda x: x[1], reverse=True)
+        
+        SCAN_LIMIT = config["SCANNER"]["SCAN_LIMIT"]
+
+        filtered = filtered[:SCAN_LIMIT]
 
         # pegar top 30
         symbols = [t for t, _ in filtered[:20]]

@@ -62,6 +62,7 @@ class BinanceTraderBot:
         candle_period,
         api_key,
         api_secret,
+        config=None,
         testnet=False,
         time_to_trade=30 * 60,
         delay_after_order=60 * 60,
@@ -82,6 +83,7 @@ class BinanceTraderBot:
         print("🤖 Robo Trader iniciando...")
         
         # 🔐 Credenciais da Binance
+        self.config = config
         self.api_key = api_key
         self.api_secret = api_secret
         self.testnet = testnet
@@ -110,7 +112,7 @@ class BinanceTraderBot:
         self.trades_cache_time = 0
         
         # limite de trades por dia
-        self.max_daily_trades = 40
+        self.max_daily_trades = config["RISK"]["MAX_TRADES_PER_DAY"]
         
         # 🎯 Modo híbrido de realização parcial
         self.partial_take_profit_levels = [0.8, 1.6, 3.0]  # %
@@ -124,6 +126,9 @@ class BinanceTraderBot:
         self.traded_quantity = traded_quantity  # Quantidade incial que será operada
         self.traded_percentage = traded_percentage  # Porcentagem do total da carteira, que será negociada        
         self.candle_period = str(candle_period).strip().lower()  # Período levado em consideração para operação (ex: 15min)        
+
+        self.min_volatility = self.config["SCANNER"]["MIN_VOLATILITY"]
+        self.max_volatility = self.config["SCANNER"]["MAX_VOLATILITY"]
 
         VALID_INTERVALS = [
             "1m","3m","5m","15m","30m",

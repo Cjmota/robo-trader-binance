@@ -6,11 +6,11 @@
     "FALLBACK_STRATEGY_ARGS": {},
     
     "SCANNER": {
-        "MIN_VOLUME": 2000000,
-        "MIN_TRADES": 500,
-        "MIN_VOLATILITY": 0.01,
-        "MAX_VOLATILITY": 0.15,
-        "SPREAD_LIMIT": 0.025,
+        "MIN_VOLUME": 3000000,
+        "MIN_TRADES": 1500,
+        "MIN_VOLATILITY": 0.008,
+        "MAX_VOLATILITY": 0.08,
+        "SPREAD_LIMIT": 0.001,
         "PUMP_PROTECTION": 0.10,
         "SCAN_LIMIT": 100
     },
