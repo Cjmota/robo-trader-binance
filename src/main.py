@@ -297,10 +297,10 @@ def trader_master_loop():
             last_outside_log = False
 
         # 🔎 procurar oportunidades
-            current_trader = None
+        if current_trader is None:
 
             symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=3)
-
+            
             if not symbols:
                 print("⚠️ Nenhuma oportunidade encontrada.")
                 time.sleep(20)
@@ -345,9 +345,13 @@ def trader_master_loop():
                     max_position = balance * config["RISK"]["MAX_POSITION_PERCENT"]
 
                     capital_config = next(
-                        s["capital"] for s in config["stocks_traded_list"]
-                        if s["operationCode"] == symbol
+                        (s["capital"] for s in config["stocks_traded_list"]
+                        if s["operationCode"] == symbol),
+                        None
                     )
+
+                    if capital_config is None:
+                        continue
                     
                     capital = min(capital_config, max_position)
 
@@ -572,6 +576,40 @@ def detectExplosionSignal(closes, volumes, highs, lows):
 
     except:
         return False
+    
+def detectSmartMoney(closes, volumes, highs, lows, imbalance):
+
+    try:
+
+        if len(closes) < 30:
+            return False
+
+        # compressão de preço
+        price_range = (
+            max(closes[-20:]) - min(closes[-20:])
+        ) / max(min(closes[-20:]), 0.0000001)
+
+        compression = price_range < 0.006
+
+        # aumento de volume recente
+        avg_volume = sum(volumes[-25:-5]) / 20
+        recent_volume = sum(volumes[-5:]) / 5
+
+        volume_growth = recent_volume > avg_volume * 1.3
+
+        # pressão de compra institucional
+        whale_buying = imbalance > 1.5
+
+        if compression and volume_growth and whale_buying:
+
+            print("🏦 SMART MONEY DETECTADO")
+
+            return True
+
+        return False
+
+    except:
+        return False
 
 def analyze_symbol(client, t, config):
     
@@ -583,7 +621,7 @@ def analyze_symbol(client, t, config):
     MIN_VOLATILITY = scanner_cfg["MIN_VOLATILITY"]
     MAX_VOLATILITY = scanner_cfg["MAX_VOLATILITY"]
     
-    SPREAD_LIMIT = config["SCANNER"]["SPREAD_LIMIT"]
+    SPREAD_LIMIT = scanner_cfg["SPREAD_LIMIT"]
     
     try:
 
@@ -592,7 +630,7 @@ def analyze_symbol(client, t, config):
         price_change = float(t.get("priceChangePercent", 0))
         
         # ignora moedas paradas
-        if abs(price_change) < 0.3:
+        if abs(price_change) < 0.2:
             return None
         
         if abs(price_change) > config["SCANNER"]["PUMP_PROTECTION"] * 100:
@@ -694,10 +732,24 @@ def analyze_symbol(client, t, config):
 
         volume_weight = min(volume / 10000000, 5)
 
+        smart_money_signal = detectSmartMoney(
+            closes,
+            volumes,
+            highs,
+            lows,
+            imbalance
+        )
+
         score = smart_score * (1 + volume_weight)
 
         if accumulation_signal:
             score *= 1.4
+
+        if smart_money_signal:
+            score *= 1.8
+            
+        if smart_money_signal and symbol not in SCANNER_SMART_MONEY:
+            SCANNER_SMART_MONEY.append(symbol)
 
         return {
             "symbol": symbol,

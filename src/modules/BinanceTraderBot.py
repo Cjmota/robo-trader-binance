@@ -90,8 +90,8 @@ class BinanceTraderBot:
         
         self.capital = traded_quantity  # valor em USDT configurado por ativo
         
-        self.trailing_activation = 0.01      # ativa com +0.5% lucro
-        self.trailing_stop_percent = 0.005     # trailing de 1%
+        self.trailing_activation = config["TRAILING"]["ACTIVATION"] / 100
+        self.trailing_stop_percent = config["TRAILING"]["DISTANCE"] / 100
         self.trailing_stop_price = 0.0
         self.highest_price_since_entry = 0.0
         
@@ -210,17 +210,20 @@ class BinanceTraderBot:
                 
                 
         # Break-even configurável por ativo
-        self.break_even_map = {
-            "BTC": 1.2 / 100,
-            "SOL": 1.0 / 100,
-            "BNB": 1.0 / 100,
-            "ADA": 0.8 / 100,
-            "XRP": 0.8 / 100,
-            "SHIB": 0.6 / 100,
-        }
+        #self.break_even_map = {
+        #    "BTC": 1.2 / 100,
+        #    "SOL": 1.0 / 100,
+        #    "BNB": 1.0 / 100,
+        #    "ADA": 0.8 / 100,
+        #    "XRP": 0.8 / 100,
+        #    "SHIB": 0.6 / 100,
+        #}
+        
+        default_be = config["BREAK_EVEN"]["ACTIVATION"] / 100
+        self.break_even_activation = self.break_even_map.get(self.stock_code, default_be)
 
         # fallback padrão
-        self.break_even_activation = self.break_even_map.get(self.stock_code, 1.0 / 100)
+        #self.break_even_activation = self.break_even_map.get(self.stock_code, 1.0 / 100)
                 
 
         self.setStepSizeAndTickSize() # Seta o time_step e step_size da classe (só precisa executar 1x)
@@ -1689,7 +1692,7 @@ class BinanceTraderBot:
                 score += 2
 
             if delta_signal == "SELL":
-                score += 1
+                score -= 2
             
             print(f"📊 Score de entrada: {score}")
             
@@ -2166,14 +2169,18 @@ class BinanceTraderBot:
             print(f"📊 Range 20 candles: {recent_range*100:.2f}%")
             print(f"📊 ATR: {atr_pct*100:.2f}%")
 
-            if recent_range < 0.005 and atr_pct < 0.002:
+            if recent_range < self.min_volatility * 1.5 and atr_pct < self.min_volatility:
 
                 print("⚠️ Mercado realmente sem volatilidade.")
 
                 return True
+            
+            if atr_pct > self.max_volatility:
+                print("⚠️ Volatilidade excessiva. Evitando trade.")
+                return True
 
             return False
-
+        
         except Exception as e:
 
             print("Erro ao calcular volatilidade:", e)
@@ -2904,7 +2911,7 @@ class BinanceTraderBot:
         
     def calculateTradeProbability(self, score, regime, spread, volume_spike):
 
-        probability = score / 10
+        probability = score / 15
 
         if regime == "SIDEWAYS":
             probability -= 0.25
