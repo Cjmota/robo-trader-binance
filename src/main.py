@@ -613,10 +613,14 @@ def analyze_symbol(client, t, config):
         return None
 
 def analyze_symbol_wrapper(t):
-    return analyze_symbol(BINANCE_CLIENT, t, config)
 
-LAST_SCAN = 0
-SCAN_CACHE = []
+    try:
+        return analyze_symbol(BINANCE_CLIENT, t, config)
+
+    except Exception as e:
+
+        print(f"Erro ao analisar {t}: {e}")
+        return None
 
 def scan_market_top_symbols(client, limit=10):
 
@@ -666,7 +670,7 @@ def scan_market_top_symbols(client, limit=10):
 
             score = volume * (1 + change / 100)
 
-            filtered.append((symbol, score))
+            filtered.append((t, score))   # guarda ticker inteiro
 
         if not filtered:
             return []
@@ -674,7 +678,7 @@ def scan_market_top_symbols(client, limit=10):
         filtered.sort(key=lambda x: x[1], reverse=True)
 
         # pegar top 30
-        symbols = [x[0] for x in filtered[:30]]
+        symbols = [t for t, _ in filtered[:30]]
 
         # análise paralela
         with ThreadPoolExecutor(max_workers=8) as executor:
