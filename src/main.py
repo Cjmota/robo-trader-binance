@@ -390,9 +390,12 @@ def trader_master_loop():
                 profit = getattr(current_trader, "last_trade_profit", 0)
 
                 TRADE_HISTORY.append({
-                    "timestamp": time.time(),
-                    "asset": current_trader.operation_code,
-                    "profit": profit
+                    "time": datetime.now(br_tz).strftime("%H:%M:%S"),
+                    "symbol": current_trader.operation_code,
+                    "side": "SELL",
+                    "entry": getattr(current_trader, "last_buy_price", 0),
+                    "exit": getattr(current_trader, "last_sell_price", 0),
+                    "profit": round(profit, 4)
                 })
 
                 update_market_memory(current_trader.operation_code, profit)
