@@ -11,23 +11,37 @@ class StrategyRunner:
         verbose=True
     ):
 
-        main_strategy_args = main_strategy_args or {}
-        main_strategy_args["stock_data"] = stock_data
-        main_strategy_args["bot"] = bot
-        main_strategy_args["verbose"] = verbose
+        try:
 
-        final_decision = main_strategy(**main_strategy_args)
+            main_strategy_args = main_strategy_args or {}
+            main_strategy_args.update({
+                "bot": bot,
+                "stock_data": stock_data,
+                "verbose": verbose
+            })
 
-        if final_decision is None and bot.fallback_activated:
+            result = main_strategy(**main_strategy_args)
 
-            print("Estratégia principal inconclusiva")
-            print("Executando estratégia de fallback...")
+            if result is None:
 
-            fallback_strategy_args = fallback_strategy_args or {}
-            fallback_strategy_args["stock_data"] = stock_data
-            fallback_strategy_args["bot"] = bot
-            fallback_strategy_args["verbose"] = verbose
+                if fallback_strategy and bot.fallback_activated:
 
-            final_decision = fallback_strategy(**fallback_strategy_args)
+                    if verbose:
+                        print("⚠️ Estratégia principal inconclusiva")
+                        print("🔁 Executando fallback...")
 
-        return final_decision
+                    fallback_strategy_args = fallback_strategy_args or {}
+                    fallback_strategy_args.update({
+                        "bot": bot,
+                        "stock_data": stock_data,
+                        "verbose": verbose
+                    })
+
+                    result = fallback_strategy(**fallback_strategy_args)
+
+            return result
+
+        except Exception as e:
+
+            print("❌ Erro no StrategyRunner:", e)
+            return None
