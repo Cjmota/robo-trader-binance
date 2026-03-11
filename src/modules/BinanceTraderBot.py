@@ -210,14 +210,14 @@ class BinanceTraderBot:
                 
                 
         # Break-even configurável por ativo
-        #self.break_even_map = {
-        #    "BTC": 1.2 / 100,
-        #    "SOL": 1.0 / 100,
-        #    "BNB": 1.0 / 100,
-        #    "ADA": 0.8 / 100,
-        #    "XRP": 0.8 / 100,
-        #    "SHIB": 0.6 / 100,
-        #}
+        self.break_even_map = {
+            "BTC": 1.2 / 100,
+            "SOL": 1.0 / 100,
+            "BNB": 1.0 / 100,
+            "ADA": 0.8 / 100,
+            "XRP": 0.8 / 100,
+            "SHIB": 0.6 / 100,
+        }
         
         default_be = config["BREAK_EVEN"]["ACTIVATION"] / 100
         self.break_even_activation = self.break_even_map.get(self.stock_code, default_be)
