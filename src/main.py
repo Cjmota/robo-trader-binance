@@ -287,7 +287,8 @@ def trader_master_loop():
             continue
 
         # horário
-        if now < 5 or now >= 21:
+        #if now < 5 or now >= 21:
+        if False:
 
             if not last_outside_log:
                 print("⏰ Fora do horário operacional (05h-20h).")
