@@ -16,32 +16,32 @@
     },
 
     "RISK": {
-        "MAX_TRADES_PER_DAY": 15,
-        "SYMBOL_COOLDOWN": 1800,
+        "MAX_TRADES_PER_DAY": 30,
+        "SYMBOL_COOLDOWN": 900,
         "LOSS_COOLDOWN": 3600,
-        "MAX_POSITION_PERCENT": 0.01
+        "MAX_POSITION_PERCENT": 0.05
     },
 
     "INTELLIGENCE": {
         "MOMENTUM_MULTIPLIER": 50,
         "TREND_STRENGTH_MULTIPLIER": 100,
-        "WHALE_IMBALANCE": 2.0
+        "WHALE_IMBALANCE": 1.4
     },
 
     "TRAILING": {
     "ACTIVATION": 0.5,
-    "DISTANCE": 1.0
+    "DISTANCE": 0.6
     },
 
     "BREAK_EVEN": {
-    "ACTIVATION": 0.8
+    "ACTIVATION": 1.0
     },
 
     "ACCEPTABLE_LOSS_PERCENTAGE": 0,
     "STOP_LOSS_PERCENTAGE": 3.5,
 
-    "TP_AT_PERCENTAGE": [2, 4],
-    "TP_AMOUNT_PERCENTAGE": [50, 50],
+    "TP_AT_PERCENTAGE": [1.5, 3],
+    "TP_AMOUNT_PERCENTAGE": [60, 40],
 
     "CANDLE_PERIOD": "5m",
     "TEMPO_ENTRE_TRADES": 30,
