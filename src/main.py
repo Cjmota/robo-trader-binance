@@ -212,6 +212,38 @@ last_traded_symbol = None
 
 thread_lock = threading.Lock()
 
+def get_btc_dominance(client):
+
+    try:
+
+        btc = client.get_ticker(symbol="BTCUSDT")
+        btc_volume = float(btc["quoteVolume"])
+
+        alt_symbols = ["ETHUSDT","BNBUSDT","SOLUSDT","XRPUSDT","ADAUSDT"]
+
+        alt_volume = 0
+
+        for s in alt_symbols:
+
+            try:
+                t = client.get_ticker(symbol=s)
+                alt_volume += float(t["quoteVolume"])
+            except:
+                pass
+
+        total = btc_volume + alt_volume
+
+        if total == 0:
+            return 0
+
+        dominance = btc_volume / total
+
+        return dominance
+
+    except Exception as e:
+
+        print("Erro calculando dominância BTC:", e)
+        return 0
 
 def trader_master_loop():
     
@@ -246,6 +278,11 @@ def trader_master_loop():
         # ping conexão
         try:
             BINANCE_CLIENT.ping()
+            
+            btc_dominance = get_btc_dominance(BINANCE_CLIENT)
+
+            print(f"📊 BTC Dominance: {btc_dominance:.2f}")
+            
         except Exception as e:
 
             print("🔄 Reconectando Binance...", e)
@@ -313,12 +350,18 @@ def trader_master_loop():
                 continue
             
             btc_mode = detect_market_mode(BINANCE_CLIENT, "BTCUSDT")
+            btc_dominance = get_btc_dominance(BINANCE_CLIENT)
+            
             print("📊 BTC Market Mode:", btc_mode)
-
+            print(f"📊 BTC Dominance: {btc_dominance:.2f}")
+            
             for symbol in symbols:
+                
+                # 🔒 filtro dominância BTC
+                if btc_dominance > 0.60 and symbol != "BTCUSDT":
 
-                # 🔒 Filtro BTC trend
-                btc_mode = detect_market_mode(BINANCE_CLIENT, "BTCUSDT")
+                    print("⚠️ Dominância BTC alta. Evitando altcoins.")
+                    continue
 
                 if btc_mode == "DOWN" and symbol != "BTCUSDT":
                     print("⚠️ BTC em queda forte. Evitando altcoins.")
@@ -869,7 +912,9 @@ def scan_market_top_symbols(client, limit=10):
 
             change = abs(float(t.get("priceChangePercent",0)))
 
-            score = volume * (1 + change / 100)                      
+            score = volume * (1 + change / 100)
+               
+            filtered.append((t, score))                  
 
         if not filtered:
             return []
@@ -974,3 +1019,4 @@ def update_market_memory(symbol, profit):
         ADAPTIVE_WEIGHTS["sweep"] = max(1.2, ADAPTIVE_WEIGHTS["sweep"] * 0.99)
         
     logging.info(f"Adaptive weights updated: {ADAPTIVE_WEIGHTS}")
+    
