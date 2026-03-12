@@ -1764,7 +1764,12 @@ class BinanceTraderBot:
 
             # fallback estratégia
             else:
-                signal = strategy_signal
+                if vacuum_signal == "BUY" and orderflow_signal == "BUY":
+                    signal = "BUY"
+                elif whale_signal == "BUY" and momentum_acceleration:
+                    signal = "BUY"
+                else:
+                    signal = strategy_signal
         
             
 
