@@ -19,7 +19,7 @@
         "MAX_TRADES_PER_DAY": 15,
         "SYMBOL_COOLDOWN": 1800,
         "LOSS_COOLDOWN": 3600,
-        "MAX_POSITION_PERCENT": 0.03
+        "MAX_POSITION_PERCENT": 0.01
     },
 
     "INTELLIGENCE": {
@@ -44,7 +44,7 @@
     "TP_AMOUNT_PERCENTAGE": [50, 50],
 
     "CANDLE_PERIOD": "5m",
-    "TEMPO_ENTRE_TRADES": 60,
+    "TEMPO_ENTRE_TRADES": 30,
     "DELAY_ENTRE_ORDENS": 10,
     "stocks_traded_list": [
         {
