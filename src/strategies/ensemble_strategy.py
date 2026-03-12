@@ -20,19 +20,19 @@ def runEnsembleStrategy(bot, stock_data, verbose=True):
 
     if regime == "TREND":
 
-        signals.append(getVortexTradeStrategy(bot=bot, stock_data=stock_data))
-        signals.append(getMovingAverageTradeStrategy(bot=bot, stock_data=stock_data))
-        signals.append(getAdvancedTradeStrategy_v3(bot=bot, stock_data=stock_data))
+        signals.append(getVortexTradeStrategy(stock_data=stock_data))
+        signals.append(getMovingAverageTradeStrategy(stock_data=stock_data))
+        signals.append(getAdvancedTradeStrategy_v3(stock_data=stock_data))
 
     elif regime == "RANGE":
 
-        signals.append(getRsiTradeStrategy(bot=bot, stock_data=stock_data))
-        signals.append(getMovingAverageRSIVolumeStrategy(bot=bot, stock_data=stock_data))
+        signals.append(getRsiTradeStrategy(stock_data=stock_data))
+        signals.append(getMovingAverageRSIVolumeStrategy(stock_data=stock_data))
 
     else:
 
-        signals.append(utBotAlerts(bot=bot, stock_data=stock_data))
-        signals.append(getVortexTradeStrategy(bot=bot, stock_data=stock_data))
+        signals.append(utBotAlerts(stock_data=stock_data))
+        signals.append(getVortexTradeStrategy(stock_data=stock_data))
 
     buy = signals.count(BUY)
     sell = signals.count(SELL)
