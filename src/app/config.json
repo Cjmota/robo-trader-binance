@@ -1,5 +1,5 @@
 {
-    "MAIN_STRATEGY": "getVortexTradeStrategy",
+    "MAIN_STRATEGY": "runEnsembleStrategy",
     "MAIN_STRATEGY_ARGS": {},
     "FALLBACK_ACTIVATED": true,
     "FALLBACK_STRATEGY": "getMovingAverageTradeStrategy",
