@@ -2845,21 +2845,33 @@ class BinanceTraderBot:
         if hasattr(self, "btc_cache") and hasattr(self, "btc_cache_time") and time.time() - self.btc_cache_time < 120:
             return self.btc_cache
 
-        candles = self.client_binance.get_klines(
-            symbol="BTCUSDT",
-            interval="5m",
-            limit=50
-        )
+        def check_tf(interval):
 
-        df = pd.DataFrame(candles)
-        df["close"] = pd.to_numeric(df[4])
+            candles = self.client_binance.get_klines(
+                symbol="BTCUSDT",
+                interval=interval,
+                limit=100
+            )
 
-        ma20 = df["close"].rolling(20).mean().iloc[-1]
-        price = df["close"].iloc[-1]
+            df = pd.DataFrame(candles)
+            df["close"] = pd.to_numeric(df[4])
 
-        ma50 = df["close"].rolling(50).mean().iloc[-1]
+            ma20 = df["close"].rolling(20).mean().iloc[-1]
+            ma50 = df["close"].rolling(50).mean().iloc[-1]
 
-        result = price > ma20 or price > ma50
+            return df["close"].iloc[-1] > ma20 or df["close"].iloc[-1] > ma50
+
+
+        btc_5m = check_tf("5m")
+        btc_15m = check_tf("15m")
+        btc_1h = check_tf("1h")
+
+        print("📊 BTC Trend Filter:")
+        print(f" - 5m : {'ALTA' if btc_5m else 'BAIXA'}")
+        print(f" - 15m: {'ALTA' if btc_15m else 'BAIXA'}")
+        print(f" - 1h : {'ALTA' if btc_1h else 'BAIXA'}")
+
+        result = not (btc_5m == False and btc_15m == False and btc_1h == False)
 
         self.btc_cache = result
         self.btc_cache_time = time.time()
