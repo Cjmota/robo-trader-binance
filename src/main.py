@@ -311,8 +311,18 @@ def trader_master_loop():
                 print("⚠️ Nenhuma oportunidade encontrada.")
                 time.sleep(20)
                 continue
+            
+            btc_mode = detect_market_mode(BINANCE_CLIENT, "BTCUSDT")
+            print("📊 BTC Market Mode:", btc_mode)
 
             for symbol in symbols:
+
+                # 🔒 Filtro BTC trend
+                btc_mode = detect_market_mode(BINANCE_CLIENT, "BTCUSDT")
+
+                if btc_mode == "DOWN" and symbol != "BTCUSDT":
+                    print("⚠️ BTC em queda forte. Evitando altcoins.")
+                    continue
 
                 # evitar moedas com loss recente
                 if symbol in MARKET_MEMORY:
