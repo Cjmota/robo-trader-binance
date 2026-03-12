@@ -1617,6 +1617,9 @@ class BinanceTraderBot:
             best_bid = float(depth["bids"][0][0])
             best_ask = float(depth["asks"][0][0])
 
+            if best_bid == 0:
+                return
+
             spread = (best_ask - best_bid) / best_bid
             
             liquidity_signal = self.detectLiquidityWall()
@@ -1717,64 +1720,82 @@ class BinanceTraderBot:
             print(f"📊 Estratégia: {strategy_signal}")
             print(f"💧 Liquidez: {liquidity_signal}")
             print(f"💥 Liquidação: {liquidation_signal}")
-
+            
             signal = None
-
-            # spoofing (maior prioridade)
-            if spoof_signal:
-                signal = spoof_signal
-
-            # market maker trap
-            elif trap_signal:
-                signal = trap_signal
             
-            elif stop_hunt_signal:
-                print("🎯 Stop hunt institucional detectado")
-                signal = stop_hunt_signal
-                
-            elif liquidity_trap_signal:
-                signal = liquidity_trap_signal
+            # ------------------------------------------------
+            # 🚀 Atalho institucional (prioridade alta)
 
-            # stop hunt
-            elif sweep_signal:
-                signal = sweep_signal
-            
-            elif grab_signal:
-                signal = grab_signal
+            institutional_buy = (
+                vacuum_signal == "BUY"
+                and orderflow_signal == "BUY"
+                and momentum_acceleration
+            )
 
-            elif vacuum_signal:
-                signal = vacuum_signal
-
-            elif accumulation_signal and multi_trend_ok and not self.actual_trade_position:
-
-                print("🔥 Sinal de acumulação detectado")
-
+            if institutional_buy and not self.actual_trade_position:
+                print("🏦 Entrada institucional detectada")
                 signal = "BUY"
-
-            # institucional
-            elif whale_signal == "BUY" and volume_spike:
-                signal = "BUY"
-
-            # liquidez
-            elif liquidity_signal:
-                signal = liquidity_signal
-
-            # liquidação
-            elif liquidation_signal:
-                signal = liquidation_signal
                 
-            elif orderflow_signal:
-                print("📊 Ordem Flow dominante detectado")
-                signal = orderflow_signal
-
-            # fallback estratégia
+            elif vacuum_signal == "BUY" and orderflow_signal == "BUY":
+                signal = "BUY"
+            elif whale_signal == "BUY" and momentum_acceleration:
+                signal = "BUY"
+            elif whale_signal == "BUY" and momentum_acceleration:
+                print("🐋 Baleias + Momentum")
+                signal = "BUY"
+                            
             else:
-                if vacuum_signal == "BUY" and orderflow_signal == "BUY":
-                    signal = "BUY"
-                elif whale_signal == "BUY" and momentum_acceleration:
-                    signal = "BUY"
-                else:
-                    signal = strategy_signal
+                if signal is None:
+
+                    # spoofing (maior prioridade)
+                    if spoof_signal:
+                        print("⚠️ Spoofing detectado → reduzindo confiança")
+                        score -= 2
+                    # market maker trap
+                    elif trap_signal:
+                        signal = trap_signal
+                    
+                    elif stop_hunt_signal:
+                        print("🎯 Stop hunt institucional detectado")
+                        signal = stop_hunt_signal
+                        
+                    elif liquidity_trap_signal:
+                        signal = liquidity_trap_signal
+
+                    # stop hunt
+                    elif sweep_signal:
+                        signal = sweep_signal
+                    
+                    elif grab_signal:
+                        signal = grab_signal
+
+                    elif vacuum_signal:
+                        signal = vacuum_signal
+
+                    elif accumulation_signal and multi_trend_ok and not self.actual_trade_position:
+
+                        print("🔥 Sinal de acumulação detectado")
+
+                        signal = "BUY"
+
+                    # institucional
+                    elif whale_signal == "BUY" and volume_spike:
+                        signal = "BUY"
+
+                    # liquidez
+                    elif liquidity_signal:
+                        signal = liquidity_signal
+
+                    # liquidação
+                    elif liquidation_signal:
+                        signal = liquidation_signal
+                
+                    elif orderflow_signal:
+                        print("📊 Ordem Flow dominante detectado")
+                        signal = orderflow_signal
+
+                    
+                        
         
             
 
