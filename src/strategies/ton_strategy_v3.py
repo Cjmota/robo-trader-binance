@@ -4,6 +4,9 @@ from src.indicators.vortex import vortex  # Importa a função vortex do arquivo
 # Variável global para o modo custom (para imprimir sinais intercalados)
 last_custom_signal = None
 
+BUY = "BUY"
+SELL = "SELL"
+HOLD = None
 
 def compute_RSI(series: pd.Series, period: int) -> pd.Series:
     """
@@ -23,7 +26,8 @@ def compute_RSI(series: pd.Series, period: int) -> pd.Series:
     return rsi
 
 def getAdvancedTradeStrategy_v3(
-    stock_data: pd.DataFrame,
+    bot=None,
+    stock_data: pd.DataFrame = None,
     m7_period: int = 7,
     m200_period: int = 200,
     m50_period: int = 50,
@@ -34,6 +38,7 @@ def getAdvancedTradeStrategy_v3(
     verbose: bool = True,
     print_mode: str = "custom"   # Define o tipo de impressão: "std" ou "custom"
 ):
+    
     """
     Estratégia avançada para criptomoedas, utilizando a função 'vortex'
     importada do arquivo vortex.py para calcular o Indicador Vortex.
@@ -61,6 +66,9 @@ def getAdvancedTradeStrategy_v3(
 
     Retorna True para sinal de compra e False para sinal de venda.
     """
+    if stock_data is None or len(stock_data) < 5:
+        return HOLD
+    
     df = stock_data.copy()
     df.sort_values("open_time", inplace=True)
 
@@ -102,7 +110,7 @@ def getAdvancedTradeStrategy_v3(
     # Seleciona os últimos dois registros para comparação
     latest = df.iloc[-1]
     prev   = df.iloc[-2]
-    prev_prev   = df.iloc[-3]
+    prev_prev = df.iloc[-3] if len(df) >= 3 else prev
 
      # Condições para COMPRA
     buy_conditions1 = (
@@ -131,11 +139,12 @@ def getAdvancedTradeStrategy_v3(
     )
  
     if sell_condition1:
-        trade_decision = False  # Sinal de VENDA
+        trade_decision = SELL  # Sinal de VENDA
+        
     elif buy_conditions1 or buy_conditions2:  
-        trade_decision = True   # Sinal de COMPRA
+        trade_decision = BUY   # Sinal de COMPRA
     else:
-        trade_decision = None
+        trade_decision = HOLD
 
     # Impressão dos dados (verbose)
     # Função auxiliar para impressão dos detalhes do candle
@@ -171,7 +180,7 @@ def getAdvancedTradeStrategy_v3(
         print(f" | MACD Histogram: {latest['MACD_histogram']:.4f} Anterior: {prev['MACD_histogram']:.4f}")
         print(f" | VIP(VI+) ({vortex_window}): {latest['VIP']:.4f} (Anterior: {prev['VIP']:.4f})")
         print(f" | VIM(VI-) ({vortex_window}): {latest['VIM']:.4f} (Anterior: {prev['VIM']:.4f})")
-        decision_text = "Comprar" if trade_decision else "Vender" if trade_decision is False else "Nenhuma ação"
+        decision_text = trade_decision if trade_decision else "Nenhuma ação"
         print(f" | Decisão: {decision_text}")
         print("-------")
 

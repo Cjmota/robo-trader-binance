@@ -1,46 +1,63 @@
 import pandas as pd
 from src.indicators import Indicators
 
+BUY = "BUY"
+SELL = "SELL"
+HOLD = None
 
-def getRsiTradeStrategy(stock_data: pd.DataFrame, low=30, high=70, verbose=True):
 
-    stock_data = stock_data.copy()  # Importante para evitar bugs
+def getRsiTradeStrategy(
+    bot=None,
+    stock_data: pd.DataFrame = None,
+    low: int = 30,
+    high: int = 70,
+    verbose: bool = True
+):
 
-    # **Calcula o RSI e adiciona ao DataFrame**
-    stock_data["RSI"] = Indicators.getRSI(stock_data["close_price"], last_only=False)
+    if stock_data is None or len(stock_data) < 20:
+        return HOLD
 
-    if "RSI" not in stock_data.columns:
-        raise ValueError("O DataFrame deve conter a coluna 'RSI'. Verifique se o RSI foi calculado.")
+    stock_data = stock_data.copy()
+
+    # Calcula RSI
+    stock_data["RSI"] = Indicators.getRSI(
+        stock_data["close_price"],
+        last_only=False
+    )
 
     rsi_series = stock_data["RSI"]
-    last_rsi = rsi_series.iloc[-1]  # Último valor do RSI
 
-    # Identifica os momentos em que RSI cruzou os níveis de sobrecompra e sobrevenda
+    last_rsi = rsi_series.iloc[-1]
+
+    # identificar picos e vales
     peaks = stock_data[rsi_series > high].index
     valleys = stock_data[rsi_series < low].index
 
-    # Encontra o último pico e o último vale
     last_peak = peaks[-1] if len(peaks) > 0 else None
     last_valley = valleys[-1] if len(valleys) > 0 else None
 
-    trade_decision = None  # Mantém a posição até uma nova condição
+    decision = HOLD
 
-    if last_valley and (last_peak is None or last_valley > last_peak):
-        # Último evento foi um vale (RSI < 30), mas ainda não passou de 70 → Mantém compra
-        trade_decision = True
+    # último evento foi vale
+    if last_valley is not None and (
+        last_peak is None or last_valley > last_peak
+    ):
+        decision = BUY
 
-    elif last_peak and (last_valley is None or last_peak > last_valley):
-        # Último evento foi um pico (RSI > 70), mas ainda não caiu até 30 → Mantém venda
-        trade_decision = False
+    # último evento foi pico
+    elif last_peak is not None and (
+        last_valley is None or last_peak > last_valley
+    ):
+        decision = SELL
 
     if verbose:
-        print("-------")
-        print("📊 Estratégia: RSI - Vales e Topos")
-        print(f" | Último RSI: {last_rsi}")
-        print(f" | Último Vale: {last_valley}")
-        print(f" | Último Pico: {last_peak}")
-        print(f' | Decisão: {"Comprar" if trade_decision == True else "Vender" if trade_decision == False else "Nenhuma"}')
 
         print("-------")
+        print("📊 Estratégia: RSI")
+        print(f" | RSI atual: {last_rsi:.2f}")
+        print(f" | Último vale: {last_valley}")
+        print(f" | Último pico: {last_peak}")
+        print(f" | Decisão: {decision}")
+        print("-------")
 
-    return trade_decision
+    return decision

@@ -24,6 +24,8 @@ from src.strategies.rsi_strategy import getRsiTradeStrategy
 from src.strategies.vortex_strategy import getVortexTradeStrategy
 from src.strategies.ma_rsi_volume_strategy import getMovingAverageRSIVolumeStrategy
 
+from src.strategies.ensemble_strategy import runEnsembleStrategy
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -125,6 +127,7 @@ strategy_map = {
     "getMovingAverageTradeStrategy": getMovingAverageTradeStrategy,
     "getRsiTradeStrategy": getRsiTradeStrategy,
     "getMovingAverageRSIVolumeStrategy": getMovingAverageRSIVolumeStrategy,
+    "runEnsembleStrategy": runEnsembleStrategy
 }
 
 MAIN_STRATEGY = strategy_map[config["MAIN_STRATEGY"]]
