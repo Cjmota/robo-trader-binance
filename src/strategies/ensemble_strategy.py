@@ -41,10 +41,10 @@ def runEnsembleStrategy(bot, stock_data, verbose=True):
         print("📊 Regime:", regime)
         print("📊 Signals:", signals)
 
-    if buy >= 2:
+    if buy > sell:
         return BUY
 
-    if sell >= 2:
+    if sell > buy:
         return SELL
 
     return HOLD
