@@ -1497,9 +1497,8 @@ class BinanceTraderBot:
             
 
             # 🧹 Limpeza automática de poeira
-            if self.cleanDustPosition():
-                return
-
+            self.cleanDustPosition()
+               
             self.updateDailyProfit()
             
             # 🛑 Stop diário de perda
@@ -1806,7 +1805,7 @@ class BinanceTraderBot:
             # ---------------------------------------------
             # COMPRA
             
-            if signal in [True, "BUY"] and probability >= 0.65 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"] and self.tradeQualityFilter():    
+            if signal in [True, "BUY"] and probability >= 0.45 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"] and self.tradeQualityFilter():    
 
                 if self.hourly_trades >= self.max_hourly_trades:
                     print("⏸️ Limite de trades por hora atingido.")
@@ -1876,31 +1875,26 @@ class BinanceTraderBot:
             print(f"❌ Erro no ciclo do robô: {e}")
                         
     def cleanDustPosition(self):
-            """
-            Limpa posições residuais (dust) menores que o mínimo negociável.
-            Evita loops infinitos de venda quando sobra poeira.
-            """
-            try:
-                close_price = self.stock_data["close_price"].iloc[-1]
-                notional_value = self.last_stock_account_balance * close_price
 
-                if 0 < notional_value < 5:
-                    print("\n🧹 Poeira detectada na carteira:")
-                    print(f" - Quantidade: {self.last_stock_account_balance:.8f} {self.stock_code}")
-                    print(f" - Valor estimado: {notional_value:.4f} USDT")
-                    print("⚠️ Valor abaixo do mínimo negociável da Binance (< 5 USDT).")
-                    print("🔄 Marcando posição como zerada para evitar loops de venda.\n")
+        try:
 
-                    # Marca como sem posição
-                    self.actual_trade_position = False
-                    self.last_stock_account_balance = 0.0
-                    return True
+            close_price = self.stock_data["close_price"].iloc[-1]
+            notional_value = self.last_stock_account_balance * close_price
 
-                return False
+            if 0 < notional_value < 5:
 
-            except Exception as e:
-                print(f"Erro ao limpar poeira: {e}")
-                return False
+                print("\n🧹 Poeira detectada na carteira:")
+                print(f" - Quantidade: {self.last_stock_account_balance:.8f} {self.stock_code}")
+                print(f" - Valor estimado: {notional_value:.4f} USDT")
+
+                self.actual_trade_position = False
+                self.last_stock_account_balance = 0.0
+
+            return False
+
+        except Exception as e:
+            print(f"Erro ao limpar poeira: {e}")
+            return False
                             
     def getCurrentOperationProfit(self):
         """
