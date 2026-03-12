@@ -1636,6 +1636,8 @@ class BinanceTraderBot:
             grab_signal = self.detectLiquidityGrab()
 
             compression_signal = self.detectVolatilityCompression()
+            
+            breakout_signal = self.detectRealBreakout()
 
             spoof_signal = self.detectSpoofing()
             
@@ -1649,6 +1651,18 @@ class BinanceTraderBot:
             
             delta_signal = self.detectVolumeDelta()
             
+            volume_confirm = volume_spike or delta_signal == "BUY"
+
+            recent_range = (
+                self.stock_data["close_price"].iloc[-20:].max() -
+                self.stock_data["close_price"].iloc[-20:].min()
+            ) / self.stock_data["close_price"].iloc[-20:].min()
+
+            tight_compression = recent_range < 0.01
+            
+            # 🚀 Breakout após compressão (setup explosivo) 
+            
+
             score = 0
             if accumulation_signal:
                 score += 4
@@ -1737,8 +1751,7 @@ class BinanceTraderBot:
                 
             elif vacuum_signal == "BUY" and orderflow_signal == "BUY":
                 signal = "BUY"
-            elif whale_signal == "BUY" and momentum_acceleration:
-                signal = "BUY"
+                
             elif whale_signal == "BUY" and momentum_acceleration:
                 print("🐋 Baleias + Momentum")
                 signal = "BUY"
@@ -1794,13 +1807,34 @@ class BinanceTraderBot:
                         signal = orderflow_signal
 
                     
-                        
-        
-            
-
             if spread > 0.003:
                 print("⚠️ Spread alto. Evitando trade.")
                 return
+            
+            if (
+                compression_signal
+                and breakout_signal == "BUY"
+                and volatility_expansion
+                and momentum_acceleration
+                and volume_confirm
+                and tight_compression
+                and spread < 0.0025
+                and not self.actual_trade_position
+            ):
+                
+                print("💥 BREAKOUT + EXPANSÃO DETECTADO")
+
+                price = self.stock_data["close_price"].iloc[-1]
+
+                capital_to_use = self.capital * 0.8
+
+                quantity = capital_to_use / price
+                quantity = self.adjust_to_step(quantity, self.step_size)
+
+                if quantity > 0:
+                    self.buyMarketOrder(quantity=quantity)
+                    self.hourly_trades += 1
+                    return
         
             # ---------------------------------------------
             # COMPRA
@@ -3570,3 +3604,46 @@ class BinanceTraderBot:
             print("🔌 Reconectado à Binance")
         except Exception as e:
             print("❌ Falha ao reconectar:", e)
+            
+    def detectRealBreakout(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            highs = self.stock_data["high_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 30:
+                return None
+
+            recent_high = highs.iloc[-20:-1].max()
+
+            current_close = closes.iloc[-1]
+            prev_close = closes.iloc[-2]
+
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            breakout = current_close > recent_high * 1.001
+
+            strong_volume = current_volume > avg_volume * 1.6
+
+            momentum = (current_close - prev_close) / prev_close
+
+            momentum_ok = momentum > 0.002
+
+            if breakout and strong_volume and momentum_ok:
+
+                print("🚀 BREAKOUT REAL CONFIRMADO")
+                print(f"Momentum: {momentum*100:.2f}%")
+                print(f"Volume spike: {current_volume/avg_volume:.2f}x")
+
+                return "BUY"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de breakout:", e)
+
+            return None
