@@ -45,8 +45,10 @@ def getRsiTradeStrategy(
         decision = BUY
 
     # último evento foi pico
-    elif last_peak is not None and (
-        last_valley is None or last_peak > last_valley
+    elif (
+        last_peak is not None
+        and (last_valley is None or last_peak > last_valley)
+        and last_rsi > high
     ):
         decision = SELL
 

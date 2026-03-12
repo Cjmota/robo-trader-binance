@@ -56,14 +56,14 @@ def getMovingAverageRSIVolumeStrategy(
     # Compra
     buy_condition = (
         (last_ma_fast > last_ma_slow)
-        and (last_rsi > rsi_oversold)
-        and (last_volume > (volume_multiplier * last_volume_avg))
+        and (last_rsi > 45)
+        and (last_volume > (0.8 * last_volume_avg))
     )
 
     # Venda
     sell_condition = (
         (last_ma_fast < last_ma_slow)
-        or (last_rsi > rsi_overbought)
+        and (last_rsi > 45)
     )
 
     if buy_condition:

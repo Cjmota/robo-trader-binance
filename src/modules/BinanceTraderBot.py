@@ -1043,23 +1043,28 @@ class BinanceTraderBot:
         rsi = Indicators.getRSI(series=self.stock_data["close_price"])
 
         if price == 0:
-            if rsi > 70:
+
+            momentum = (close_price - self.stock_data["close_price"].iloc[-2]) / self.stock_data["close_price"].iloc[-2]
+
+            # mercado forte → vender mais caro
+            if momentum > 0.002 and volume > avg_volume:
+
+                limit_price = close_price + (0.004 * close_price)
+
+            # RSI alto → possível topo
+            elif rsi > 70:
+
                 limit_price = close_price + (0.002 * close_price)
+
+            # volume fraco → saída rápida
             elif volume < avg_volume:
+
                 limit_price = close_price - (0.002 * close_price)
+
+            # padrão
             else:
-                limit_price = close_price - (0.005 * close_price)
 
-            if limit_price < (self.last_buy_price * (1 - self.acceptable_loss_percentage)):
-                print(f"\nAjuste de venda aceitável ({self.acceptable_loss_percentage*100}%):")
-                print(f" - De: {limit_price:.4f}")
-                limit_price = self.getMinimumPriceToSell()
-                print(f" - Para: {limit_price}")
-        else:
-            limit_price = price
-
-        # Ajustar preço ao tick
-        limit_price = self.adjust_to_step(limit_price, self.tick_size, as_string=True)
+                limit_price = close_price + (0.001 * close_price)
 
         # Ajustar quantidade ao step
         quantity = self.adjust_to_step(
@@ -1779,7 +1784,8 @@ class BinanceTraderBot:
         
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and (probability >= 0.65 and score >= 8) and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
+            
+            if signal in [True, "BUY"] and probability >= 0.65 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"] and self.tradeQualityFilter():    
 
                 if self.hourly_trades >= self.max_hourly_trades:
                     print("⏸️ Limite de trades por hora atingido.")
@@ -2374,52 +2380,50 @@ class BinanceTraderBot:
         
     def detectMarketRegime(self):
 
-        try:
+        closes = self.stock_data["close_price"]
+        highs = self.stock_data["high_price"]
+        lows = self.stock_data["low_price"]
+        volumes = self.stock_data["volume"]
 
-            closes = self.stock_data["close_price"]
-            highs = self.stock_data["high_price"]
-            lows = self.stock_data["low_price"]
-            volumes = self.stock_data["volume"]
+        ma20 = closes.rolling(20).mean().iloc[-1]
+        ma50 = closes.rolling(50).mean().iloc[-1]
 
-            # tendência usando média
-            ma20 = closes.rolling(20).mean().iloc[-1]
-            ma50 = closes.rolling(50).mean().iloc[-1]
+        recent_range = (closes.iloc[-20:].max() - closes.iloc[-20:].min()) / closes.iloc[-20:].min()
 
-            # range
-            recent_range = (closes.iloc[-20:].max() - closes.iloc[-20:].min()) / closes.iloc[-20:].min()
+        avg_volume = volumes.rolling(20).mean().iloc[-1]
+        current_volume = volumes.iloc[-1]
 
-            # volume
-            avg_volume = volumes.rolling(20).mean().iloc[-1]
-            current_volume = volumes.iloc[-1]
+        atr = (highs - lows).rolling(14).mean().iloc[-1]
+        atr_pct = atr / closes.iloc[-1]
 
-            # ATR simplificado
-            atr = (highs - lows).rolling(14).mean().iloc[-1]
-            atr_pct = atr / closes.iloc[-1]
+        compression = self.detectVolatilityCompression()
+        momentum = self.detectMomentumAcceleration()
 
-            # ----------------------------
+        if compression and momentum:
 
-            # mercado explosivo
-            if current_volume > avg_volume * 2 and atr_pct > 0.004:
-                print("🔥 REGIME: EXPLOSIVO")
-                return "EXPLOSIVE"
+            print("⚡ REGIME: PRE-BREAKOUT")
 
-            # mercado em tendência
-            if abs(ma20 - ma50) / closes.iloc[-1] > 0.002:
-                print("📈 REGIME: TREND")
-                return "TREND"
+            return "PRE_BREAKOUT"
 
-            # mercado lateral
-            if recent_range < 0.006:
-                print("↔️ REGIME: SIDEWAYS")
-                return "SIDEWAYS"
+        if current_volume > avg_volume * 2 and atr_pct > 0.004:
 
-            return "NORMAL"
+            print("🔥 REGIME: EXPLOSIVO")
 
-        except Exception as e:
+            return "EXPLOSIVE"
 
-            print("Erro ao detectar regime:", e)
+        if abs(ma20 - ma50) / closes.iloc[-1] > 0.002:
 
-            return "NORMAL"
+            print("📈 REGIME: TREND")
+
+            return "TREND"
+
+        if recent_range < 0.006:
+
+            print("↔️ REGIME: SIDEWAYS")
+
+            return "SIDEWAYS"
+
+        return "NORMAL"
 
     def detectFakeBreakout(self):
 
@@ -2501,8 +2505,7 @@ class BinanceTraderBot:
             asks = depth.get("asks", [])[:10]
 
             if not bids or not asks:
-                print("⚠️ Orderbook vazio. Ignorando spoofing.")
-                return None
+                return False
 
             bid_volume = sum(float(b[1]) for b in bids)
             ask_volume = sum(float(a[1]) for a in asks)
@@ -2510,24 +2513,34 @@ class BinanceTraderBot:
             max_bid = max(float(b[1]) for b in bids)
             max_ask = max(float(a[1]) for a in asks)
 
+            best_bid = float(bids[0][0])
+            best_ask = float(asks[0][0])
+
             print(f"🕵️ Spoofing check - bid wall: {max_bid} | ask wall: {max_ask}")
 
-            # parede muito grande comparada ao restante
-            if max_bid > bid_volume * 0.6:
-                print("⚠️ Possível spoofing de compra detectado")
-                return "SELL"
+            min_wall_size = 0.5
 
-            if max_ask > ask_volume * 0.6:
-                print("⚠️ Possível spoofing de venda detectado")
-                return "BUY"
+            bid_spoof = (
+                max_bid > bid_volume * 0.6
+                and max_bid > min_wall_size
+            )
 
-            return None
+            ask_spoof = (
+                max_ask > ask_volume * 0.6
+                and max_ask > min_wall_size
+            )
+
+            if bid_spoof or ask_spoof:
+                print("⚠️ Possível spoofing detectado")
+                return True
+
+            return False
 
         except Exception as e:
 
             print("Erro no detector de spoofing:", e)
-
-            return None
+            return False
+            
     def detectLiquidityVacuum(self):
         """
         Detecta vácuo de liquidez no orderbook.
