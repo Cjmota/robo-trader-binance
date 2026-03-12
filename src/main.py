@@ -374,6 +374,9 @@ def trader_master_loop():
                         continue
 
                     decision = current_trader.getFinalDecisionStrategy()
+                    
+                    print("🔎 Decisão da estratégia:", decision)
+                    
                     decision_str = str(decision).upper()
 
                     print(f"🔎 Decisão da estratégia: {decision_str}")
