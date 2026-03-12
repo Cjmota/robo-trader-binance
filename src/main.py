@@ -367,7 +367,7 @@ def trader_master_loop():
                     print("⚠️ Dominância BTC alta. Evitando altcoins.")
                     continue
 
-                if btc_mode == "DOWN" and symbol != "BTCUSDT":
+                if btc_mode in ["LOW_LIQUIDITY", "LOW_ACTIVITY"] and symbol != "BTCUSDT":
                     print("⚠️ BTC em queda forte. Evitando altcoins.")
                     continue
 
@@ -1034,7 +1034,20 @@ def get_cached_btc_mode(client):
         return BTC_MODE_CACHE
 
     try:
-        mode = detect_market_mode(client, "BTCUSDT")
+
+        candles = safe_binance_call(
+            client.get_klines,
+            symbol="BTCUSDT",
+            interval=Client.KLINE_INTERVAL_5MINUTE,
+            limit=50
+        )
+
+        if not candles:
+            return BTC_MODE_CACHE
+
+        volumes = [float(c[5]) for c in candles]
+
+        mode = detect_market_mode(volumes)
 
         BTC_MODE_CACHE = mode
         BTC_MODE_LAST_UPDATE = now
@@ -1045,4 +1058,3 @@ def get_cached_btc_mode(client):
 
         print("Erro ao detectar modo BTC:", e)
         return BTC_MODE_CACHE
-    
