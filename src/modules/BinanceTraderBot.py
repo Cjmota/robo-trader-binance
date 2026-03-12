@@ -1486,7 +1486,7 @@ class BinanceTraderBot:
 
             avg_quote_volume = quote_volume.iloc[-20:].mean()
 
-            if avg_quote_volume < 100000 and not self.actual_trade_position:
+            if avg_quote_volume < 30000 and not self.actual_trade_position:
                 print("⚠️ Liquidez em USDT muito baixa.")
                 return 
             
@@ -1768,13 +1768,13 @@ class BinanceTraderBot:
         
             
 
-            if spread > 0.002:
+            if spread > 0.003:
                 print("⚠️ Spread alto. Evitando trade.")
                 return
         
             # ---------------------------------------------
             # COMPRA
-            if signal in [True, "BUY"] and probability >= 0.75 and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
+            if signal in [True, "BUY"] and (probability >= 0.65 and score >= 8) and regime in ["TREND","EXPLOSIVE"] and self.tradeQualityFilter():
 
                 if self.hourly_trades >= self.max_hourly_trades:
                     print("⏸️ Limite de trades por hora atingido.")
@@ -2933,7 +2933,7 @@ class BinanceTraderBot:
         
     def calculateTradeProbability(self, score, regime, spread, volume_spike):
 
-        probability = score / 15
+        probability = score / 20
 
         if regime == "SIDEWAYS":
             probability -= 0.25
