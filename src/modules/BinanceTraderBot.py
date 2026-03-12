@@ -1807,8 +1807,18 @@ class BinanceTraderBot:
 
                 if price <= 0:
                     return
-                                 
+                
+                price = self.stock_data["close_price"].iloc[-1]
+
+                if price <= 0:
+                    return
+
                 quantity = capital_to_use / price
+                quantity = self.adjust_to_step(quantity, self.step_size)
+
+                if quantity <= 0:
+                    print("⚠️ Quantidade inválida.")
+                    return
 
                 if not self.actual_trade_position:
                     print("🚀 Entrada confirmada.")
