@@ -302,6 +302,29 @@ def trader_master_loop():
 
         # 🔎 procurar oportunidades
         if current_trader is None:
+            
+            current_trader = BinanceTraderBot(
+                stock_code="BTC",
+                operation_code="BTCUSDT",
+                traded_quantity=config["stocks_traded_list"][0]["capital"],
+                traded_percentage=100,
+                candle_period=CANDLE_PERIOD,
+                api_key=API_KEY,
+                api_secret=API_SECRET,
+                config=config,
+                testnet=TESTNET,
+                time_to_trade=TEMPO_ENTRE_TRADES,
+                delay_after_order=DELAY_ENTRE_ORDENS,
+                acceptable_loss_percentage=ACCEPTABLE_LOSS_PERCENTAGE,
+                stop_loss_percentage=STOP_LOSS_PERCENTAGE,
+                fallback_activated=FALLBACK_ACTIVATED,
+                take_profit_at_percentage=TP_AT_PERCENTAGE,
+                take_profit_amount_percentage=TP_AMOUNT_PERCENTAGE,
+                main_strategy=MAIN_STRATEGY,
+                main_strategy_args=MAIN_STRATEGY_ARGS,
+                fallback_strategy=FALLBACK_STRATEGY,
+                fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
+            )
 
             symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=3)
             
@@ -809,7 +832,8 @@ def scan_market_top_symbols(client, limit=10):
 
         STABLE_FILTER = {
             "USDCUSDT","FDUSDUSDT","TUSDUSDT",
-            "BUSDUSDT","USDPUSDT","RLUSDUSDT"
+            "BUSDUSDT","USDPUSDT","RLUSDUSDT",
+            "PAXGUSDT","XAUTUSDT"
         }
 
         # filtro inicial rápido
@@ -824,8 +848,11 @@ def scan_market_top_symbols(client, limit=10):
             if not symbol.endswith("USDT"):
                 continue
 
-            if symbol in STABLE_FILTER:
+            if symbol in STABLE_FILTER or symbol.startswith(("USDC","TUSD","FDUSD","USDP")):
                 continue
+            
+            if "UPUSDT" in symbol or "DOWNUSDT" in symbol:
+                continue   
                        
             volume = float(t.get("quoteVolume",0))
             trades = int(t.get("count",0))
@@ -852,7 +879,7 @@ def scan_market_top_symbols(client, limit=10):
         filtered = filtered[:SCAN_LIMIT]
 
         # pegar top 30
-        symbols = [t for t, _ in filtered[:20]]
+        symbols = [t for t, _ in filtered[:SCAN_LIMIT]]
 
         # análise paralela
         max_workers = min(8, os.cpu_count() or 1)
