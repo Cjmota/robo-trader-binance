@@ -76,6 +76,10 @@ COOLDOWN_SECONDS = config["RISK"]["SYMBOL_COOLDOWN"]
 
 MAX_TRADES_PER_DAY = config["RISK"]["MAX_TRADES_PER_DAY"]
 
+BTC_MODE_CACHE = None
+BTC_MODE_LAST_UPDATE = 0
+BTC_MODE_CACHE_SECONDS = 120  # atualiza a cada 2 minutos
+
 def reload_runtime_config(bot):
     new_config = load_config()
 
@@ -349,7 +353,7 @@ def trader_master_loop():
                 time.sleep(20)
                 continue
             
-            btc_mode = detect_market_mode(BINANCE_CLIENT, "BTCUSDT")
+            btc_mode = get_cached_btc_mode(BINANCE_CLIENT)
             btc_dominance = get_btc_dominance(BINANCE_CLIENT)
             
             print("📊 BTC Market Mode:", btc_mode)
@@ -1019,4 +1023,26 @@ def update_market_memory(symbol, profit):
         ADAPTIVE_WEIGHTS["sweep"] = max(1.2, ADAPTIVE_WEIGHTS["sweep"] * 0.99)
         
     logging.info(f"Adaptive weights updated: {ADAPTIVE_WEIGHTS}")
+    
+def get_cached_btc_mode(client):
+
+    global BTC_MODE_CACHE, BTC_MODE_LAST_UPDATE
+
+    now = time.time()
+
+    if BTC_MODE_CACHE and now - BTC_MODE_LAST_UPDATE < BTC_MODE_CACHE_SECONDS:
+        return BTC_MODE_CACHE
+
+    try:
+        mode = detect_market_mode(client, "BTCUSDT")
+
+        BTC_MODE_CACHE = mode
+        BTC_MODE_LAST_UPDATE = now
+
+        return mode
+
+    except Exception as e:
+
+        print("Erro ao detectar modo BTC:", e)
+        return BTC_MODE_CACHE
     
