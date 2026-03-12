@@ -3000,7 +3000,7 @@ class BinanceTraderBot:
         
     def calculateTradeProbability(self, score, regime, spread, volume_spike):
 
-        probability = score / 20
+        probability = score / 12
 
         if regime == "SIDEWAYS":
             probability -= 0.25
