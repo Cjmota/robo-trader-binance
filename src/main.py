@@ -215,28 +215,7 @@ thread_lock = threading.Lock()
 
 def trader_master_loop():
     
-    current_trader = BinanceTraderBot(
-        stock_code="BTC",
-        operation_code="BTCUSDT",
-        traded_quantity=config["stocks_traded_list"][0]["capital"],
-        traded_percentage=100,
-        candle_period=CANDLE_PERIOD,
-        api_key=API_KEY,
-        api_secret=API_SECRET,
-        config=config,
-        testnet=TESTNET,
-        time_to_trade=TEMPO_ENTRE_TRADES,
-        delay_after_order=DELAY_ENTRE_ORDENS,
-        acceptable_loss_percentage=ACCEPTABLE_LOSS_PERCENTAGE,
-        stop_loss_percentage=STOP_LOSS_PERCENTAGE,
-        fallback_activated=FALLBACK_ACTIVATED,
-        take_profit_at_percentage=TP_AT_PERCENTAGE,
-        take_profit_amount_percentage=TP_AMOUNT_PERCENTAGE,
-        main_strategy=MAIN_STRATEGY,
-        main_strategy_args=MAIN_STRATEGY_ARGS,
-        fallback_strategy=FALLBACK_STRATEGY,
-        fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
-    )  
+    current_trader = None
         
     global CURRENT_TRADER, BOT_RUNNING, BINANCE_CLIENT, last_traded_symbol
 
@@ -382,15 +361,29 @@ def trader_master_loop():
                     
                     capital = min(capital_config, max_position)
 
-                    # 🔁 troca o ativo do robô
-                    current_trader.stock_code = stock
-                    current_trader.operation_code = symbol
-                    current_trader.traded_quantity = capital
+                    current_trader = BinanceTraderBot(
+                        stock_code=stock,
+                        operation_code=symbol,
+                        traded_quantity=capital,
+                        traded_percentage=100,
+                        candle_period=CANDLE_PERIOD,
+                        api_key=API_KEY,
+                        api_secret=API_SECRET,
+                        config=config,
+                        testnet=TESTNET,
+                        time_to_trade=TEMPO_ENTRE_TRADES,
+                        delay_after_order=DELAY_ENTRE_ORDENS,
+                        acceptable_loss_percentage=ACCEPTABLE_LOSS_PERCENTAGE,
+                        stop_loss_percentage=STOP_LOSS_PERCENTAGE,
+                        fallback_activated=FALLBACK_ACTIVATED,
+                        take_profit_at_percentage=TP_AT_PERCENTAGE,
+                        take_profit_amount_percentage=TP_AMOUNT_PERCENTAGE,
+                        main_strategy=MAIN_STRATEGY,
+                        main_strategy_args=MAIN_STRATEGY_ARGS,
+                        fallback_strategy=FALLBACK_STRATEGY,
+                        fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
+                    )
 
-                    # resetar estado
-                    current_trader.resetForNewSymbol()
-
-                    # atualizar filtros da Binance
                     current_trader.setStepSizeAndTickSize()
                         
                     if not current_trader.updateAllData():
@@ -660,7 +653,7 @@ def analyze_symbol(client, t, config):
         price_change = float(t.get("priceChangePercent", 0))
         
         # ignora moedas paradas
-        if abs(price_change) < 0.2:
+        if abs(price_change) < 0.05:
             return None
         
         if abs(price_change) > config["SCANNER"]["PUMP_PROTECTION"] * 100:
@@ -835,7 +828,8 @@ def scan_market_top_symbols(client, limit=10):
             "BUSDUSDT","USDPUSDT","RLUSDUSDT",
             "PAXGUSDT","XAUTUSDT"
         }
-
+        
+        
         # filtro inicial rápido
         MIN_VOLUME = config["SCANNER"]["MIN_VOLUME"]
                 
@@ -865,9 +859,7 @@ def scan_market_top_symbols(client, limit=10):
 
             change = abs(float(t.get("priceChangePercent",0)))
 
-            score = volume * (1 + change / 100)
-
-            filtered.append((t, score))   # guarda ticker inteiro
+            score = volume * (1 + change / 100)                      
 
         if not filtered:
             return []
