@@ -8,7 +8,7 @@
     "SCANNER": {
         "MIN_VOLUME": 3000000,
         "MIN_TRADES": 1500,
-        "MIN_VOLATILITY": 0.008,
+        "MIN_VOLATILITY": 0.003,
         "MAX_VOLATILITY": 0.08,
         "SPREAD_LIMIT": 0.001,
         "PUMP_PROTECTION": 0.10,
