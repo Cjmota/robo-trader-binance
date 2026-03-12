@@ -536,6 +536,8 @@
 
             }
 
+            let buyHoldHistory = []
+
             async function updateEquity() {
 
                 if (!profitChart) return;
@@ -551,13 +553,17 @@
                 // Normaliza em % (base 100)
                 let equityPct = ((data.equity / baseEquity) - 1) * 100;
                 let btcPct = ((data.btc_price / baseBTC) - 1) * 100;
+                let buyHoldPct = btcPct   // ou outro ativo que você queira comparar
 
                 equityHistory.push(equityPct);
                 btcHistory.push(btcPct);
+                buyHoldHistory.push(buyHoldPct)
 
                 profitChart.data.labels.push(now);
+
                 profitChart.data.datasets[0].data = equityHistory;
                 profitChart.data.datasets[1].data = btcHistory;
+                profitChart.data.datasets[2].data = buyHoldHistory    
 
                 if (equityHistory.length > 100) {
                     equityHistory.shift();
@@ -970,8 +976,6 @@ ${c.symbol}<br>${c.change}%
 
         </script>
     
-    
-
 </body>
 
 </html>
