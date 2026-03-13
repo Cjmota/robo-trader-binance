@@ -247,6 +247,11 @@
                 <canvas id="tradeEquityChart" height="100"></canvas>
             </div>
 
+            <div class="card p-4 mt-4">
+                <h5 class="mb-3">📊 Profit por Trade</h5>
+                <canvas id="profitTradeChart" height="100"></canvas>
+            </div>
+
             <div class="row mt-4 g-4">
 
                 <div class="col-md-3">
@@ -587,6 +592,19 @@
 
                 let profits = trades.map(t => t.profit);
 
+                // 🔥 Atualiza gráfico Profit por Trade
+                if(profitTradeChart){
+
+                    profitTradeChart.data.labels = profits.map((_,i)=> i+1)
+
+                    profitTradeChart.data.datasets[0].data = profits
+
+                    profitTradeChart.data.datasets[0].backgroundColor =
+                        profits.map(p => p>0 ? "#22c55e" : "#ef4444")
+
+                    profitTradeChart.update()
+                }
+
                 let wins = profits.filter(p => p > 0);
                 let losses = profits.filter(p => p < 0);
 
@@ -627,6 +645,38 @@
                     tradeEquityChart.data.datasets[0].data = cumulative;
                     tradeEquityChart.update();
                 }
+
+
+                let profitTradeChart = null;
+
+                function initProfitTradeChart(){
+
+                    if(profitTradeChart) return;
+
+                    let ctx = document.getElementById('profitTradeChart').getContext('2d');
+
+                    profitTradeChart = new Chart(ctx,{
+                        type:'bar',
+                        data:{
+                            labels:[],
+                            datasets:[{
+                                label:'Profit por Trade (USDT)',
+                                data:[],
+                                backgroundColor:[]
+                            }]
+                        },
+                        options:{
+                            plugins:{
+                                legend:{ labels:{ color:"white"} }
+                            },
+                            scales:{
+                                x:{ ticks:{ color:"white"} },
+                                y:{ ticks:{ color:"white"} }
+                            }
+                        }
+                    })
+                }    
+
 
                 // 🔥 STREAK
                 let streak = 0;
@@ -683,6 +733,7 @@
                     setTimeout(() => {
                         initChart();
                         initTradeChart();
+                        initProfitTradeChart();
                         updateEquity();
                         updateTradeStats();
                     }, 200);

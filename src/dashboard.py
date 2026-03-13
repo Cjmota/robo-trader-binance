@@ -1,5 +1,6 @@
 from flask import Flask, render_template, request, jsonify
 from src.main import SCANNER_RANKING, SCANNER_SMART_MONEY
+from src.utils.performance import calculate_metrics
 from flask import Response
 from datetime import datetime
 import numpy as np
@@ -38,7 +39,11 @@ def save_config(config):
 # ---------------- HOME ----------------
 @app.route("/")
 def home():
-    return render_template("dashboard.html")
+    metrics = calculate_metrics()
+    return render_template(
+        "dashboard.html", 
+        metrics=metrics,
+    )
 
 # ---------------- STATUS ----------------
 @app.route("/status")

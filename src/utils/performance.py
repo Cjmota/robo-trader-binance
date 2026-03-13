@@ -1,3 +1,4 @@
+import os
 import pandas as pd
 import matplotlib.pyplot as plt
 
@@ -27,14 +28,18 @@ def calculate_metrics():
 
     max_drawdown = (equity - equity.cummax()).min()
 
-    return {
-        "total_trades": total_trades,
-        "win_rate": win_rate,
-        "profit_factor": profit_factor,
-        "expectancy": expectancy,
-        "equity": equity.iloc[-1] if len(equity) else 0,
-        "max_drawdown": max_drawdown
-    }
+    if not os.path.exists("trades_log.csv"):
+        print("⚠️ Nenhum histórico de trades ainda.")
+        return {
+            "total_trades": 0,
+            "win_rate": 0,
+            "profit_factor": 0,
+            "expectancy": 0,
+            "equity": 0,
+            "max_drawdown": 0
+        }
+
+    df = pd.read_csv("trades_log.csv")
     
 # -------------------------------
 # Curva de Equity
