@@ -1296,6 +1296,8 @@ class BinanceTraderBot:
     # Função que executa estratégias implementadas e retorna a decisão final
     def getFinalDecisionStrategy(self):
 
+        print("🚨 getFinalDecisionStrategy CHAMADA")
+        
         final_decision = StrategyRunner.execute(
             self,
             stock_data=self.stock_data,
@@ -1305,7 +1307,7 @@ class BinanceTraderBot:
             fallback_strategy_args=self.fallback_strategy_args,
         )
         
-        print("📈 Rodando estratégia principal...")
+        #print("📈 Rodando estratégia principal...")
 
         return final_decision
 
@@ -1986,6 +1988,8 @@ class BinanceTraderBot:
                     self.hourly_trades += 1
                     self.last_trade_time = time.time()
                                              
+            if signal == "SELL" and not self.actual_trade_position:
+                print("⚠️ Sinal de venda detectado, mas não há posição aberta.")
 
             # ---------------------------------------------
             # VENDA
