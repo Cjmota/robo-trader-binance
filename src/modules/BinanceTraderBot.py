@@ -805,16 +805,18 @@ class BinanceTraderBot:
         
         try:
 
-            if not self.hasEnoughBalanceToBuy(quantity, close_price):
-                print("⏸️ Compra cancelada por saldo insuficiente.")
-                return False    
+            close_price = float(self.stock_data["close_price"].iloc[-1])    
+
+            if quantity is not None:
+                if not self.hasEnoughBalanceToBuy(quantity, close_price):
+                    print("⏸️ Compra cancelada por saldo insuficiente.")
+                    return False    
 
             if self.actual_trade_position:
                 logging.warning("Erro ao comprar: Posição já comprada.")
                 print("\nErro ao comprar: Posição já comprada.")
                 return False
-
-            close_price = float(self.stock_data["close_price"].iloc[-1])
+            
 
             if quantity is not None:
                 if not self.hasEnoughBalanceToBuy(quantity, close_price):
