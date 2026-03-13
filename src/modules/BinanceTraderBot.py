@@ -1933,8 +1933,20 @@ class BinanceTraderBot:
                 
             # ---------------------------------------------
             # COMPRA
-            
-            if signal in [True, "BUY"] and probability >= 0.45 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"] and self.tradeQualityFilter():    
+            institutional_setup = (
+                score >= 8
+                or (whale_signal == "BUY" and vacuum_signal == "BUY")
+            )
+
+            if signal in [True, "BUY"] and probability >= 0.45 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"]:
+
+                if institutional_setup and probability >= 0.70:
+                    print("🔥 Trade institucional detectado - ignorando filtro")
+
+                else:
+                    if not self.tradeQualityFilter():
+                        print("⛔ Trade bloqueado pelo filtro de qualidade")
+                        return   
 
                 if self.hourly_trades >= self.max_hourly_trades:
                     print("⏸️ Limite de trades por hora atingido.")
