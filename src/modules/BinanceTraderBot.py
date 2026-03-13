@@ -1296,7 +1296,10 @@ class BinanceTraderBot:
     # Função que executa estratégias implementadas e retorna a decisão final
     def getFinalDecisionStrategy(self):
 
+        
         print("🚨 getFinalDecisionStrategy CHAMADA")
+        
+        print("📈 Rodando estratégia principal...")
         
         final_decision = StrategyRunner.execute(
             self,
@@ -1306,8 +1309,6 @@ class BinanceTraderBot:
             fallback_strategy=self.fallback_strategy,
             fallback_strategy_args=self.fallback_strategy_args,
         )
-        
-        #print("📈 Rodando estratégia principal...")
 
         return final_decision
 
