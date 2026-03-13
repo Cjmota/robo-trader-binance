@@ -805,12 +805,21 @@ class BinanceTraderBot:
         
         try:
 
+            if not self.hasEnoughBalanceToBuy(quantity, close_price):
+                print("⏸️ Compra cancelada por saldo insuficiente.")
+                return False    
+
             if self.actual_trade_position:
                 logging.warning("Erro ao comprar: Posição já comprada.")
                 print("\nErro ao comprar: Posição já comprada.")
                 return False
 
             close_price = float(self.stock_data["close_price"].iloc[-1])
+
+            if quantity is not None:
+                if not self.hasEnoughBalanceToBuy(quantity, close_price):
+                    print("⏸️ Compra cancelada por saldo insuficiente.")
+                    return False
 
             # ----------------------------
             # calcular quantidade
@@ -1700,6 +1709,8 @@ class BinanceTraderBot:
 
             tight_compression = recent_range < 0.01
             
+            score = 0
+            
             # 🚀 Breakout após compressão (setup explosivo) 
             
 
@@ -1861,6 +1872,7 @@ class BinanceTraderBot:
                 and volatility_expansion
                 and momentum_acceleration
                 and volume_confirm
+                and orderflow_signal == "BUY"
                 and probability > 0.55
                 and spread < 0.002
                 and regime in ["PRE_BREAKOUT","EXPLOSIVE"]
@@ -1888,7 +1900,7 @@ class BinanceTraderBot:
 
                 raw_quantity = capital_to_use / price
 
-                quantity = self.adjust_to_step(raw_quantity, self.step_size)
+                quantity = float(self.adjust_to_step(raw_quantity, self.step_size))
 
                 if quantity > 0:
 
@@ -2799,7 +2811,7 @@ class BinanceTraderBot:
 
             print(f"📉 Compressão volatilidade: {bollinger_width:.4f}")
 
-            if bollinger_width < 0.006:
+            if bollinger_width < 0.004:
                 print("📦 Compressão de volatilidade detectada")
                 return True
 
@@ -3459,6 +3471,10 @@ class BinanceTraderBot:
 
        # limite máximo
        capital_to_use = min(capital_to_use, self.capital * 0.95)
+
+       # 🔒 mínimo Binance
+       if capital_to_use < 5:
+           capital_to_use = 5.25
 
        return capital_to_use
     
