@@ -1789,7 +1789,20 @@ class BinanceTraderBot:
             print(f"💧 Liquidez: {liquidity_signal}")
             print(f"💥 Liquidação: {liquidation_signal}")
             
-            signal = None
+            signal = strategy_signal
+            
+            # ------------------------------------------------
+            # Ajuste do sinal com detectores institucionais
+
+            # Liquidity Vacuum pode antecipar movimento
+            if vacuum_signal == "BUY" and signal != "SELL":
+                print("🌪️ Liquidity vacuum reforçando compra")
+                signal = "BUY"
+
+            # Baleias vendendo forte
+            if whale_signal == "SELL" and signal != "BUY":
+                print("🐋 Baleias pressionando venda")
+                signal = "SELL"
             
             # ------------------------------------------------
             # 🚀 Atalho institucional (prioridade alta)
@@ -3079,7 +3092,7 @@ class BinanceTraderBot:
         
     def calculateTradeProbability(self, score, regime, spread, volume_spike):
 
-        probability = score / 12
+        probability = min(score / 7, 1)
 
         if regime == "SIDEWAYS":
             probability -= 0.25
