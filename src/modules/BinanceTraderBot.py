@@ -792,61 +792,101 @@ class BinanceTraderBot:
     # FUNÇÕES DE COMPRA
 
     # Compra a ação a MERCADO
-    def buyMarketOrder(self, quantity=None):
+    def buyMarketOrder(
+        self, 
+        quantity=None,
+        score=0,
+        probability=0,
+        sweep_signal=None,
+        trap_signal=None,
+        whale_signal=None,
+        volume_spike=False
+    ):
+        
         try:
-            if not self.actual_trade_position:  # Se a posição for vendida
 
-                if quantity is None:
-                    close_price = self.stock_data["close_price"].iloc[-1]
-                    quantity = (self.capital * 0.95) / close_price
-                else:
-                    quantity = self.adjust_to_step(
-                        quantity,
-                        self.step_size,
-                        as_string=True,
-                    )
-
-                # 🔒 Proteção contra poeira e notional mínimo
-                qty_float = float(quantity)
-                close_price = float(self.stock_data["close_price"].iloc[-1])
-                notional_value = qty_float * close_price
-
-                MIN_NOTIONAL = 5  # padrão Binance spot
-
-                if qty_float < self.step_size or notional_value < MIN_NOTIONAL:
-                    print("⚠️ Quantidade muito pequena para comprar (poeira). Ignorando...")
-                    return False
-
-                order_buy = self.client_binance.create_order(
-                    symbol=self.operation_code,
-                    side=SIDE_BUY,  # Compra
-                    type=ORDER_TYPE_MARKET,  # Ordem de Mercado
-                    quantity=quantity,
-                )
-                
-                self.highest_price_since_entry = close_price
-                self.trailing_stop_price = 0
-                self.break_even_activated = False
-
-                self.last_trade_time = time.time()
-
-                self.actual_trade_position = True  # Define posição como comprada
-                self.saveBotState()
-                createLogOrder(order_buy)  # Cria um log
-                print(f"\nOrdem de COMPRA a mercado enviada com sucesso:")
-                print(order_buy)
-                return order_buy  # Retorna a ordem
-
-            else:  # Se a posição já está comprada
+            if self.actual_trade_position:
                 logging.warning("Erro ao comprar: Posição já comprada.")
                 print("\nErro ao comprar: Posição já comprada.")
                 return False
+
+            close_price = float(self.stock_data["close_price"].iloc[-1])
+
+            # ----------------------------
+            # calcular quantidade
+            if quantity is None:
+
+                capital_to_use = self.calculateAdaptivePositionSize(
+                    score,
+                    probability,
+                    sweep_signal,
+                    trap_signal,
+                    whale_signal,
+                    volume_spike
+                )
+
+                # 🔒 proteção mínimo Binance
+                MIN_NOTIONAL = 5
+                if capital_to_use < MIN_NOTIONAL:
+                    capital_to_use = MIN_NOTIONAL * 1.05
+
+                raw_quantity = capital_to_use / close_price
+
+            else:
+                raw_quantity = float(quantity)
+
+            # ----------------------------
+            # ajustar para step da Binance
+            quantity = self.adjust_to_step(
+                raw_quantity,
+                self.step_size,
+                as_string=True
+            )
+
+            qty_float = float(quantity)
+
+            # ----------------------------
+            # verificar notional mínimo
+            notional_value = qty_float * close_price
+
+            MIN_NOTIONAL = 5
+
+            if qty_float < self.step_size or notional_value < MIN_NOTIONAL:
+                print("⚠️ Quantidade muito pequena para comprar (poeira). Ignorando...")
+                return False
+
+            # ----------------------------
+            # enviar ordem
+            order_buy = self.client_binance.create_order(
+                symbol=self.operation_code,
+                side=SIDE_BUY,
+                type=ORDER_TYPE_MARKET,
+                quantity=quantity,
+            )
+
+            # ----------------------------
+            # atualizar estado do robô
+            self.highest_price_since_entry = close_price
+            self.trailing_stop_price = 0
+            self.break_even_activated = False
+
+            self.last_trade_time = time.time()
+
+            self.actual_trade_position = True
+            self.saveBotState()
+
+            createLogOrder(order_buy)
+
+            print("\nOrdem de COMPRA a mercado enviada com sucesso:")
+            print(order_buy)
+
+            return order_buy
 
         except Exception as e:
             logging.error(f"Erro ao executar ordem de compra a mercado: {e}")
             print(f"\nErro ao executar ordem de compra a mercado: {e}")
             return False
-
+    
     # Compra por um preço máximo (Ordem Limitada)
     # [NOVA] Define o valor usando RSI e Volume Médio
     def buyLimitedOrder(self, quantity=None, price=0):
@@ -1663,7 +1703,9 @@ class BinanceTraderBot:
             # 🚀 Breakout após compressão (setup explosivo) 
             
 
-            score = 0
+            if breakout_signal == "BUY":
+                score += 3
+            
             if accumulation_signal:
                 score += 4
 
@@ -1688,8 +1730,8 @@ class BinanceTraderBot:
             if volume_spike:
                 score += 1
 
-            if compression_signal:
-                score += 1
+            if compression_signal and volatility_expansion:
+                score += 2
 
             if multi_trend_ok:
                 score += 2
@@ -1811,31 +1853,54 @@ class BinanceTraderBot:
                 print("⚠️ Spread alto. Evitando trade.")
                 return
             
+            # 🚀 Setup explosivo institucional
+
             if (
                 compression_signal
                 and breakout_signal == "BUY"
                 and volatility_expansion
                 and momentum_acceleration
                 and volume_confirm
-                and tight_compression
-                and spread < 0.0025
+                and probability > 0.55
+                and spread < 0.002
+                and regime in ["PRE_BREAKOUT","EXPLOSIVE"]
                 and not self.actual_trade_position
             ):
-                
-                print("💥 BREAKOUT + EXPANSÃO DETECTADO")
+
+                print("💥 SETUP EXPLOSIVO DETECTADO")
 
                 price = self.stock_data["close_price"].iloc[-1]
 
-                capital_to_use = self.capital * 0.8
+                capital_to_use = self.calculateAdaptivePositionSize(
+                    score,
+                    probability,
+                    sweep_signal,
+                    trap_signal,
+                    whale_signal,
+                    volume_spike
+                )
 
-                quantity = capital_to_use / price
-                quantity = self.adjust_to_step(quantity, self.step_size)
+                # proteção mínimo Binance
+                min_notional = 5
+
+                if capital_to_use < min_notional:
+                    capital_to_use = min_notional * 1.05
+
+                raw_quantity = capital_to_use / price
+
+                quantity = self.adjust_to_step(raw_quantity, self.step_size)
 
                 if quantity > 0:
+
+                    print("🚀 Entrada por compressão + breakout")
+
                     self.buyMarketOrder(quantity=quantity)
+
                     self.hourly_trades += 1
+                    self.last_trade_time = time.time()
+
                     return
-        
+                
             # ---------------------------------------------
             # COMPRA
             
@@ -3364,25 +3429,38 @@ class BinanceTraderBot:
         volume_spike
     ):
 
-        base_capital = self.capital
+       base_capital = self.capital * 0.25
 
-        capital = base_capital * 0.4
+       # qualidade do trade
+       strength = min(score / 15, 1)
 
-        if sweep_signal:
-            capital = base_capital * 0.7
+       # probabilidade
+       strength += probability
 
-        if trap_signal:
-            capital = base_capital * 0.9
+       # whale pressure
+       if whale_signal == "BUY":
+           strength += 0.3
 
-        if whale_signal == "BUY" and volume_spike:
-            capital = base_capital * 1.0
+       # sweep institucional
+       if sweep_signal:
+           strength += 0.2
 
-        if probability > 0.85 and score >= 8:
-            capital = min(capital, self.capital)
+       # trap institucional
+       if trap_signal:
+           strength += 0.2
 
-        print(f"💰 Capital adaptativo: {capital:.2f} USDT")
+       # volume spike
+       if volume_spike:
+           strength += 0.2
 
-        return capital
+       strength = min(strength, 1.5)
+
+       capital_to_use = base_capital * (1 + strength)
+
+       # limite máximo
+       capital_to_use = min(capital_to_use, self.capital * 0.95)
+
+       return capital_to_use
     
     def detectOrderFlowImbalance(self):
 
