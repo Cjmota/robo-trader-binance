@@ -20,9 +20,12 @@ from src.modules.StrategyRunner import StrategyRunner
 from src.strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
 from src.strategies.moving_average import getMovingAverageTradeStrategy
 
+from src.utils.trade_logger import log_trade
+
 from src.indicators import Indicators
 
 from src import main
+
 
 # fmt: on
 
@@ -2128,33 +2131,44 @@ class BinanceTraderBot:
             print(f"Erro ao atualizar lucro diário: {e}")
             
     def printOperationResult(self, sell_price, quantity):
-        """ Mostra o lucro/prejuízo da operação atual
-        """
+
         try:
+
             if self.last_buy_price == 0:
                 return
 
-            pnl_usdt = (sell_price - self.last_buy_price) * quantity
-            
-            main.TRADE_HISTORY.append({
-                "time": datetime.now().strftime("%H:%M:%S"),
+            entry_price = float(self.last_buy_price)
+            exit_price = float(sell_price)
+            qty = float(quantity)
+
+            pnl_usdt = (exit_price - entry_price) * qty
+            pnl_pct = ((exit_price - entry_price) / entry_price) * 100
+
+            trade = {
+                "time": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                 "symbol": self.operation_code,
-                "side": "SELL",
-                "entry": self.last_buy_price,
-                "exit": sell_price,
-                "profit": round(pnl_usdt,4)
-            })
-            
-            pnl_pct = ((sell_price - self.last_buy_price) / self.last_buy_price) * 100
+                "entry_price": entry_price,
+                "exit_price": exit_price,
+                "quantity": qty,
+                "profit_usdt": round(pnl_usdt, 6),
+                "profit_pct": round(pnl_pct, 4),
+                "capital": round(entry_price * qty, 6)
+            }
+
+            # histórico em memória
+            main.TRADE_HISTORY.append(trade)
+
+            # histórico permanente
+            log_trade(trade)
 
             print("\n💰 RESULTADO DA OPERAÇÃO")
-            print(f" - Entrada : {self.last_buy_price:.4f}")
-            print(f" - Saída   : {sell_price:.4f}")
-            print(f" - Qtd     : {quantity:.4f}")
-            print(f" - PnL     : {pnl_usdt:.4f} USDT ({pnl_pct:.2f}%)")
+            print(f"Entrada : {entry_price:.4f}")
+            print(f"Saída   : {exit_price:.4f}")
+            print(f"Qtd     : {qty:.6f}")
+            print(f"PnL     : {pnl_usdt:.6f} USDT ({pnl_pct:.2f}%)")
 
         except Exception as e:
-            print(f"Erro ao calcular PnL: {e}")
+            print("Erro ao calcular PnL:", e)
 
     def breakEvenTrigger(self):
         """
@@ -3109,7 +3123,7 @@ class BinanceTraderBot:
         
     def calculateTradeProbability(self, score, regime, spread, volume_spike):
 
-        probability = min(score / 7, 1)
+        probability = min(score / 12, 1)
 
         if regime == "SIDEWAYS":
             probability -= 0.25
@@ -3773,3 +3787,4 @@ class BinanceTraderBot:
             print("Erro no detector de breakout:", e)
 
             return None
+    
