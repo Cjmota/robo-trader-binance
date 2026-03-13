@@ -1,35 +1,9 @@
-import os
 import pandas as pd
-import matplotlib.pyplot as plt
-
-# -------------------------------
-# Cálculo de métricas
-# -------------------------------
+import os
 
 def calculate_metrics():
 
-    df = pd.read_csv("trades_log.csv")
-
-    total_trades = len(df)
-
-    wins = df[df["profit_usdt"] > 0]
-    losses = df[df["profit_usdt"] < 0]
-
-    win_rate = len(wins) / total_trades if total_trades > 0 else 0
-
-    gross_profit = wins["profit_usdt"].sum()
-    gross_loss = abs(losses["profit_usdt"].sum())
-
-    profit_factor = gross_profit / gross_loss if gross_loss > 0 else 0
-
-    expectancy = df["profit_usdt"].mean()
-
-    equity = df["profit_usdt"].cumsum()
-
-    max_drawdown = (equity - equity.cummax()).min()
-
     if not os.path.exists("trades_log.csv"):
-        print("⚠️ Nenhum histórico de trades ainda.")
         return {
             "total_trades": 0,
             "win_rate": 0,
@@ -40,70 +14,30 @@ def calculate_metrics():
         }
 
     df = pd.read_csv("trades_log.csv")
-    
-# -------------------------------
-# Curva de Equity
-# -------------------------------
 
-def plot_equity_curve():
+    total_trades = len(df)
 
-    df = pd.read_csv("trades_log.csv")
+    wins = df[df["profit_usdt"] > 0]
+    losses = df[df["profit_usdt"] < 0]
 
-    equity = df["profit_usdt"].cumsum()
+    win_rate = len(wins) / total_trades if total_trades else 0
 
-    plt.figure()
-    plt.plot(equity)
-    plt.title("Equity Curve")
-    plt.xlabel("Trades")
-    plt.ylabel("USDT")
-    plt.grid()
+    gross_profit = wins["profit_usdt"].sum()
+    gross_loss = abs(losses["profit_usdt"].sum())
 
-    plt.show()
-    
-    
-# -------------------------------
-# Lucro por trade
-# -------------------------------
+    profit_factor = gross_profit / gross_loss if gross_loss else 0
 
-def plot_trade_distribution():
-
-    df = pd.read_csv("trades_log.csv")
-
-    plt.figure()
-
-    plt.bar(range(len(df)), df["profit_usdt"])
-
-    plt.title("Profit per Trade")
-
-    plt.xlabel("Trade")
-
-    plt.ylabel("USDT")
-
-    plt.grid()
-
-    plt.show()    
-    
- # -------------------------------
-# Drawdown
-# -------------------------------       
-        
-        
-def plot_drawdown():
-
-    df = pd.read_csv("trades_log.csv")
+    expectancy = df["profit_usdt"].mean()
 
     equity = df["profit_usdt"].cumsum()
 
-    drawdown = equity - equity.cummax()
+    max_drawdown = (equity - equity.cummax()).min()
 
-    plt.figure()
-
-    plt.plot(drawdown)
-
-    plt.title("Drawdown")
-
-    plt.xlabel("Trades")
-
-    plt.ylabel("USDT")
-
-    plt.show()
+    return {
+        "total_trades": total_trades,
+        "win_rate": win_rate,
+        "profit_factor": profit_factor,
+        "expectancy": expectancy,
+        "equity": equity.iloc[-1] if len(equity) else 0,
+        "max_drawdown": max_drawdown
+    }
