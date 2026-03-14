@@ -146,6 +146,10 @@ class BinanceTraderBot:
         self.max_scale_levels = 3
         
         self.scale_trigger_levels = [0.5, 1.0, 1.8]  # % lucro
+        
+        self.scanner_cache = []
+        self.scanner_cache_time = 0
+        self.scanner_cache_ttl = 5  # segundos
 
         VALID_INTERVALS = [
             "1m","3m","5m","15m","30m",
@@ -1537,7 +1541,36 @@ class BinanceTraderBot:
     # Função principal e a única que deve ser executada em loop, quando o
     def execute(self):
                 
+        
+        
+              
+                
         try:
+                
+                # atualizar scanner somente quando necessário
+            if time.time() - self.last_scan_time > self.scan_interval:
+
+                print("🔎 Escaneando mercado inteligente PRO...")
+
+                self.scanner_ranking = self.fastMarketScanner()
+
+                self.last_scan_time = time.time()  
+                
+            ranking = self.scanner_ranking[:3] if self.scanner_ranking else []
+            
+            if not ranking:
+                print("⚠️ Nenhum ativo encontrado no scanner.")
+                return
+            
+            for symbol, score, change, volume in ranking:
+
+                print(f"🎯 Testando ativo: {symbol}")
+
+                self.operation_code = symbol
+
+                if self.updateAllData(verbose=True):
+                    break
+            
             
             if self.actual_trade_position:
                 profit, pct = self.getCurrentOperationProfit()
@@ -1564,12 +1597,7 @@ class BinanceTraderBot:
 
             # 3️⃣ análise pesada
             institutional_signals = self.heavyMarketAnalysis()         
-            
-            # Atualiza todos os dados
-            if not self.updateAllData(verbose=True):
-                print("⚠️ Falha na atualização dos dados.")
-                return
-            
+        
             # proteção contra poucos candles
             if self.stock_data is None or len(self.stock_data) < 50:
                 print("⚠️ Dados insuficientes de candles.")
@@ -1701,8 +1729,8 @@ class BinanceTraderBot:
                 return
 
             # 🚫 Limite de trades diário
-            if self.daily_trades >= self.max_daily_trades and score < 8:
-                print("🚫 Limite diário atingido para trades normais.")
+            if self.daily_trades >= self.max_daily_trades:
+                print("🚫 Limite diário atingido.")
                 return
 
             smart_money_signal = self.detectSmartMoneyAccumulation()
@@ -4307,6 +4335,63 @@ class BinanceTraderBot:
             return False
 
         return True
+    
+    def fastMarketScanner(self):
+
+        now = time.time()
+
+        # usar cache se ainda estiver válido
+        if now - self.scanner_cache_time < self.scanner_cache_ttl:
+            return self.scanner_cache
+
+        print("🔎 Escaneando mercado rápido...")
+
+        tickers = self.client_binance.get_ticker()  # 24h stats de todos os pares
+
+        ranking = []
+
+        for t in tickers:
+
+            symbol = t["symbol"]
+
+            if not symbol.endswith("USDT"):
+                continue
+
+            price = float(t["lastPrice"])
+            volume = float(t["quoteVolume"])
+            change = float(t["priceChangePercent"])
+
+            # filtro de liquidez
+            if volume < 5_000_000:
+                continue
+
+            score = 0
+
+            # momentum
+            if change > 2:
+                score += 2
+            elif change > 1:
+                score += 1
+
+            # volume alto
+            if volume > 20_000_000:
+                score += 2
+            elif volume > 10_000_000:
+                score += 1
+
+            ranking.append((symbol, score, change, volume))
+
+        ranking.sort(key=lambda x: x[1], reverse=True)
+
+        top = ranking[:10]
+
+        print("🔥 TOP OPORTUNIDADES:", [r[0] for r in top])
+
+        # salvar cache
+        self.scanner_cache = top
+        self.scanner_cache_time = now
+
+        return top
     
     def mediumMarketAnalysis(self):
 
