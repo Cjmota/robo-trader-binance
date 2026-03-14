@@ -2441,7 +2441,7 @@ class BinanceTraderBot:
             print(f"📊 Range 20 candles: {recent_range*100:.2f}%")
             print(f"📊 ATR: {atr_pct*100:.2f}%")
 
-            if recent_range < self.min_volatility * 1.5 and atr_pct < self.min_volatility:
+            if recent_range < self.min_volatility * 1.2 and atr_pct < self.min_volatility:
 
                 print("⚠️ Mercado realmente sem volatilidade.")
 
@@ -3940,7 +3940,7 @@ class BinanceTraderBot:
                     continue
 
                 # valores muito pequenos
-                if free < 0.001:
+                if free > 0 and asset not in ["USDT","BNB","BTC","ETH"]:
                     assets.append(asset)
 
             if not assets:
