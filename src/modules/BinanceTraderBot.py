@@ -1758,6 +1758,7 @@ class BinanceTraderBot:
             # EXECUTAR ESTRATÉGIA   
             
             spread = 0
+            signal = None
             
             depth = self.getCachedOrderBook()
 
@@ -1884,10 +1885,25 @@ class BinanceTraderBot:
                 volume_spike
             )
             
+            # normalizar sinal
+            if strategy_signal in ["Comprar", "BUY", True]:
+                signal = "BUY"
+            elif strategy_signal in ["Vender", "SELL", False]:
+                signal = "SELL"
+            else:
+                signal = None
+
+            print(f"📊 Estratégia: {signal}")
+            print(f"💧 Liquidez: {liquidity_signal}")
+            print(f"💥 Liquidação: {liquidation_signal}")
+            
+            if signal is None:
+                print("⚠️ Nenhum sinal da estratégia")
+            
             # -----------------------------------------
             # 🚀 EXCEÇÃO INSTITUCIONAL
 
-            if signal in ["BUY", True]:
+            if signal == "BUY":
 
                 if score >= 7.5 and probability >= 0.65:
 
@@ -1901,25 +1917,10 @@ class BinanceTraderBot:
 
                         return
             
-            # normalizar sinal
-            if strategy_signal in ["Comprar", "BUY", True]:
-                strategy_signal = "BUY"
-            elif strategy_signal in ["Vender", "SELL", False]:
-                strategy_signal = "SELL"
-
-            print(f"📊 Estratégia: {strategy_signal}")
-            print(f"💧 Liquidez: {liquidity_signal}")
-            print(f"💥 Liquidação: {liquidation_signal}")
-            
-            signal = strategy_signal
-            
-            
             # manipulação institucional
             if manipulation_signal:
                 print("🏦 Manipulação institucional detectada")
                 signal = manipulation_signal
-            
-            
             
             # ------------------------------------------------
             # Ajuste do sinal com detectores institucionais
@@ -2106,11 +2107,6 @@ class BinanceTraderBot:
 
                 if price <= 0:
                     return
-                
-                price = self.stock_data["close_price"].iloc[-1]
-
-                if price <= 0:
-                    return
 
                 quantity = capital_to_use / price
                 quantity = self.adjust_to_step(quantity, self.step_size)
@@ -2133,7 +2129,7 @@ class BinanceTraderBot:
 
             # ---------------------------------------------
             # VENDA
-            elif signal in [False, "SELL"]:
+            elif signal == "SELL":
 
                 close_price = self.stock_data["close_price"].iloc[-1]
 
