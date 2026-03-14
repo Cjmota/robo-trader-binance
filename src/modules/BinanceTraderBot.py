@@ -134,6 +134,10 @@ class BinanceTraderBot:
         self.max_volatility = self.config["SCANNER"]["MAX_VOLATILITY"]
 
         self.last_dust_check = 0
+        
+        self.scaling_done = False
+        self.scale_trigger_profit = 0.6   # %
+        self.scale_size_multiplier = 0.5  # adiciona 50% da posição inicial
 
         VALID_INTERVALS = [
             "1m","3m","5m","15m","30m",
@@ -1069,6 +1073,7 @@ class BinanceTraderBot:
                 # Só zera posição se vendeu praticamente tudo
                 if remaining_balance * close_price < 5:
                     self.actual_trade_position = False
+                    self.scaling_done = False
                 else:
                     self.actual_trade_position = True
 
@@ -1208,6 +1213,62 @@ class BinanceTraderBot:
     # este valor seja descontado nas execuções seguintes.
     # Se foi parcialmente executado, ela também salva o valor que foi executado
     # na variável self.last_buy_price
+    
+    def scalePosition(self):
+
+        try:
+
+            if not self.actual_trade_position:
+                return False
+
+            if self.scaling_done:
+                return False
+
+            close_price = self.stock_data["close_price"].iloc[-1]
+
+            profit_pct = self.getPriceChangePercentage(
+                self.last_buy_price,
+                close_price
+            )
+
+            if profit_pct < self.scale_trigger_profit:
+                return False
+
+            # confirma força do mercado
+            momentum = self.detectMomentumAcceleration()
+            volume_spike = self.detectPump()
+            whale_signal = self.detectWhalePressure()
+
+            if not momentum:
+                return False
+
+            if whale_signal != "BUY":
+                return False
+
+            print("🚀 SCALE-IN DETECTADO")
+
+            # tamanho adicional
+            capital_extra = self.capital * self.scale_size_multiplier
+
+            quantity = capital_extra / close_price
+            quantity = self.adjust_to_step(quantity, self.step_size)
+
+            if quantity <= 0:
+                return False
+
+            self.buyMarketOrder(quantity=quantity)
+
+            self.scaling_done = True
+
+            print("📈 Posição aumentada com sucesso")
+
+            return True
+
+        except Exception as e:
+
+            print("Erro no scale position:", e)
+
+            return False
     
     def hasOpenBuyOrder(self):
         """
@@ -1513,6 +1574,9 @@ class BinanceTraderBot:
             multi_trend_ok = self.getTrendMultiTimeframe()
             
             if self.actual_trade_position:
+                
+                self.scalePosition()
+                
                 if self.trailingStopTrigger():
                     return
             
