@@ -5,6 +5,7 @@ import time
 import os
 import logging
 import math
+import csv
 
 import pytz
 br_tz = pytz.timezone("America/Sao_Paulo")
@@ -488,6 +489,18 @@ def trader_master_loop():
                     "exit": round(exit_price, 2),
                     "profit": round(profit, 4)
                 })
+                
+                import csv
+
+                with open("trades_log.csv","a",newline="") as f:
+
+                    writer = csv.writer(f)
+
+                    writer.writerow([
+                        datetime.now().isoformat(),
+                        current_trader.operation_code,
+                        profit
+                    ])
 
                 update_market_memory(current_trader.operation_code, profit)
 

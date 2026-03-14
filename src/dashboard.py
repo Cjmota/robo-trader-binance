@@ -277,7 +277,7 @@ def heatmap():
 
 @app.route("/api/dashboard")
 def dashboard_data():
-
+    
     trader = main.CURRENT_TRADER
 
     try:
@@ -341,3 +341,12 @@ def dashboard_data():
             "heatmap": [],
             "trades": []
         })
+        
+@app.route("/api/performance")
+def performance():
+
+    from src.utils.performance import calculate_metrics
+
+    metrics = calculate_metrics()
+
+    return jsonify(metrics)

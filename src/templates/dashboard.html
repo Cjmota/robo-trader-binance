@@ -1300,13 +1300,36 @@ ${c.symbol}<br>${c.change}%
 
             }
 
+            async function updatePerformance(){
+
+                let res = await fetch("/api/performance")
+                let data = await res.json()
+
+                document.getElementById("statTrades").innerText =
+                    data.total_trades
+
+                document.getElementById("statWinrate").innerText =
+                    (data.win_rate*100).toFixed(2) + "%"
+
+                document.getElementById("statProfitFactor").innerText =
+                    data.profit_factor.toFixed(2)
+
+                document.getElementById("statExpectancy").innerText =
+                    data.expectancy.toFixed(4)
+
+                document.getElementById("statSharpe").innerText =
+                    data.sharpe.toFixed(2)
+            }
+
             setInterval(updateTradesTable, 4000)    
 
             setInterval(updateHeatmap, 5000)
 
             setInterval(updateStatus, 2000);
-            
             updateStatus();
+
+            setInterval(updatePerformance,5000)
+            updatePerformance()
 
             // 🤖 Atualiza informações do robô
             setInterval(updateBotInfo, 3000)
