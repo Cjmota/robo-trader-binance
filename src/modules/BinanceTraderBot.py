@@ -3935,13 +3935,31 @@ class BinanceTraderBot:
                 if free == 0:
                     continue
 
-                # ignora USDT e BNB
-                if asset in ["USDT","BNB"]:
+                if asset in ["USDT", "BNB", "BTC", "ETH"]:
                     continue
 
-                # valores muito pequenos
-                if free > 0 and asset not in ["USDT","BNB","BTC","ETH"]:
+                if asset.startswith("LD"):
+                    continue
+
+                if asset.startswith("BNFCR"):
+                    continue
+
+                try:
+
+                    ticker = self.client_binance.get_symbol_ticker(
+                        symbol=f"{asset}USDT"
+                    )
+
+                    price = float(ticker["price"])
+                    value_usdt = free * price
+
+                    if value_usdt > 5:
+                        continue
+
                     assets.append(asset)
+
+                except:
+                    continue
 
             if not assets:
                 print("🧹 Nenhuma poeira encontrada.")
