@@ -141,6 +141,11 @@ class BinanceTraderBot:
         self.scaling_done = False
         self.scale_trigger_profit = 0.6   # %
         self.scale_size_multiplier = 0.5  # adiciona 50% da posição inicial
+        
+        self.scale_level = 0
+        self.max_scale_levels = 3
+        
+        self.scale_trigger_levels = [0.5, 1.0, 1.8]  # % lucro
 
         VALID_INTERVALS = [
             "1m","3m","5m","15m","30m",
@@ -801,38 +806,27 @@ class BinanceTraderBot:
 
     # Compra a ação a MERCADO
     def buyMarketOrder(
-        self, 
-        quantity=None,
-        score=0,
-        probability=0,
-        sweep_signal=None,
-        trap_signal=None,
-        whale_signal=None,
-        volume_spike=False
+    self,
+    quantity=None,
+    score=0,
+    probability=0,
+    sweep_signal=None,
+    trap_signal=None,
+    whale_signal=None,
+    volume_spike=False
     ):
-        
+
         try:
 
-            close_price = float(self.stock_data["close_price"].iloc[-1])    
-
-            if quantity is not None:
-                if not self.hasEnoughBalanceToBuy(quantity, close_price):
-                    print("⏸️ Compra cancelada por saldo insuficiente.")
-                    return False    
+            close_price = float(self.stock_data["close_price"].iloc[-1])
 
             if self.actual_trade_position:
                 logging.warning("Erro ao comprar: Posição já comprada.")
-                print("\nErro ao comprar: Posição já comprada.")
+                print("Erro ao comprar: Posição já comprada.")
                 return False
-            
 
-            if quantity is not None:
-                if not self.hasEnoughBalanceToBuy(quantity, close_price):
-                    print("⏸️ Compra cancelada por saldo insuficiente.")
-                    return False
-
-            # ----------------------------
-            # calcular quantidade
+            # -----------------------------------
+            # calcular quantidade se não foi passada
             if quantity is None:
 
                 capital_to_use = self.calculateAdaptivePositionSize(
@@ -844,37 +838,39 @@ class BinanceTraderBot:
                     volume_spike
                 )
 
-                # 🔒 proteção mínimo Binance
+                # limite máximo de risco
+                capital_to_use = min(capital_to_use, self.capital * 0.6)
+
                 MIN_NOTIONAL = 5
+
                 if capital_to_use < MIN_NOTIONAL:
                     capital_to_use = MIN_NOTIONAL * 1.05
 
                 raw_quantity = capital_to_use / close_price
 
-            else:
-                raw_quantity = float(quantity)
+                quantity = self.adjust_to_step(
+                    raw_quantity,
+                    self.step_size,
+                    as_string=True
+                )
 
-            # ----------------------------
-            # ajustar para step da Binance
-            quantity = self.adjust_to_step(
-                raw_quantity,
-                self.step_size,
-                as_string=True
-            )
+            # -----------------------------------
+            # verificar saldo
+            if not self.hasEnoughBalanceToBuy(float(quantity), close_price):
+                print("⏸️ Compra cancelada por saldo insuficiente.")
+                return False
 
             qty_float = float(quantity)
 
-            # ----------------------------
-            # verificar notional mínimo
             notional_value = qty_float * close_price
 
             MIN_NOTIONAL = 5
 
             if qty_float < self.step_size or notional_value < MIN_NOTIONAL:
-                print("⚠️ Quantidade muito pequena para comprar (poeira). Ignorando...")
+                print("⚠️ Quantidade muito pequena para comprar.")
                 return False
 
-            # ----------------------------
+            # -----------------------------------
             # enviar ordem
             order_buy = self.client_binance.create_order(
                 symbol=self.operation_code,
@@ -883,8 +879,8 @@ class BinanceTraderBot:
                 quantity=quantity,
             )
 
-            # ----------------------------
-            # atualizar estado do robô
+            # -----------------------------------
+            # atualizar estado
             self.highest_price_since_entry = close_price
             self.trailing_stop_price = 0
             self.break_even_activated = False
@@ -896,14 +892,14 @@ class BinanceTraderBot:
 
             createLogOrder(order_buy)
 
-            print("\nOrdem de COMPRA a mercado enviada com sucesso:")
+            print("\nOrdem de COMPRA enviada com sucesso:")
             print(order_buy)
 
             return order_buy
 
         except Exception as e:
-            logging.error(f"Erro ao executar ordem de compra a mercado: {e}")
-            print(f"\nErro ao executar ordem de compra a mercado: {e}")
+            logging.error(f"Erro ao executar ordem de compra: {e}")
+            print(f"\nErro ao executar ordem de compra: {e}")
             return False
     
     # Compra por um preço máximo (Ordem Limitada)
@@ -1253,9 +1249,15 @@ class BinanceTraderBot:
                 return False
 
             # evita escalar perto do topo
+            if len(self.stock_data) < 20:
+                return False
+            
             recent_high = self.stock_data["close_price"].iloc[-20:].max()
 
             distance_from_top = (recent_high - close_price) / close_price
+            
+            if distance_from_top < 0.005:
+                return False
 
             if distance_from_top < 0.002:
                 print("⚠️ Muito perto do topo para escalar")
@@ -4331,4 +4333,111 @@ class BinanceTraderBot:
 
         return score >= 3
     
-    
+    def scalePosition(self):
+
+        try:
+
+            if not self.actual_trade_position:
+                return False
+
+            if self.scale_level >= self.max_scale_levels:
+                return False
+
+            close_price = self.stock_data["close_price"].iloc[-1]
+
+            profit_pct = self.getPriceChangePercentage(
+                self.last_buy_price,
+                close_price
+            )
+
+            trigger = self.scale_trigger_levels[self.scale_level]
+
+            if profit_pct < trigger:
+                return False
+
+            # confirmação institucional
+            momentum = self.detectMomentumAcceleration()
+            whale_signal = self.detectWhalePressure()
+            orderflow = self.detectOrderFlowImbalance()
+
+            if not momentum:
+                return False
+
+            if whale_signal != "BUY":
+                return False
+
+            if orderflow != "BUY":
+                return False
+
+            print(f"🚀 SCALE {self.scale_level + 1} DETECTADO")
+
+            # tamanho progressivo
+            capital_extra = self.capital * (0.25 + self.scale_level * 0.25)
+
+            quantity = capital_extra / close_price
+            quantity = self.adjust_to_step(quantity, self.step_size)
+
+            if quantity <= 0:
+                return False
+
+            self.buyMarketOrder(quantity=quantity)
+
+            self.scale_level += 1
+
+            print(f"📈 Scale executado nível {self.scale_level}")
+
+            return True
+
+        except Exception as e:
+
+            print("Erro no scale position:", e)
+
+            return False
+        
+    def calculateAdaptivePositionSize(
+        self,
+        score,
+        probability,
+        sweep_signal,
+        trap_signal,
+        whale_signal,
+        volume_spike
+    ):
+
+        base_capital = self.capital * 0.25
+
+        multiplier = 1.0
+
+        # força do score
+        if score >= 9:
+            multiplier += 0.8
+        elif score >= 7:
+            multiplier += 0.4
+        elif score >= 5:
+            multiplier += 0.2
+
+        # probabilidade da estratégia
+        if probability > 0.65:
+            multiplier += 0.3
+        elif probability < 0.45:
+            multiplier -= 0.3
+
+        # sinais institucionais
+        if whale_signal == "BUY":
+            multiplier += 0.3
+
+        if volume_spike:
+            multiplier += 0.2
+
+        if sweep_signal:
+            multiplier += 0.2
+
+        if trap_signal:
+            multiplier -= 0.2
+
+        # limite de risco
+        multiplier = max(0.3, min(multiplier, 2.5))
+
+        capital_to_use = base_capital * multiplier
+
+        return capital_to_use
