@@ -1884,6 +1884,23 @@ class BinanceTraderBot:
                 volume_spike
             )
             
+            # -----------------------------------------
+            # 🚀 EXCEÇÃO INSTITUCIONAL
+
+            if signal in ["BUY", True]:
+
+                if score >= 7.5 and probability >= 0.65:
+
+                    print("🔥 Trade institucional forte - ignorando filtros")
+
+                else:
+
+                    if not self.tradeQualityFilter():
+
+                        print("⛔ Trade bloqueado pelo filtro de qualidade")
+
+                        return
+            
             # normalizar sinal
             if strategy_signal in ["Comprar", "BUY", True]:
                 strategy_signal = "BUY"
@@ -2044,7 +2061,7 @@ class BinanceTraderBot:
             # ---------------------------------------------
             # COMPRA
             institutional_setup = (
-                score >= 8
+                score >= 9
                 or (whale_signal == "BUY" and vacuum_signal == "BUY")
             )
 
