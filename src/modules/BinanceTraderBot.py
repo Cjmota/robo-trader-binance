@@ -1548,6 +1548,7 @@ class BinanceTraderBot:
 
             # Atualiza todos os dados
             if not self.updateAllData(verbose=True):
+                close_price = self.stock_data["close_price"].iloc[-1]
                 print("⚠️ Falha na atualização dos dados.")
                 return
             
@@ -1589,9 +1590,24 @@ class BinanceTraderBot:
 
                     profit, pct = self.getCurrentOperationProfit()
 
-                    if pct < 0.4:
+                    if pct < 0.3:
 
                         print("⚡ Momentum morreu → saída antecipada")
+
+                        close_price = self.stock_data["close_price"].iloc[-1]
+                        position_value = self.last_stock_account_balance * close_price
+
+                        # posição pequena demais → limpar estado
+                        if position_value < 5:
+                            print("🧹 Posição virou poeira. Limpando estado do bot.")
+
+                            self.cancelAllOrders()
+
+                            self.actual_trade_position = False
+                            self.last_stock_account_balance = 0
+                            self.saveBotState()
+
+                            return
 
                         self.cancelAllOrders()
                         time.sleep(1)
@@ -1723,6 +1739,7 @@ class BinanceTraderBot:
                 or whale_signal
                 or iceberg_signal
                 or explosion_setup
+                or (orderflow_signal == "BUY" and momentum_acceleration)
             ):
                 print("⏸️ Mercado lateral detectado pelo regime.")
                 return
