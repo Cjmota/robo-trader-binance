@@ -1878,6 +1878,53 @@ class BinanceTraderBot:
             
             print(f"📊 Score de entrada: {score}")
             
+            # ---------------------------------------------
+            # 🏦 INSTITUTIONAL SCORE (atalho para pumps)
+
+            institutional_score = 0
+
+            if whale_signal == "BUY":
+                institutional_score += 2
+
+            if vacuum_signal == "BUY":
+                institutional_score += 2
+
+            if orderflow_signal == "BUY":
+                institutional_score += 2
+
+            if stop_hunt_signal == "BUY":
+                institutional_score += 1
+
+            print(f"🏦 Institutional Score: {institutional_score}")
+
+            # 🚀 Entrada institucional imediata
+            if institutional_score >= 5 and not self.actual_trade_position:
+
+                print("🔥 ENTRADA INSTITUCIONAL FORTE DETECTADA")
+
+                price = self.stock_data["close_price"].iloc[-1]
+
+                capital_to_use = self.calculateAdaptivePositionSize(
+                    score,
+                    0.75,  # probabilidade alta presumida
+                    sweep_signal,
+                    trap_signal,
+                    whale_signal,
+                    volume_spike
+                )
+
+                quantity = capital_to_use / price
+                quantity = self.adjust_to_step(quantity, self.step_size)
+
+                if quantity > 0:
+
+                    self.buyMarketOrder(quantity=quantity)
+
+                    self.hourly_trades += 1
+                    self.last_trade_time = time.time()
+
+                    return
+            
             probability = self.calculateTradeProbability(
                 score,
                 regime,
