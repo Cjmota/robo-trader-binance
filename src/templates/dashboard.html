@@ -182,6 +182,34 @@
                     </div>
                 </div>
 
+                <div class="col-md-3">
+                    <div class="card p-3 text-center">
+                        <h6>🤖 Estratégia</h6>
+                        <div id="botStrategy">-</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card p-3 text-center">
+                        <h6>📈 PnL da posição</h6>
+                        <div id="botPnl">-</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card p-3 text-center">
+                        <h6>⏳ Cooldowns</h6>
+                        <div id="botCooldowns">-</div>
+                    </div>
+                </div>
+
+                <div class="col-md-3">
+                    <div class="card p-3 text-center">
+                        <h6>🧠 Memória mercado</h6>
+                        <div id="botMemory">-</div>
+                    </div>
+                </div>
+                
             </div>
 
             <div class="mt-4">
@@ -981,6 +1009,46 @@
 
             }
 
+            async function updateBotInfo(){
+
+                try{
+
+                    let res = await fetch("/botinfo")
+                    let data = await res.json()
+
+                    if(!data.active){
+                        document.getElementById("botStrategy").innerHTML = "-"
+                        document.getElementById("botPnl").innerHTML = "-"
+                        document.getElementById("botCooldowns").innerHTML = "-"
+                        document.getElementById("botMemory").innerHTML = "-"
+                        return
+                    }
+
+                    document.getElementById("botStrategy").innerHTML = data.strategy
+
+                    let pnl = data.pnl_pct.toFixed(2) + "%"
+
+                    let pnlEl = document.getElementById("botPnl")
+
+                    pnlEl.innerHTML = pnl
+
+                    if(data.pnl_pct > 0)
+                        pnlEl.style.color = "#22c55e"
+                    else if(data.pnl_pct < 0)
+                        pnlEl.style.color = "#ef4444"
+                    else
+                        pnlEl.style.color = "white"
+
+                    document.getElementById("botCooldowns").innerHTML = data.cooldowns
+                    document.getElementById("botMemory").innerHTML = data.memory_assets
+
+                }catch(e){
+
+                    console.log("Erro botinfo", e)
+
+                }
+            }
+
             setInterval(() => {
                 if (profitChart) {
                     updateEquity();
@@ -1101,18 +1169,27 @@
 
             async function loadConfig() {
 
-                let res = await fetch("/api/config")
-                let data = await res.json()
+            let res = await fetch("/api/config")
+            let data = await res.json()
 
-                document.getElementById("cfg_stoploss").value = data.STOP_LOSS_PERCENTAGE
-                document.getElementById("cfg_tp1").value = data.TP_AT_PERCENTAGE[0]
-                document.getElementById("cfg_tp2").value = data.TP_AT_PERCENTAGE[1]
-                document.getElementById("cfg_time").value = data.TEMPO_ENTRE_TRADES
-                document.getElementById("cfg_max_position").value =
-                    data.RISK.MAX_POSITION_PERCENT * 100
+            document.getElementById("cfg_stoploss").value = data.STOP_LOSS_PERCENTAGE
+            document.getElementById("cfg_tp1").value = data.TP_AT_PERCENTAGE[0]
+            document.getElementById("cfg_tp2").value = data.TP_AT_PERCENTAGE[1]
 
-            }
+            document.getElementById("cfg_time").value = data.TEMPO_ENTRE_TRADES
 
+            document.getElementById("cfg_max_position").value =
+                data.RISK.MAX_POSITION_PERCENT * 100
+
+            document.getElementById("cfg_max_trades_day").value =
+                data.RISK.MAX_TRADES_PER_DAY
+
+            document.getElementById("cfg_symbol_cooldown").value =
+                data.RISK.SYMBOL_COOLDOWN
+
+            document.getElementById("cfg_loss_cooldown").value =
+                data.RISK.LOSS_COOLDOWN
+        }
             async function saveConfig() {
 
                 let config = {
@@ -1130,11 +1207,21 @@
                         document.getElementById("cfg_time").value
                     ),
 
-                    RISK: {
-                        MAX_POSITION_PERCENT: parseFloat(
-                            document.getElementById("cfg_max_position").value
-                        ) / 100
-                    }
+                    MAX_POSITION_PERCENT: parseFloat(
+                        document.getElementById("cfg_max_position").value
+                    ),
+
+                    MAX_TRADES_PER_DAY: parseInt(
+                        document.getElementById("cfg_max_trades_day").value
+                    ),
+
+                    SYMBOL_COOLDOWN: parseInt(
+                        document.getElementById("cfg_symbol_cooldown").value
+                    ),
+
+                    LOSS_COOLDOWN: parseInt(
+                        document.getElementById("cfg_loss_cooldown").value
+                    )
 
                 }
 
@@ -1145,7 +1232,6 @@
                 })
 
                 alert("Configuração salva!")
-
             }
 
             async function updateHeatmap() {
@@ -1219,7 +1305,12 @@ ${c.symbol}<br>${c.change}%
             setInterval(updateHeatmap, 5000)
 
             setInterval(updateStatus, 2000);
+            
             updateStatus();
+
+            // 🤖 Atualiza informações do robô
+            setInterval(updateBotInfo, 3000)
+            updateBotInfo()
 
         </script>
     

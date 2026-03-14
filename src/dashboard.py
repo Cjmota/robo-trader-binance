@@ -50,10 +50,15 @@ def home():
 def status():
     trader = main.CURRENT_TRADER
 
+    if trader and trader.actual_trade_position:
+        position = "Comprado"
+    else:
+        position = "Sem posição"
+
     return jsonify({
         "running": main.BOT_RUNNING,
         "asset": trader.operation_code if trader else "Nenhum",
-        "position": "Comprado" if trader and trader.actual_trade_position else "Vendido",
+        "position": position,
         "daily_profit": round(getattr(trader, "daily_profit", 0), 4) if trader else 0,
         "sleep_time": trader.time_to_sleep if trader else 0
     })
@@ -104,7 +109,9 @@ def stop_bot():
 
 @app.route("/trades")
 def get_trades():
-    return jsonify(main.TRADE_HISTORY)
+    MAX_TRADES = 300
+
+    return jsonify(main.TRADE_HISTORY[-MAX_TRADES:])
 
 @app.route("/equity")
 def equity():
@@ -164,7 +171,7 @@ def equity():
         cumulative_pct = ((total_usdt / INITIAL_EQUITY) - 1) * 100
 
         peak = np.maximum.accumulate(equity_array)
-        drawdown = (equity_array - peak) / peak
+        drawdown = np.where(peak != 0, (equity_array - peak) / peak, 0)
         max_drawdown = drawdown.min() * 100 if len(drawdown) > 0 else 0
 
         if len(returns) > 1 and np.std(returns) != 0:
@@ -196,20 +203,20 @@ def equity():
 def scanner():
 
     try:
+        
+        ranking = []
 
-        ranking = [
-            {
+        for s in SCANNER_RANKING or []:
+            ranking.append({
                 "symbol": s[0],
                 "score": round(s[1], 2),
                 "momentum": round(s[2], 4) if len(s) > 2 else 0,
                 "volume": int(s[3]) if len(s) > 3 else 0
-            }
-            for s in SCANNER_RANKING
-        ]
-
+            })
+            
         return jsonify({
             "ranking": ranking,
-            "smart_money": SCANNER_SMART_MONEY
+            "smart_money": SCANNER_SMART_MONEY or []
         })
 
     except Exception as e:
@@ -267,3 +274,70 @@ def heatmap():
         })
 
     return jsonify(data)
+
+@app.route("/api/dashboard")
+def dashboard_data():
+
+    trader = main.CURRENT_TRADER
+
+    try:
+
+        status = {
+            "running": main.BOT_RUNNING,
+            "asset": trader.operation_code if trader else "Nenhum",
+            "position": "Comprado" if trader and trader.actual_trade_position else "Sem posição",
+            "daily_profit": round(getattr(trader, "daily_profit", 0), 4) if trader else 0
+        }
+
+        botinfo = None
+
+        if trader:
+            pnl_usdt, pnl_pct = trader.getCurrentOperationProfit()
+
+            botinfo = {
+                "strategy": trader.main_strategy.__name__,
+                "pnl_usdt": pnl_usdt,
+                "pnl_pct": pnl_pct,
+                "cooldowns": len(main.symbol_cooldown),
+                "memory_assets": len(main.MARKET_MEMORY)
+            }
+
+        scanner = [
+            {
+                "symbol": s[0],
+                "score": round(s[1],2),
+                "momentum": round(s[2],4) if len(s)>2 else 0,
+                "volume": int(s[3]) if len(s)>3 else 0
+            }
+            for s in main.SCANNER_RANKING
+        ]
+
+        heatmap = [
+            {
+                "symbol": r[0],
+                "change": round(r[2]*100,2)
+            }
+            for r in main.SCANNER_RANKING
+        ]
+
+        trades = main.TRADE_HISTORY[-200:]
+
+        return jsonify({
+            "status": status,
+            "botinfo": botinfo,
+            "scanner": scanner,
+            "heatmap": heatmap,
+            "trades": trades
+        })
+
+    except Exception as e:
+
+        logging.error("Erro dashboard", exc_info=True)
+
+        return jsonify({
+            "status": {},
+            "botinfo": None,
+            "scanner": [],
+            "heatmap": [],
+            "trades": []
+        })
