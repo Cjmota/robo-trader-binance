@@ -1689,7 +1689,12 @@ class BinanceTraderBot:
                 print("⏸️ Pulando trade por baixa volatilidade.")
                 return
             
-            if regime == "SIDEWAYS" and not sweep_signal and not whale_signal:
+            if regime == "SIDEWAYS" and not (
+                sweep_signal
+                or whale_signal
+                or iceberg_signal
+                or explosion_setup
+            ):
                 print("⏸️ Mercado lateral detectado pelo regime.")
                 return
 
