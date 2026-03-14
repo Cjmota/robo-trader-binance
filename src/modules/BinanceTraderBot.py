@@ -91,6 +91,9 @@ class BinanceTraderBot:
         self.api_secret = api_secret
         self.testnet = testnet
         
+        # iniciar gerenciador de poeira
+        threading.Thread(target=self.dust_manager, daemon=True).start()
+        
         self.capital = 15 #traded_quantity  # valor em USDT configurado por ativo
         
         self.trailing_activation = config["TRAILING"]["ACTIVATION"] / 100
@@ -1517,7 +1520,7 @@ class BinanceTraderBot:
     # --------------------------------------------------------------
     # EXECUTE
 
-    # Função principal e a única que deve ser execuda em loop, quando o
+    # Função principal e a única que deve ser executada em loop, quando o
     def execute(self):
                 
         try:
@@ -1537,15 +1540,17 @@ class BinanceTraderBot:
             print("------------------------------------------------")
             print(f"🟢 Executado {datetime.now().strftime('(%H:%M:%S) %d-%m-%Y')}\n")
             
-            # 🧹 converter poeira a cada 12h
-            if time.time() - self.last_dust_check > 43200:
+            # 1️⃣ filtro rápido
+            if not self.fastMarketFilter():
+                return
 
-                print("🧹 Verificando poeira na conta...")
+            # 2️⃣ análise intermediária
+            if not self.mediumMarketAnalysis():
+                return
 
-                self.convert_dust_to_bnb()
-
-                self.last_dust_check = time.time()
-
+            # 3️⃣ análise pesada
+            institutional_signals = self.heavyMarketAnalysis()         
+            
             # Atualiza todos os dados
             if not self.updateAllData(verbose=True):
                 print("⚠️ Falha na atualização dos dados.")
@@ -4098,53 +4103,68 @@ class BinanceTraderBot:
             account = self.client_binance.get_account()
 
             assets = []
+            dust_values = []
 
             for bal in account["balances"]:
 
                 asset = bal["asset"]
                 free = float(bal["free"])
 
-                if free == 0:
+                if free <= 0:
                     continue
 
                 if asset in ["USDT", "BNB", "BTC", "ETH"]:
                     continue
 
-                if asset.startswith("LD"):
+                if asset.startswith("LD") or asset.startswith("BNFCR"):
                     continue
 
-                if asset.startswith("BNFCR"):
-                    continue
+                symbol = f"{asset}USDT"
 
                 try:
 
-                    ticker = self.client_binance.get_symbol_ticker(
-                        symbol=f"{asset}USDT"
-                    )
+                    ticker = self.client_binance.get_symbol_ticker(symbol=symbol)
 
                     price = float(ticker["price"])
                     value_usdt = free * price
+
+                    if value_usdt < 0.001:
+                        continue
 
                     if value_usdt > 5:
                         continue
 
                     assets.append(asset)
+                    dust_values.append(value_usdt)
 
                 except:
                     continue
 
+            total_dust_value = sum(dust_values)
+
+            if total_dust_value < 1:
+                return total_dust_value
+
             if not assets:
                 print("🧹 Nenhuma poeira encontrada.")
-                return
+                return total_dust_value
 
-            print("🧹 Convertendo poeira:", assets)
+            assets = assets[:10]
 
-            self.client_binance.transfer_dust(asset=assets)
+            assets_string = ",".join(assets)
+
+            print(f"🧹 Convertendo poeira ({total_dust_value:.2f} USDT): {assets_string}")
+
+            self.client_binance.transfer_dust(asset=assets_string)
 
             print("🟢 Poeira convertida para BNB!")
 
+            return total_dust_value
+
         except Exception as e:
-            print("Erro convertendo poeira:", e)
+
+            print(f"⚠️ Erro convertendo poeira: {e}")
+            return 0
         
     def rebalance_profit(self, profit):
 
@@ -4224,4 +4244,79 @@ class BinanceTraderBot:
             print("Erro detector explosão:", e)
 
             return False
+    
+    def dust_manager(self):
+
+        while True:
+
+            try:
+
+                print("🧹 Iniciando verificação de poeira...")
+
+                total_dust_value = self.convert_dust_to_bnb()
+
+                if total_dust_value < 1:
+                    print("🧹 Poeira muito pequena. Ignorando conversão.")
+
+            except Exception as e:
+                print("⚠️ Erro dust manager:", e)
+
+            # roda 1x por dia
+            time.sleep(86400)
+            
+    def fastMarketFilter(self):
+
+        if self.stock_data is None or len(self.stock_data) < 50:
+            return False
+
+        avg_volume = self.stock_data["volume"].iloc[-20:].mean()
+        close_price = self.stock_data["close_price"].iloc[-1]
+
+        avg_quote_volume = avg_volume * close_price
+
+        if avg_quote_volume < 8000:
+            print("⚠️ Liquidez baixa.")
+            return False
+
+        if self.isLowVolatility():
+            print("⚠️ Volatilidade baixa.")
+            return False
+
+        regime = self.detectMarketRegime()
+
+        if regime == "SIDEWAYS":
+            print("⚠️ Mercado lateral.")
+            return False
+
+        if not self.btcTrendFilter():
+            print("⚠️ BTC em queda.")
+            return False
+
+        return True
+    
+    def mediumMarketAnalysis(self):
+
+        momentum = self.detectMomentumAcceleration()
+        volume_spike = self.detectPump()
+        orderflow = self.detectOrderFlowImbalance()
+        compression = self.detectVolatilityCompression()
+
+        score = 0
+
+        if momentum:
+            score += 2
+
+        if volume_spike:
+            score += 2
+
+        if orderflow == "BUY":
+            score += 2
+
+        if compression:
+            score += 1
+
+        print(f"📊 Score intermediário: {score}")
+
+        return score >= 3
+    
     
