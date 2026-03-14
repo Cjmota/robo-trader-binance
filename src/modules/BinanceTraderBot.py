@@ -3678,8 +3678,8 @@ class BinanceTraderBot:
        capital_to_use = min(capital_to_use, self.capital * 0.95)
 
        # 🔒 mínimo Binance
-       if capital_to_use < 5:
-           capital_to_use = 5.25
+       if capital_to_use < 6:
+           capital_to_use = 6
 
        return capital_to_use
     
