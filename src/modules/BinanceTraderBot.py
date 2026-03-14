@@ -133,6 +133,8 @@ class BinanceTraderBot:
         self.min_volatility = self.config["SCANNER"]["MIN_VOLATILITY"]
         self.max_volatility = self.config["SCANNER"]["MAX_VOLATILITY"]
 
+        self.last_dust_check = 0
+
         VALID_INTERVALS = [
             "1m","3m","5m","15m","30m",
             "1h","2h","4h","6h","8h","12h",
@@ -236,7 +238,6 @@ class BinanceTraderBot:
         # fmt: on
         
         
-
     def trailingStopTrigger(self):
         if not self.actual_trade_position or self.last_buy_price <= 0:
             return False
@@ -385,10 +386,7 @@ class BinanceTraderBot:
         except Exception as e:
             print(f"❌ Erro geral ao atualizar dados: {e}")
             return False
-        
-    
-    
-    
+         
     # GETS Principais
 
     # Busca infos atualizada da conta Binance
@@ -1190,7 +1188,7 @@ class BinanceTraderBot:
             symbol=self.operation_code,
             orderId=order_id,
         )
-
+        
     # Cancela todas ordens abertas
     def cancelAllOrders(self):
         if self.open_orders:
@@ -1210,6 +1208,7 @@ class BinanceTraderBot:
     # este valor seja descontado nas execuções seguintes.
     # Se foi parcialmente executado, ela também salva o valor que foi executado
     # na variável self.last_buy_price
+    
     def hasOpenBuyOrder(self):
         """
         Verifica se há uma ordem de compra aberta para o ativo configurado.
@@ -1256,7 +1255,7 @@ class BinanceTraderBot:
         except Exception as e:
             print(f"Erro ao verificar ordens abertas para {self.operation_code}: {e}")
             return False
-
+    
     # Verifica se há uma ordem de VENDA aberta para o ativo configurado.
     # Se houver, salva a quantidade já executada na variável self.partial_quantity_discount.
     def hasOpenSellOrder(self):
@@ -1290,11 +1289,6 @@ class BinanceTraderBot:
         except Exception as e:
             print(f"Erro ao verificar ordens abertas para {self.operation_code}: {e}")
             return False
-
-    
-    
-    # -------------------------------------------------------------
-    # ESTRATÉGIAS DE DECISÃO
 
     # Função que executa estratégias implementadas e retorna a decisão final
     def getFinalDecisionStrategy(self):
@@ -1463,7 +1457,6 @@ class BinanceTraderBot:
     # EXECUTE
 
     # Função principal e a única que deve ser execuda em loop, quando o
-    # robô estiver funcionando normalmente
     def execute(self):
                 
         try:
@@ -1482,6 +1475,15 @@ class BinanceTraderBot:
                        
             print("------------------------------------------------")
             print(f"🟢 Executado {datetime.now().strftime('(%H:%M:%S) %d-%m-%Y')}\n")
+            
+            # 🧹 converter poeira a cada 12h
+            if time.time() - self.last_dust_check > 43200:
+
+                print("🧹 Verificando poeira na conta...")
+
+                self.convert_dust_to_bnb()
+
+                self.last_dust_check = time.time()
 
             # Atualiza todos os dados
             if not self.updateAllData(verbose=True):
@@ -1557,6 +1559,9 @@ class BinanceTraderBot:
             self.cleanDustPosition()
                
             self.updateDailyProfit()
+            
+            # 💰 rebalance automático de lucro
+            self.rebalance_profit()
             
             # 🛑 Stop diário de perda
             if self.daily_profit <= -self.max_daily_loss:
@@ -3787,4 +3792,76 @@ class BinanceTraderBot:
             print("Erro no detector de breakout:", e)
 
             return None
-    
+        
+    def convert_dust_to_bnb(self):
+
+        try:
+
+            account = self.client_binance.get_account()
+
+            assets = []
+
+            for bal in account["balances"]:
+
+                asset = bal["asset"]
+                free = float(bal["free"])
+
+                if free == 0:
+                    continue
+
+                # ignora USDT e BNB
+                if asset in ["USDT","BNB"]:
+                    continue
+
+                # valores muito pequenos
+                if free < 0.001:
+                    assets.append(asset)
+
+            if not assets:
+                print("🧹 Nenhuma poeira encontrada.")
+                return
+
+            print("🧹 Convertendo poeira:", assets)
+
+            self.client_binance.transfer_dust(asset=assets)
+
+            print("🟢 Poeira convertida para BNB!")
+
+        except Exception as e:
+            print("Erro convertendo poeira:", e)
+        
+    def rebalance_profit(self, profit):
+
+        try:
+
+            if self.daily_profit < 20:
+                return
+
+            print(f"💰 Rebalanceando lucro: {self.daily_profit:.2f} USDT")
+
+            btc_amount = self.daily_profit * 0.5
+            bnb_amount = self.daily_profit * 0.3
+
+            #comprar BTC          
+            self.client_binance.create_order(
+                symbol="BTCUSDT",
+                side="BUY",
+                type="MARKET",
+                quoteOrderQty=btc_amount
+            )
+            
+            #comprar BNB         
+            self.client_binance.create_order(
+                symbol="BNBUSDT",
+                side="BUY",
+                type="MARKET",
+                quoteOrderQty=bnb_amount
+            )
+            
+            print("🟢 Lucro convertido em BTC + BNB")
+
+            #reset
+            self.daily_profit = 0            
+
+        except Exception as e:
+            print("Erro no rebalance:", e)
