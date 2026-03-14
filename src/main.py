@@ -728,14 +728,22 @@ def analyze_symbol(client, t, config):
             ORDERBOOK_CACHE = {}
             ORDERBOOK_CACHE_TIME = now
 
-        if symbol not in ORDERBOOK_CACHE:
-            ORDERBOOK_CACHE[symbol] = safe_binance_call(
+        now = time.time()
+
+        if symbol not in ORDERBOOK_CACHE or now - ORDERBOOK_CACHE_TIME.get(symbol,0) > ORDERBOOK_CACHE_TTL:
+
+            book = safe_binance_call(
                 client.get_order_book,
                 symbol=symbol,
                 limit=5
             )
 
-        book = ORDERBOOK_CACHE.get(symbol)
+            ORDERBOOK_CACHE[symbol] = book
+            ORDERBOOK_CACHE_TIME[symbol] = now
+
+        else:
+
+            book = ORDERBOOK_CACHE[symbol]
         
         if not book:
             return None
@@ -860,7 +868,8 @@ LAST_SCAN = 0
 SCAN_CACHE = []
 
 ORDERBOOK_CACHE = {}
-ORDERBOOK_CACHE_TIME = 0
+ORDERBOOK_CACHE_TIME = {}
+ORDERBOOK_CACHE_TTL = 5   # segundos
 
 def scan_market_top_symbols(client, limit=10):
 
@@ -1072,3 +1081,30 @@ def get_cached_btc_mode(client):
 
         print("Erro ao detectar modo BTC:", e)
         return BTC_MODE_CACHE
+
+def run_symbol(symbol):
+
+    try:
+
+        print(f"🚀 Iniciando bot para {symbol}")
+
+        bot = BinanceTraderBot(
+            stock_code=symbol.replace("USDT",""),
+            operation_code=symbol,
+            traded_quantity=config["TRADE_QUANTITY"],
+            traded_percentage=config["TRADE_PERCENTAGE"],
+            candle_period=config["CANDLE_PERIOD"],
+            api_key=API_KEY,
+            api_secret=API_SECRET,
+            config=config
+        )
+
+        while True:
+
+            bot.execute()
+
+            time.sleep(10)
+
+    except Exception as e:
+
+        print(f"Erro no bot {symbol}:", e)
