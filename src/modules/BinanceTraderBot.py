@@ -1551,6 +1551,8 @@ class BinanceTraderBot:
                 print("⚠️ Falha na atualização dos dados.")
                 return
             
+            momentum_acceleration = self.detectMomentumAcceleration()
+            
             # proteção contra poucos candles
             if self.stock_data is None or len(self.stock_data) < 50:
                 print("⚠️ Dados insuficientes de candles.")
