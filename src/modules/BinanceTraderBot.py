@@ -1685,7 +1685,7 @@ class BinanceTraderBot:
                 return
 
             # Evita operar em baixa volatilidade
-            if self.isLowVolatility():
+            if self.isLowVolatility() and not explosion_setup:
                 print("⏸️ Pulando trade por baixa volatilidade.")
                 return
             

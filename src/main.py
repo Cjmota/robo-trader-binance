@@ -369,7 +369,7 @@ def trader_master_loop():
 
                 #if btc_mode in ["LOW_LIQUIDITY", "LOW_ACTIVITY"] and symbol != "BTCUSDT":
                 if btc_mode == "LOW_ACTIVITY" and symbol != "BTCUSDT":
-                    print("⚠️ Mercado fraco ({btc_mode}). Evitando altcoins.")
+                    print(f"⚠️ Mercado fraco ({btc_mode}). Evitando altcoins.")
                     continue
 
                 # evitar moedas com loss recente
