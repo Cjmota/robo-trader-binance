@@ -1559,6 +1559,8 @@ class BinanceTraderBot:
             # 🔎 Detectar regime de mercado
             regime = self.detectMarketRegime()
             
+            explosion_setup = self.detectVolatilityExplosionSetup()
+            
             volume_spike = self.detectPump()
             pump_signal = volume_spike
             
@@ -1649,6 +1651,27 @@ class BinanceTraderBot:
 
             # 🚀 Entrada antecipada (pré-pump)
             if pre_pump_signal and not self.actual_trade_position and regime in ["TREND", "EXPLOSIVE"]:
+
+                # 💣 Entrada antecipada por compressão + volume
+                if explosion_setup and not self.actual_trade_position:
+
+                    print("💥 ENTRADA POR COMPRESSÃO DE VOLATILIDADE")
+
+                    price = self.stock_data["close_price"].iloc[-1]
+
+                    capital_to_use = self.capital * 0.6
+
+                    quantity = capital_to_use / price
+                    quantity = self.adjust_to_step(quantity, self.step_size)
+
+                    if quantity > 0:
+
+                        self.buyMarketOrder(quantity=quantity)
+
+                        self.hourly_trades += 1
+                        self.last_trade_time = time.time()
+
+                        return
 
                 print("🔥 Entrada antecipada detectada (pré-pump)")
 
@@ -4009,3 +4032,46 @@ class BinanceTraderBot:
 
         except Exception as e:
             print("Erro no rebalance:", e)
+            
+    def detectVolatilityExplosionSetup(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 30:
+                return False
+
+            # compressão recente
+            recent_range = (
+                closes.iloc[-20:].max() - closes.iloc[-20:].min()
+            ) / closes.iloc[-20:].min()
+
+            compression = recent_range < 0.008
+
+            # volume começando a crescer
+            avg_volume = volumes.iloc[-20:-5].mean()
+            recent_volume = volumes.iloc[-3:].mean()
+
+            volume_rising = recent_volume > avg_volume * 1.4
+
+            # pequeno movimento inicial
+            momentum = (closes.iloc[-1] - closes.iloc[-2]) / closes.iloc[-2]
+
+            if compression and volume_rising and momentum > 0:
+
+                print("💣 POSSÍVEL EXPLOSÃO DE VOLATILIDADE")
+
+                print(f"Range comprimido: {recent_range*100:.3f}%")
+                print(f"Volume growth: {recent_volume/avg_volume:.2f}x")
+
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro detector explosão:", e)
+
+            return False
