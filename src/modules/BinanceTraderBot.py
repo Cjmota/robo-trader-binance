@@ -4080,3 +4080,4 @@ class BinanceTraderBot:
             print("Erro detector explosão:", e)
 
             return False
+    

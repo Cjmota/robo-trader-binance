@@ -26,6 +26,8 @@ from src.strategies.ma_rsi_volume_strategy import getMovingAverageRSIVolumeStrat
 
 from src.strategies.ensemble_strategy import runEnsembleStrategy
 
+from src.utils.capital_flow import scan_capital_flow
+
 from dotenv import load_dotenv
 load_dotenv()
 
@@ -873,6 +875,17 @@ def scan_market_top_symbols(client, limit=10):
     SCANNER_RANKING.clear()
 
     print("🔎 Escaneando mercado inteligente PRO...")
+
+    symbols = [
+        "SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","LINKUSDT",
+        "AVAXUSDT","TAOUSDT","RENDERUSDT","SUIUSDT","ZECUSDT"
+    ]
+
+    top = scan_capital_flow(self.client_binance, symbols)
+
+    top_symbols = [x["symbol"] for x in top]
+
+    print(f"🔥 TOP OPORTUNIDADES: {top_symbols}")
 
     try:
 
