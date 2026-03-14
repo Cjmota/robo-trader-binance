@@ -1558,30 +1558,49 @@ class BinanceTraderBot:
 
                 self.last_scan_time = time.time()  
                 
-            ranking = self.scanner_ranking[:3] if self.scanner_ranking else []
-            
+            ranking_original = self.scanner_ranking[:3] if self.scanner_ranking else []
+
+            # ativos institucionais prioritários
+            smart_money_assets = [
+                ("BTCUSDT", 10, 0, 0),
+                ("ETHUSDT", 9, 0, 0)
+            ]
+
+            ranking = smart_money_assets + ranking_original
+
             if not ranking:
                 print("⚠️ Nenhum ativo encontrado no scanner.")
                 return
-            
+
+            # remover duplicados pelo símbolo
+            unique = {}
+            for r in ranking:
+                symbol = r[0]
+                if symbol not in unique:
+                    unique[symbol] = r
+
+            ranking = list(unique.values())
+
+            tested_symbols = set()
+
             for symbol, score, change, volume in ranking:
 
-                now = time.time()
+                if symbol in tested_symbols:
+                    continue
 
-                if symbol in self.symbol_cooldown:
-                    if now - self.symbol_cooldown[symbol] < self.symbol_cooldown_time:
-                        continue
+                self.resetForNewSymbol()        
 
                 print(f"🎯 Testando ativo: {symbol}")
 
                 self.operation_code = symbol
 
-                if self.updateAllData(verbose=True):
+                if not self.updateAllData(verbose=True):
+                    continue
 
-                    self.symbol_cooldown[symbol] = now
+                tested_symbols.add(symbol)
 
-                    break
-            
+                if self.detectMomentumAcceleration():
+                    break         
             
             if self.actual_trade_position:
                 profit, pct = self.getCurrentOperationProfit()
