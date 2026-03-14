@@ -1625,7 +1625,7 @@ class BinanceTraderBot:
             self.updateDailyProfit()
             
             # 💰 rebalance automático de lucro
-            self.rebalance_profit()
+            self.rebalance_profit(self.daily_profit)
             
             # 🛑 Stop diário de perda
             if self.daily_profit <= -self.max_daily_loss:
@@ -1758,6 +1758,8 @@ class BinanceTraderBot:
             stop_hunt_signal = self.detectStopHunt()
             
             liquidity_trap_signal = self.detectLiquidityTrap()
+            
+            manipulation_signal = self.detectLiquidityManipulation()
                         
             grab_signal = self.detectLiquidityGrab()
 
@@ -1865,6 +1867,14 @@ class BinanceTraderBot:
             print(f"💥 Liquidação: {liquidation_signal}")
             
             signal = strategy_signal
+            
+            
+            # manipulação institucional
+            if manipulation_signal:
+                print("🏦 Manipulação institucional detectada")
+                signal = manipulation_signal
+            
+            
             
             # ------------------------------------------------
             # Ajuste do sinal com detectores institucionais
@@ -2598,7 +2608,7 @@ class BinanceTraderBot:
 
             with self.lock:
 
-                if self.cached_orderbook and time.time() - self.last_orderbook_check < 5:
+                if self.cached_orderbook and time.time() - self.last_orderbook_check < 8:
                     return self.cached_orderbook
 
                 depth = self.client_binance.get_order_book(
@@ -2826,8 +2836,7 @@ class BinanceTraderBot:
 
             print("Erro no detector de Liquidity Vacuum:", e)
             return None
-    
-    
+
     def detectMarketMakerTrap(self):
         """
         Detecta armadilha de market maker (fake breakout + reversão).
@@ -3356,7 +3365,6 @@ class BinanceTraderBot:
             print("Erro no detector de exaustão:", e)
 
             return False
-    
         
     def detectWhaleExit(self):
 
@@ -3496,6 +3504,60 @@ class BinanceTraderBot:
             print("Erro no detector de Liquidity Trap:", e)
 
             return None
+        
+    def detectLiquidityManipulation(self):
+
+        try:
+
+            highs = self.stock_data["high_price"]
+            lows = self.stock_data["low_price"]
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 30:
+                return None
+
+            # níveis de liquidez
+            recent_high = highs.iloc[-20:-2].max()
+            recent_low = lows.iloc[-20:-2].min()
+
+            prev_high = highs.iloc[-2]
+            prev_low = lows.iloc[-2]
+
+            current_close = closes.iloc[-1]
+
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            # -------------------------
+            # Stop hunt abaixo do fundo
+
+            if prev_low < recent_low and current_close > recent_low:
+
+                if current_volume > avg_volume * 1.3:
+
+                    print("🎯 STOP HUNT ABAIXO DO FUNDO DETECTADO")
+
+                    return "BUY"
+
+            # -------------------------
+            # Stop hunt acima do topo
+
+            if prev_high > recent_high and current_close < recent_high:
+
+                if current_volume > avg_volume * 1.3:
+
+                    print("🎯 STOP HUNT ACIMA DO TOPO DETECTADO")
+
+                    return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro no detector de manipulação:", e)
+
+            return None    
         
     def detectVolatilityExpansion(self):
 
@@ -3705,7 +3767,7 @@ class BinanceTraderBot:
 
         try:
 
-            if hasattr(self, "trades_cache") and time.time() - self.trades_cache_time < 5:
+            if hasattr(self, "trades_cache") and time.time() - self.trades_cache_time < 10:
                 trades = self.trades_cache
             else:
                 trades = self.client_binance.get_recent_trades(
