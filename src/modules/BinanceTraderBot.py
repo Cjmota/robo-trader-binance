@@ -396,7 +396,7 @@ class BinanceTraderBot:
     # Busca infos atualizada da conta Binance
     def getUpdatedAccountData(self):
 
-        if self.cached_account and time.time() - self.last_account_update < 10:
+        if self.cached_account is not None and time.time() - self.last_account_update < 10:
             return self.cached_account
 
         data = self.client_binance.get_account()
@@ -1548,17 +1548,19 @@ class BinanceTraderBot:
 
             # Atualiza todos os dados
             if not self.updateAllData(verbose=True):
-                close_price = self.stock_data["close_price"].iloc[-1]
                 print("⚠️ Falha na atualização dos dados.")
                 return
-            
-            momentum_acceleration = self.detectMomentumAcceleration()
             
             # proteção contra poucos candles
             if self.stock_data is None or len(self.stock_data) < 50:
                 print("⚠️ Dados insuficientes de candles.")
-                return          
+                return 
             
+            momentum_acceleration = self.detectMomentumAcceleration()
+            
+            close_price = self.stock_data["close_price"].iloc[-1]
+            position_value = self.last_stock_account_balance * close_price
+                    
             # 🔎 Detectar regime de mercado
             regime = self.detectMarketRegime()
             
@@ -1594,8 +1596,7 @@ class BinanceTraderBot:
 
                         print("⚡ Momentum morreu → saída antecipada")
 
-                        close_price = self.stock_data["close_price"].iloc[-1]
-                        position_value = self.last_stock_account_balance * close_price
+                       
 
                         # posição pequena demais → limpar estado
                         if position_value < 5:
@@ -1734,6 +1735,8 @@ class BinanceTraderBot:
                 print("⏸️ Pulando trade por baixa volatilidade.")
                 return
             
+            orderflow_signal = None
+            
             if regime == "SIDEWAYS" and not (
                 sweep_signal
                 or whale_signal
@@ -1808,16 +1811,16 @@ class BinanceTraderBot:
             
             depth = self.getCachedOrderBook()
 
-            orderflow_signal = self.detectOrderFlowImbalance()
-
-            if not depth["bids"] or not depth["asks"]:
+            if not depth or not depth["bids"] or not depth["asks"]:
                 print("⚠️ Orderbook vazio. Pulando ciclo.")
                 return
+
+            orderflow_signal = self.detectOrderFlowImbalance()
 
             best_bid = float(depth["bids"][0][0])
             best_ask = float(depth["asks"][0][0])
 
-            if best_bid == 0:
+            if best_bid <= 0:
                 return
 
             spread = (best_ask - best_bid) / best_bid
@@ -2522,7 +2525,7 @@ class BinanceTraderBot:
             time.sleep(2)
 
     def detectPump(self):
-
+        
         volume = self.stock_data["volume"].iloc[-1]
         avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
 
@@ -3897,7 +3900,7 @@ class BinanceTraderBot:
         
     def marketRiskFilter(self):
 
-        if self.market_cache and time.time() - self.market_cache_time < 120:
+        if self.market_cache is not None and time.time() - self.market_cache_time < 120:
             return self.market_cache
 
         btc = self.client_binance.get_klines(
@@ -3935,7 +3938,7 @@ class BinanceTraderBot:
 
         try:
 
-            if hasattr(self, "trades_cache") and time.time() - self.trades_cache_time < 10:
+            if hasattr(self, "trades_cache") and time.time() - self.trades_cache_time < 15:
                 trades = self.trades_cache
             else:
                 trades = self.client_binance.get_recent_trades(
@@ -3980,6 +3983,8 @@ class BinanceTraderBot:
 
             highs = self.stock_data["high_price"]
             lows = self.stock_data["low_price"]
+            if self.stock_data is None or len(self.stock_data) < 10:
+                return None
             closes = self.stock_data["close_price"]
             volumes = self.stock_data["volume"]
 
