@@ -156,6 +156,9 @@ class BinanceTraderBot:
         self.scan_interval = 10  # segundos entre scans
         
         self.operation_code = None
+        
+        self.symbol_cooldown = {}
+        self.symbol_cooldown_time = 30
 
         VALID_INTERVALS = [
             "1m","3m","5m","15m","30m",
@@ -1563,11 +1566,20 @@ class BinanceTraderBot:
             
             for symbol, score, change, volume in ranking:
 
+                now = time.time()
+
+                if symbol in self.symbol_cooldown:
+                    if now - self.symbol_cooldown[symbol] < self.symbol_cooldown_time:
+                        continue
+
                 print(f"🎯 Testando ativo: {symbol}")
 
                 self.operation_code = symbol
 
                 if self.updateAllData(verbose=True):
+
+                    self.symbol_cooldown[symbol] = now
+
                     break
             
             
