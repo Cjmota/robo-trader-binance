@@ -342,9 +342,10 @@ def trader_master_loop():
             #agora começa a analisar simbolos        
             for symbol in symbols:
                 # filtro dominância
-                if btc_dominance > 0.60 and symbol != "BTCUSDT":
-                    print("⚠️ Dominância BTC alta. Evitando altcoins.")
+                if btc_dominance > 0.60 and symbol != symbols[0]:
+                    print("⚠️ Dominância BTC alta. Apenas TOP1 permitido.")
                     continue
+
 
                 if btc_mode == "LOW_ACTIVITY":
 
@@ -393,7 +394,7 @@ def trader_master_loop():
                 # filtro simples de momentum
                 momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.0000001)
 
-                if abs(momentum) < 0.003:
+                if abs(momentum) < 0.0015:
                     print("⚠️ Momentum fraco, ignorando")
                     continue
                 
