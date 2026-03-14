@@ -150,6 +150,12 @@ class BinanceTraderBot:
         self.scanner_cache = []
         self.scanner_cache_time = 0
         self.scanner_cache_ttl = 5  # segundos
+        
+        self.scanner_ranking = []
+        self.last_scan_time = 0
+        self.scan_interval = 10  # segundos entre scans
+        
+        self.operation_code = None
 
         VALID_INTERVALS = [
             "1m","3m","5m","15m","30m",
@@ -1535,16 +1541,9 @@ class BinanceTraderBot:
 
         return order_buy
 
-    # --------------------------------------------------------------
-    # EXECUTE
-
     # Função principal e a única que deve ser executada em loop, quando o
     def execute(self):
-                
-        
-        
-              
-                
+                      
         try:
                 
                 # atualizar scanner somente quando necessário
