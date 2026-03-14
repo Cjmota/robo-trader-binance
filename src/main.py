@@ -345,8 +345,10 @@ def trader_master_loop():
                     print("⚠️ Dominância BTC alta. Evitando altcoins.")
                     continue
 
-                if btc_mode == "LOW_ACTIVITY" and symbol != "BTCUSDT":
-                    print(f"⚠️ Mercado fraco ({btc_mode}). Evitando altcoins.")
+                if btc_mode == "LOW_ACTIVITY":
+
+                if symbol != "BTCUSDT" and symbol != allowed_altcoin:
+                    print(f"⚠️ Mercado fraco ({btc_mode}). Limitando altcoins.")
                     continue
 
                 # loss recente
