@@ -1241,16 +1241,28 @@ class BinanceTraderBot:
             momentum = self.detectMomentumAcceleration()
             volume_spike = self.detectPump()
             whale_signal = self.detectWhalePressure()
+            orderflow = self.detectOrderFlowImbalance()
 
-            if not momentum:
+            if not momentum and not volume_spike:
                 return False
 
             if whale_signal != "BUY":
                 return False
 
+            if orderflow != "BUY":
+                return False
+
+            # evita escalar perto do topo
+            recent_high = self.stock_data["close_price"].iloc[-20:].max()
+
+            distance_from_top = (recent_high - close_price) / close_price
+
+            if distance_from_top < 0.002:
+                print("⚠️ Muito perto do topo para escalar")
+                return False
+
             print("🚀 SCALE-IN DETECTADO")
 
-            # tamanho adicional
             capital_extra = self.capital * self.scale_size_multiplier
 
             quantity = capital_extra / close_price
