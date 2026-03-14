@@ -1581,6 +1581,21 @@ class BinanceTraderBot:
                 
                 if self.trailingStopTrigger():
                     return
+                
+                # ⚡ SAÍDA POR PERDA DE MOMENTUM
+                if not momentum_acceleration:
+
+                    profit, pct = self.getCurrentOperationProfit()
+
+                    if pct < 0.4:
+
+                        print("⚡ Momentum morreu → saída antecipada")
+
+                        self.cancelAllOrders()
+                        time.sleep(1)
+                        self.sellMarketOrder()
+
+                        return
             
                 if self.detectPumpExhaustion():
 
@@ -1601,6 +1616,18 @@ class BinanceTraderBot:
                     self.sellMarketOrder()
 
                     return    
+
+                trade_duration = time.time() - self.last_trade_time
+
+                # 20 minutos
+                if trade_duration > 1200:
+
+                    profit, pct = self.getCurrentOperationProfit()
+
+                    if pct < 0.3:
+                        print("⏰ Trade sem progresso. Saindo...")
+                        self.sellMarketOrder()
+                        return
 
             # break even
             if self.breakEvenTrigger():
@@ -1836,18 +1863,15 @@ class BinanceTraderBot:
 
             if sweep_signal:
                 score += 3
-                
-            if vacuum_signal:
-                score += 2
-
-            if whale_signal == "BUY" and volume_spike:
+            
+            if vacuum_signal == "BUY":
                 score += 3
                 
-            elif whale_signal == "BUY":
-                score += 1
+            if whale_signal == "BUY":
+                score += 3
 
             if volume_spike:
-                score += 1
+                score += 0.5
 
             if compression_signal and volatility_expansion:
                 score += 2
@@ -1939,6 +1963,19 @@ class BinanceTraderBot:
                 signal = "SELL"
             else:
                 signal = None
+
+            # ---------------------------------------------
+            # CONFIRMAÇÃO DE CANDLE
+
+            confirmation = False
+
+            if len(self.stock_data) >= 3:
+
+                last = self.stock_data["close_price"].iloc[-1]
+                prev = self.stock_data["close_price"].iloc[-2]
+
+                if last > prev:
+                    confirmation = True
 
             print(f"📊 Estratégia: {signal}")
             print(f"💧 Liquidez: {liquidity_signal}")
@@ -2114,6 +2151,30 @@ class BinanceTraderBot:
             )
 
             if signal in [True, "BUY"] and probability >= 0.55 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"]:
+
+                if not confirmation:
+                    print("⏳ Aguardando confirmação do candle")
+                    return
+                
+                recent_high = self.stock_data["close_price"].iloc[-20:].max()
+                close_price = self.stock_data["close_price"].iloc[-1]
+
+                distance_from_top = (recent_high - close_price) / close_price
+
+                if distance_from_top < 0.0015:
+                    print("⚠️ Muito perto do topo recente")
+                    return
+
+                if len(self.stock_data) >= 6:
+
+                    move = (
+                        self.stock_data["close_price"].iloc[-1]
+                        - self.stock_data["close_price"].iloc[-5]
+                    ) / self.stock_data["close_price"].iloc[-5]
+
+                    if move > 0.025:
+                        print("⚠️ Movimento já esticado")
+                        return
 
                 if institutional_setup and probability >= 0.70:
                     print("🔥 Trade institucional detectado - ignorando filtro")
@@ -3289,7 +3350,7 @@ class BinanceTraderBot:
         
     def calculateTradeProbability(self, score, regime, spread, volume_spike):
 
-        probability = min(score / 12, 1)
+        probability = min(score / 15, 1)
 
         if regime == "SIDEWAYS":
             probability -= 0.25
