@@ -330,6 +330,14 @@ def trader_master_loop():
                     balance = float(asset["free"])
                     break
 
+            allowed_altcoin = None
+
+            if btc_mode == "LOW_ACTIVITY":
+                for s in symbols:
+                    if s != "BTCUSDT":
+                        allowed_altcoin = s
+                        break        
+
             #agora começa a analisar simbolos        
             for symbol in symbols:
                 # filtro dominância
@@ -342,10 +350,10 @@ def trader_master_loop():
                     continue
 
                 # loss recente
-                if symbol in MARKET_MEMORY:
-                    last_loss = MARKET_MEMORY.get(symbol, {}).get("last_loss", 0)
-                    if time.time() - last_loss < LOSS_COOLDOWN:
-                        print(f"⚠️ {symbol} ignorado por loss recente")
+                if btc_mode == "LOW_ACTIVITY":
+
+                    if symbol != "BTCUSDT" and symbol != allowed_altcoin:
+                        print(f"⚠️ Mercado fraco ({btc_mode}). Limitando altcoins.")
                         continue
 
                 now_ts = time.time()
@@ -911,6 +919,7 @@ def scan_market_top_symbols(client, limit=10):
         if not filtered:
             return []
 
+        change = abs(float(t.get("priceChangePercent", 0)))
         score = volume * (1 + change / 100)
         filtered.append((t, score))
         
