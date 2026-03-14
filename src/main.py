@@ -881,7 +881,7 @@ def scan_market_top_symbols(client, limit=10):
         "AVAXUSDT","TAOUSDT","RENDERUSDT","SUIUSDT","ZECUSDT"
     ]
 
-    top = scan_capital_flow(self.client_binance, symbols)
+    top = scan_capital_flow(client, symbols)
 
     top_symbols = [x["symbol"] for x in top]
 
