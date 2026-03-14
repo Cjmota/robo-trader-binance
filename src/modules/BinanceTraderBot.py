@@ -91,7 +91,7 @@ class BinanceTraderBot:
         self.api_secret = api_secret
         self.testnet = testnet
         
-        self.capital = traded_quantity  # valor em USDT configurado por ativo
+        self.capital = 15 #traded_quantity  # valor em USDT configurado por ativo
         
         self.trailing_activation = config["TRAILING"]["ACTIVATION"] / 100
         self.trailing_stop_percent = config["TRAILING"]["DISTANCE"] / 100
@@ -1952,7 +1952,7 @@ class BinanceTraderBot:
 
             if signal == "BUY":
 
-                if score >= 7.5 and probability >= 0.65:
+                if score >= 7.5 and probability >= 0.55:
 
                     print("🔥 Trade institucional forte - ignorando filtros")
 
@@ -2113,7 +2113,7 @@ class BinanceTraderBot:
                 or (whale_signal == "BUY" and vacuum_signal == "BUY")
             )
 
-            if signal in [True, "BUY"] and probability >= 0.45 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"]:
+            if signal in [True, "BUY"] and probability >= 0.55 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"]:
 
                 if institutional_setup and probability >= 0.70:
                     print("🔥 Trade institucional detectado - ignorando filtro")
@@ -3706,7 +3706,7 @@ class BinanceTraderBot:
         volume_spike
     ):
 
-       base_capital = self.capital * 0.25
+       base_capital = max(self.capital * 0.25, 6)
 
        # qualidade do trade
        strength = min(score / 15, 1)
