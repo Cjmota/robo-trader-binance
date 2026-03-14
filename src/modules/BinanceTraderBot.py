@@ -1662,7 +1662,8 @@ class BinanceTraderBot:
 
             avg_quote_volume = quote_volume.iloc[-20:].mean()
 
-            if avg_quote_volume < 30000 and not self.actual_trade_position:
+            #filtro de liquidez
+            if avg_quote_volume < 8000 and not self.actual_trade_position:
                 print("⚠️ Liquidez em USDT muito baixa.")
                 return 
             
@@ -1681,8 +1682,8 @@ class BinanceTraderBot:
                 return
 
             # 🚫 Limite de trades diário
-            if self.daily_trades >= self.max_daily_trades:
-                print("🚫 Limite diário de trades atingido.")
+            if self.daily_trades >= self.max_daily_trades and score < 8:
+                print("🚫 Limite diário atingido para trades normais.")
                 return
 
             smart_money_signal = self.detectSmartMoneyAccumulation()
@@ -1740,9 +1741,7 @@ class BinanceTraderBot:
             if regime == "SIDEWAYS" and not (
                 sweep_signal
                 or whale_signal
-                or iceberg_signal
-                or explosion_setup
-                or (orderflow_signal == "BUY" and momentum_acceleration)
+                or orderflow_signal == "BUY"
             ):
                 print("⏸️ Mercado lateral detectado pelo regime.")
                 return
@@ -2112,7 +2111,7 @@ class BinanceTraderBot:
                         signal = orderflow_signal
 
                     
-            if spread > 0.003:
+            if spread > 0.006:
                 print("⚠️ Spread alto. Evitando trade.")
                 return
             
@@ -2172,7 +2171,7 @@ class BinanceTraderBot:
                 or (whale_signal == "BUY" and vacuum_signal == "BUY")
             )
 
-            if signal in [True, "BUY"] and probability >= 0.55 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"]:
+            if signal in [True, "BUY"] and probability >= 0.45 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"]:
 
                 if not confirmation:
                     print("⏳ Aguardando confirmação do candle")
@@ -2183,7 +2182,7 @@ class BinanceTraderBot:
 
                 distance_from_top = (recent_high - close_price) / close_price
 
-                if distance_from_top < 0.0015:
+                if distance_from_top < 0.0005:
                     print("⚠️ Muito perto do topo recente")
                     return
 
@@ -2194,7 +2193,7 @@ class BinanceTraderBot:
                         - self.stock_data["close_price"].iloc[-5]
                     ) / self.stock_data["close_price"].iloc[-5]
 
-                    if move > 0.025:
+                    if move > 0.05:
                         print("⚠️ Movimento já esticado")
                         return
 
@@ -2211,7 +2210,7 @@ class BinanceTraderBot:
                     return     
 
                 # ⏸️ Cooldown entre trades
-                if time.time() - self.last_trade_time < self.trade_cooldown:
+                if time.time() - self.last_trade_time < self.trade_cooldown and score < 8:
                     print("⏸️ Cooldown ativo. Aguardando próximo trade.")
                     return
 

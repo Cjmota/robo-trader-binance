@@ -252,18 +252,16 @@ def get_btc_dominance(client):
         return 0
 
 def trader_master_loop():
-    
-    current_trader = None
-        
+
     global CURRENT_TRADER, BOT_RUNNING, BINANCE_CLIENT, last_traded_symbol
 
+    current_trader = None
     last_outside_log = False
     last_trade_logged = False
-    
+
     try:
         if BINANCE_CLIENT is None:
             BINANCE_CLIENT = Client(API_KEY, API_SECRET)
-
     except Exception as e:
         print("Erro conectando Binance:", e)
         time.sleep(10)
@@ -284,21 +282,18 @@ def trader_master_loop():
         # ping conexão
         try:
             BINANCE_CLIENT.ping()
-            
-            btc_dominance = get_btc_dominance(BINANCE_CLIENT)
-
-            print(f"📊 BTC Dominance: {btc_dominance:.2f}")
-            
         except Exception as e:
-
             print("🔄 Reconectando Binance...", e)
-
             try:
                 BINANCE_CLIENT = Client(API_KEY, API_SECRET)
             except Exception as reconnect_error:
                 print("❌ Falha na reconexão:", reconnect_error)
                 time.sleep(10)
                 continue
+
+        # BTC dominância
+        btc_dominance = get_btc_dominance(BINANCE_CLIENT)
+        print(f"📊 BTC Dominance: {btc_dominance:.2f}")
 
         now = datetime.now(br_tz).hour
 
@@ -308,77 +303,47 @@ def trader_master_loop():
             time.sleep(600)
             continue
 
-        # horário
-        #if now < 5 or now >= 21:
-        if False:
-
-            if not last_outside_log:
-                print("⏰ Fora do horário operacional (05h-20h).")
-                last_outside_log = True
-
-            time.sleep(300)
-            continue
-
-        else:
-            last_outside_log = False
-
-        # 🔎 procurar oportunidades
+        # procurar oportunidades
         if current_trader is None:
-            
-            current_trader = BinanceTraderBot(
-                stock_code="BTC",
-                operation_code="BTCUSDT",
-                traded_quantity=config["stocks_traded_list"][0]["capital"],
-                traded_percentage=100,
-                candle_period=CANDLE_PERIOD,
-                api_key=API_KEY,
-                api_secret=API_SECRET,
-                config=config,
-                testnet=TESTNET,
-                time_to_trade=TEMPO_ENTRE_TRADES,
-                delay_after_order=DELAY_ENTRE_ORDENS,
-                acceptable_loss_percentage=ACCEPTABLE_LOSS_PERCENTAGE,
-                stop_loss_percentage=STOP_LOSS_PERCENTAGE,
-                fallback_activated=FALLBACK_ACTIVATED,
-                take_profit_at_percentage=TP_AT_PERCENTAGE,
-                take_profit_amount_percentage=TP_AMOUNT_PERCENTAGE,
-                main_strategy=MAIN_STRATEGY,
-                main_strategy_args=MAIN_STRATEGY_ARGS,
-                fallback_strategy=FALLBACK_STRATEGY,
-                fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
-            )
 
             symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=3)
-            
+
             if not symbols:
                 print("⚠️ Nenhuma oportunidade encontrada.")
-                time.sleep(20)
+                time.sleep(10)
                 continue
-            
+
             btc_mode = get_cached_btc_mode(BINANCE_CLIENT)
-            btc_dominance = get_btc_dominance(BINANCE_CLIENT)
-            
+
             print("📊 BTC Market Mode:", btc_mode)
             print(f"📊 BTC Dominance: {btc_dominance:.2f}")
-            
-            for symbol in symbols:
-                
-                # 🔒 filtro dominância BTC
-                if btc_dominance > 0.60 and symbol != "BTCUSDT":
 
+            # pegar saldo apenas uma vez
+            account = safe_binance_call(BINANCE_CLIENT.get_account)
+
+            if not account:
+                continue
+
+            balance = 0
+            for asset in account["balances"]:
+                if asset["asset"] == "USDT":
+                    balance = float(asset["free"])
+                    break
+
+            #agora começa a analisar simbolos        
+            for symbol in symbols:
+                # filtro dominância
+                if btc_dominance > 0.60 and symbol != "BTCUSDT":
                     print("⚠️ Dominância BTC alta. Evitando altcoins.")
                     continue
 
-                #if btc_mode in ["LOW_LIQUIDITY", "LOW_ACTIVITY"] and symbol != "BTCUSDT":
                 if btc_mode == "LOW_ACTIVITY" and symbol != "BTCUSDT":
                     print(f"⚠️ Mercado fraco ({btc_mode}). Evitando altcoins.")
                     continue
 
-                # evitar moedas com loss recente
+                # loss recente
                 if symbol in MARKET_MEMORY:
-
                     last_loss = MARKET_MEMORY.get(symbol, {}).get("last_loss", 0)
-
                     if time.time() - last_loss < LOSS_COOLDOWN:
                         print(f"⚠️ {symbol} ignorado por loss recente")
                         continue
@@ -388,40 +353,56 @@ def trader_master_loop():
                 if symbol in symbol_cooldown and now_ts - symbol_cooldown[symbol] < COOLDOWN_SECONDS:
                     continue
 
-                if symbol == last_traded_symbol and now_ts - symbol_cooldown.get(symbol, 0) < COOLDOWN_SECONDS:
-                    continue
+                if symbol in MARKET_MEMORY:
+
+                    wins = MARKET_MEMORY[symbol]["wins"]
+                    losses = MARKET_MEMORY[symbol]["losses"]
+
+                    # se está perdendo mais do que ganhando, ignora
+                    if losses > wins:
+                        print(f"⚠️ {symbol} ignorado por histórico ruim")
+                        continue
 
                 stock = symbol.replace("USDT", "")
 
                 print(f"🎯 Testando ativo: {symbol}")
+                
+                candles = safe_binance_call(
+                    BINANCE_CLIENT.get_klines,
+                    symbol=symbol,
+                    interval=Client.KLINE_INTERVAL_5MINUTE,
+                    limit=30
+                )
+
+                if not candles:
+                    continue
+
+                closes = [float(c[4]) for c in candles]
+
+                # filtro simples de momentum
+                momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.0000001)
+
+                if abs(momentum) < 0.003:
+                    print("⚠️ Momentum fraco, ignorando")
+                    continue
+                
 
                 try:
-                    account = safe_binance_call(BINANCE_CLIENT.get_account)
-                    
-                    if not account:
-                        continue
-
-                    balance = 0
-
-                    for asset in account["balances"]:
-                        if asset["asset"] == "USDT":
-                            balance = float(asset["free"])
-                            break
 
                     max_position = balance * config["RISK"]["MAX_POSITION_PERCENT"]
 
                     capital_config = next(
                         (s["capital"] for s in config["stocks_traded_list"]
-                        if s["operationCode"] == symbol),
+                         if s["operationCode"] == symbol),
                         None
                     )
 
                     if capital_config is None:
                         continue
-                    
+
                     capital = min(capital_config, max_position)
 
-                    current_trader = BinanceTraderBot(
+                    temp_trader = BinanceTraderBot(
                         stock_code=stock,
                         operation_code=symbol,
                         traded_quantity=capital,
@@ -444,15 +425,12 @@ def trader_master_loop():
                         fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
                     )
 
-                    current_trader.setStepSizeAndTickSize()
-                        
-                    if not current_trader.updateAllData():
+                    temp_trader.setStepSizeAndTickSize()
+
+                    if not temp_trader.updateAllData():
                         continue
 
-                    decision = current_trader.getFinalDecisionStrategy()
-                    
-                    print("🔎 Decisão da estratégia:", decision)
-                    
+                    decision = temp_trader.getFinalDecisionStrategy()
                     decision_str = str(decision).upper()
 
                     print(f"🔎 Decisão da estratégia: {decision_str}")
@@ -461,6 +439,7 @@ def trader_master_loop():
 
                         print(f"🚀 Oportunidade encontrada em {symbol}")
 
+                        current_trader = temp_trader
                         symbol_cooldown[symbol] = time.time()
                         last_traded_symbol = symbol
                         break
@@ -487,10 +466,7 @@ def trader_master_loop():
                 exit_price = getattr(current_trader, "last_sell_price", 0)
                 qty = getattr(current_trader, "last_stock_account_balance", 0)
 
-                if entry and exit_price and qty:
-                    profit = (exit_price - entry) * qty
-                else:
-                    profit = 0
+                profit = (exit_price - entry) * qty if entry and exit_price and qty else 0
 
                 last_trade_logged = True
 
@@ -507,11 +483,10 @@ def trader_master_loop():
 
                 current_trader = None
                 last_traded_symbol = None
-                
-                time.sleep(15)
 
-        cooldown = max(15, TEMPO_ENTRE_TRADES)
-        sleep_time = max(10, cooldown)
+                time.sleep(10)
+
+        sleep_time = max(3, min(8, TEMPO_ENTRE_TRADES))
         time.sleep(sleep_time)
 
     print("🛑 Loop do robô finalizado.")
@@ -724,10 +699,6 @@ def analyze_symbol(client, t, config):
 
         now = time.time()
 
-        if now - ORDERBOOK_CACHE_TIME > 5:
-            ORDERBOOK_CACHE = {}
-            ORDERBOOK_CACHE_TIME = now
-
         now = time.time()
 
         if symbol not in ORDERBOOK_CACHE or now - ORDERBOOK_CACHE_TIME.get(symbol,0) > ORDERBOOK_CACHE_TTL:
@@ -900,14 +871,11 @@ def scan_market_top_symbols(client, limit=10):
 
         tickers = safe_binance_call(client.get_ticker)
 
-        if not tickers:
-            return []
-
-        STABLE_FILTER = {
-            "USDCUSDT","FDUSDUSDT","TUSDUSDT",
-            "BUSDUSDT","USDPUSDT","RLUSDUSDT",
-            "PAXGUSDT","XAUTUSDT"
-        }
+        tickers = sorted(
+            tickers,
+            key=lambda x: float(x.get("quoteVolume",0)),
+            reverse=True
+        )[:80]
         
         
         # filtro inicial rápido
@@ -922,31 +890,29 @@ def scan_market_top_symbols(client, limit=10):
             if not symbol.endswith("USDT"):
                 continue
 
-            if symbol in STABLE_FILTER or symbol.startswith(("USDC","TUSD","FDUSD","USDP")):
-                continue
-            
-            if "UPUSDT" in symbol or "DOWNUSDT" in symbol:
-                continue   
-                       
             volume = float(t.get("quoteVolume",0))
-            trades = int(t.get("count",0))
 
             if volume < MIN_VOLUME:
                 continue
+
+            trades = int(t.get("count",0))
 
             if trades < config["SCANNER"]["MIN_TRADES"]:
                 continue
 
             change = abs(float(t.get("priceChangePercent",0)))
 
-            score = volume * (1 + change / 100)
-               
-            filtered.append((t, score))                  
+            if change < 0.1:
+                continue  
+            
+            # 👇 adiciona na lista filtrada
+            filtered.append((t, volume))               
 
         if not filtered:
             return []
 
-        filtered.sort(key=lambda x: x[1], reverse=True)
+        score = volume * (1 + change / 100)
+        filtered.append((t, score))
         
         SCAN_LIMIT = config["SCANNER"]["SCAN_LIMIT"]
 
