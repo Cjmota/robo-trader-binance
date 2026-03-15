@@ -439,11 +439,12 @@ def trader_master_loop():
                         continue
 
                     decision = temp_trader.getFinalDecisionStrategy()
-                    decision_str = str(decision).upper()
+                    decision = temp_trader.getFinalDecisionStrategy()
+                    decision_str = decision.upper() if isinstance(decision, str) else ""
 
                     print(f"🔎 Decisão da estratégia: {decision_str}")
 
-                    if decision_str in ["TRUE", "BUY", "COMPRAR"]:
+                    if decision_str == "BUY":
 
                         score = abs(momentum)
 
