@@ -894,13 +894,13 @@ def scan_market_top_symbols(client, limit=10):
 
     try:
 
-        tickers = safe_binance_call(client.get_ticker_24hr)
+        tickers = safe_binance_call(client.get_ticker)
 
         tickers = sorted(
             tickers,
             key=lambda x: float(x.get("quoteVolume",0)),
             reverse=True
-        )[:80]
+        )[:60]
         
         
         # filtro inicial rápido
