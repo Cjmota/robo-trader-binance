@@ -1568,9 +1568,9 @@ class BinanceTraderBot:
                 print("⚠️ Dados insuficientes de candles.")
                 return 
             
-            momentum_acceleration = self.detectMomentumAcceleration()
-            
-            momentum_expansion = self.detectMomentumExpansion()
+            momentum_acceleration = self.detectMomentumAcceleration()            
+            momentum_expansion = self.detectMomentumExpansion()            
+            volume_divergence = self.detectVolumeDivergence()
             
             close_price = self.stock_data["close_price"].iloc[-1]
             position_value = self.last_stock_account_balance * close_price
@@ -1630,9 +1630,16 @@ class BinanceTraderBot:
 
                         return
             
-                if self.detectPumpExhaustion():
+                # detectar divergência de volume
+                volume_divergence = self.detectVolumeDivergence()
 
-                    print("📉 Pump perdendo força → saindo da posição")
+                if self.detectPumpExhaustion() or volume_divergence:
+
+                    if volume_divergence:
+                        print("⚠️ Divergência de volume detectada → saída antecipada")
+
+                    else:
+                        print("📉 Pump perdendo força → saindo da posição")
 
                     self.cancelAllOrders()
                     time.sleep(1)
@@ -2187,6 +2194,11 @@ class BinanceTraderBot:
                 score >= 9
                 or (whale_signal == "BUY" and vacuum_signal == "BUY")
             )
+
+            # 🚫 evitar entrada se houver divergência de volume
+            if volume_divergence and not self.actual_trade_position:
+                print("⚠️ Divergência de volume detectada, evitando compra")
+                return    
 
             if signal in [True, "BUY"] and probability >= 0.45 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"]:
 
@@ -4527,3 +4539,31 @@ class BinanceTraderBot:
         self.candles_cache_time[key] = now
 
         return candles
+    
+    def detectVolumeDivergence(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 15:
+                return False
+
+            price_move = closes.iloc[-1] - closes.iloc[-5]
+            volume_move = volumes.iloc[-1] - volumes.iloc[-5]
+
+            print(f"📊 Divergência | price_move={price_move:.5f} volume_move={volume_move:.2f}")
+
+            # preço sobe mas volume cai
+            if price_move > 0 and volume_move < 0:
+                print("⚠️ Divergência bearish detectada")
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro detectVolumeDivergence:", e)
+
+            return False
