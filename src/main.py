@@ -340,10 +340,10 @@ def trader_master_loop():
                         break        
 
             # priorizar BTC se dominância estiver alta
-            if btc_dominance > 0.60:
+            if btc_dominance > 0.60 and symbols[0] != "BTCUSDT":
                 print("⚠️ Dominância BTC alta. Priorizando BTC.")
                 symbols = ["BTCUSDT"] + [s for s in symbols if s != "BTCUSDT"]
-
+                
             # agora começa a analisar símbolos
             for symbol in symbols:
 
