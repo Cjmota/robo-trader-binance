@@ -1633,19 +1633,21 @@ class BinanceTraderBot:
                 # detectar divergência de volume
                 volume_divergence = self.detectVolumeDivergence()
 
-                if self.detectPumpExhaustion() or volume_divergence:
+                profit, pct = self.getCurrentOperationProfit()
+
+                if (self.detectPumpExhaustion() or volume_divergence) and pct > 0:
 
                     if volume_divergence:
-                        print("⚠️ Divergência de volume detectada → saída antecipada")
+                        print("⚠️ Divergência de volume detectada → saída antecipada com lucro")
 
                     else:
-                        print("📉 Pump perdendo força → saindo da posição")
+                        print("📉 Pump perdendo força → realizando lucro")
 
                     self.cancelAllOrders()
                     time.sleep(1)
                     self.sellMarketOrder()
 
-                    return    
+                    return  
 
                 if self.detectWhaleExit():
 
