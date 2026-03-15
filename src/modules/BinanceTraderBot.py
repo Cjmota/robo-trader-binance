@@ -1315,8 +1315,11 @@ class BinanceTraderBot:
             fallback_strategy_args=self.fallback_strategy_args,
         )
 
-        if not final_decision:
-            return ""
+        if final_decision is None:
+            return "HOLD"
+
+        if isinstance(final_decision, bool):
+            return "BUY" if final_decision else "SELL"
 
         return str(final_decision).upper()
 
