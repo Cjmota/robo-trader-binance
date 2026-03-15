@@ -4277,6 +4277,10 @@ class BinanceTraderBot:
             price = float(t["lastPrice"])
             volume = float(t["quoteVolume"])
             change = float(t["priceChangePercent"])
+            
+            # ignorar moedas muito baratas (ruído)
+            if price < 0.00001:
+                continue
 
             # filtro de liquidez
             if volume < 5_000_000:
@@ -4284,23 +4288,31 @@ class BinanceTraderBot:
 
             score = 0
 
-            # momentum
-            if change > 2:
+            # volume forte
+            if volume > 30_000_000:
+                score += 3
+            elif volume > 15_000_000:
+                score += 2
+            elif volume > 8_000_000:
+                score += 1
+
+            # momentum diário
+            if change > 4:
+                score += 3
+            elif change > 2:
                 score += 2
             elif change > 1:
                 score += 1
 
-            # volume alto
-            if volume > 20_000_000:
-                score += 2
-            elif volume > 10_000_000:
-                score += 1
-
+            # bônus para moedas com bom movimento
+            if abs(change) > 5:
+                score += 1           
+            
             ranking.append((symbol, score, change, volume))
 
         ranking.sort(key=lambda x: x[1], reverse=True)
 
-        top = ranking[:10]
+        top = ranking[:6]
 
         print("🔥 TOP OPORTUNIDADES:", [r[0] for r in top])
 
