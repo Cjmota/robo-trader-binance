@@ -342,8 +342,9 @@ def trader_master_loop():
             #agora começa a analisar simbolos        
             for symbol in symbols:
                 # filtro dominância
-                if btc_dominance > 0.60 and symbol != symbols[0]:
-                    print("⚠️ Dominância BTC alta. Apenas TOP1 permitido.")
+                if btc_dominance > 0.60:
+                    print("⚠️ Dominância BTC alta. Priorizando TOP1.")
+                    symbols = [symbols[0]] + symbols[1:]
                     continue
 
 
@@ -893,7 +894,7 @@ def scan_market_top_symbols(client, limit=10):
 
     try:
 
-        tickers = safe_binance_call(client.get_ticker)
+        tickers = safe_binance_call(client.get_ticker_24hr)
 
         tickers = sorted(
             tickers,
@@ -928,19 +929,15 @@ def scan_market_top_symbols(client, limit=10):
 
             if change < 0.1:
                 continue  
-            
-            # 👇 adiciona na lista filtrada
-            filtered.append((t, volume))               
+                    
+            # score inicial simples
+            score = volume * (1 + change / 100)
 
-        if not filtered:
-            return []
-
-        change = abs(float(t.get("priceChangePercent", 0)))
-        score = volume * (1 + change / 100)
-        filtered.append((t, score))
+            filtered.append((t, score))
         
         SCAN_LIMIT = config["SCANNER"]["SCAN_LIMIT"]
 
+        filtered.sort(key=lambda x: x[1], reverse=True)
         filtered = filtered[:SCAN_LIMIT]
 
         # pegar top 30
