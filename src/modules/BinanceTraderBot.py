@@ -213,6 +213,10 @@ class BinanceTraderBot:
         
         self.market_cache = None
         self.market_cache_time = 0
+        
+        self.candles_cache = {}
+        self.candles_cache_time = {}
+        self.candle_cache_ttl = 15
 
         for attempt in range(5):
             try:
@@ -317,7 +321,7 @@ class BinanceTraderBot:
 
             def get_ma_trend(interval):
 
-                candles = self.client_binance.get_klines(
+                candles = self.getCachedKlines(
                     symbol=self.operation_code,
                     interval=interval,
                     limit=100
@@ -463,7 +467,7 @@ class BinanceTraderBot:
     ):
 
         # Busca dados na binance dos últimos 1000 períodos
-        candles = self.client_binance.get_klines(
+        candles = self.getCachedKlines(
             symbol=self.operation_code,
             interval=str(self.candle_period).strip(),
             limit=200,
@@ -3308,7 +3312,7 @@ class BinanceTraderBot:
 
         def check_tf(interval):
 
-            candles = self.client_binance.get_klines(
+            candles = self.getCachedKlines(
                 symbol="BTCUSDT",
                 interval=interval,
                 limit=100
@@ -3867,13 +3871,13 @@ class BinanceTraderBot:
         if self.market_cache is not None and time.time() - self.market_cache_time < 120:
             return self.market_cache
 
-        btc = self.client_binance.get_klines(
+        btc = self.getCachedKlines(
             symbol="BTCUSDT",
             interval="5m",
             limit=50
         )
 
-        eth = self.client_binance.get_klines(
+        eth = self.getCachedKlines(
             symbol="ETHUSDT",
             interval="5m",
             limit=50
@@ -4500,3 +4504,26 @@ class BinanceTraderBot:
             print("Erro no detector de momentum expansion:", e)
 
             return False
+        
+    def getCachedKlines(self, symbol, interval, limit=100):
+
+        key = f"{symbol}_{interval}_{limit}"
+
+        now = time.time()
+
+        if (
+            key in self.candles_cache
+            and now - self.candles_cache_time.get(key, 0) < self.candle_cache_ttl
+        ):
+            return self.candles_cache[key]
+
+        candles = self.getCachedKlines(
+            symbol=symbol,
+            interval=interval,
+            limit=limit
+        )
+
+        self.candles_cache[key] = candles
+        self.candles_cache_time[key] = now
+
+        return candles
