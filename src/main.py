@@ -309,6 +309,9 @@ def trader_master_loop():
         # procurar oportunidades
         if current_trader is None:
 
+            best_candidate = None
+            best_score = 0
+
             symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=3)
 
             if not symbols:
@@ -398,7 +401,9 @@ def trader_master_loop():
                     min_momentum = 0.0006
                 elif btc_mode == "SIDEWAYS":
                     min_momentum = 0.0008
-                else:  # TREND
+                elif btc_mode == "HIGH_VOLATILITY":
+                    min_momentum = 0.0012
+                else:
                     min_momentum = 0.0015
 
                 # log
@@ -491,7 +496,7 @@ def trader_master_loop():
                     print(f"Erro ao analisar {symbol}: {e}")
                     
             
-            if best_score < 0.002:
+            if best_score < min_momentum:
                 print("⚠️ Nenhum ativo com momentum suficiente.")
                 best_candidate = None
 
