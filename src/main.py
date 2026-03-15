@@ -387,16 +387,37 @@ def trader_master_loop():
 
                 closes = [float(c[4]) for c in candles]
 
-                print(f"Momentum detectado {symbol}: {momentum}")
+                if len(closes) < 8:
+                    continue
 
-                # filtro simples de momentum
-                momentum = (closes[-1] - closes[-10]) / max(closes[-10], 1e-8)
+                # cálculo de momentum
+                momentum = (closes[-1] - closes[-8]) / max(closes[-8], 1e-8)
 
-                if abs(momentum) < 0.0015:
+                # definir momentum mínimo baseado no modo de mercado
+                if btc_mode == "LOW_LIQUIDITY":
+                    min_momentum = 0.0006
+                elif btc_mode == "SIDEWAYS":
+                    min_momentum = 0.0008
+                else:  # TREND
+                    min_momentum = 0.0015
+
+                # log
+                print(f"📈 {symbol} momentum: {momentum:.5f} | min necessário: {min_momentum}")
+
+                # direção do movimento
+                if momentum > min_momentum:
+                    direction = "UP"
+                elif momentum < -min_momentum:
+                    direction = "DOWN"
+                else:
                     print("⚠️ Momentum fraco, ignorando")
                     continue
-                
 
+                # filtro
+                if abs(momentum) < min_momentum:
+                    print(f"⚠️ Momentum fraco ({momentum:.5f} < {min_momentum})")
+                    continue
+                
                 try:
 
                     max_position = balance * config["RISK"]["MAX_POSITION_PERCENT"]
