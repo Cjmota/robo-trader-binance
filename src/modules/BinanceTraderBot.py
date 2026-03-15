@@ -1635,7 +1635,7 @@ class BinanceTraderBot:
 
                 profit, pct = self.getCurrentOperationProfit()
 
-                if (self.detectPumpExhaustion() or volume_divergence) and pct > 0:
+                if (self.detectPumpExhaustion() or volume_divergence) and pct > 0.3:
 
                     if volume_divergence:
                         print("⚠️ Divergência de volume detectada → saída antecipada com lucro")
