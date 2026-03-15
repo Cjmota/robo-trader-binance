@@ -1215,88 +1215,8 @@ class BinanceTraderBot:
                     )
                     print(f"❌ Ordem {order['orderId']} cancelada.")
                 except Exception as e:
-                    print(f"Erro ao cancelar ordem {order['orderId']}: {e}")
-
-    # Verifica se há alguma ordem de COMPRA aberta
-    # Se a ordem foi parcialmente executada, ele salva o valor
-    # executado na variável self.partial_quantity_discount, para que
-    # este valor seja descontado nas execuções seguintes.
-    # Se foi parcialmente executado, ela também salva o valor que foi executado
-    # na variável self.last_buy_price
+                    print(f"Erro ao cancelar ordem {order['orderId']}: {e}")   
     
-    def scalePosition(self):
-
-        try:
-
-            if not self.actual_trade_position:
-                return False
-
-            if self.scaling_done:
-                return False
-
-            close_price = self.stock_data["close_price"].iloc[-1]
-
-            profit_pct = self.getPriceChangePercentage(
-                self.last_buy_price,
-                close_price
-            )
-
-            if profit_pct < self.scale_trigger_profit:
-                return False
-
-            # confirma força do mercado
-            momentum = self.detectMomentumAcceleration()
-            volume_spike = self.detectPump()
-            whale_signal = self.detectWhalePressure()
-            orderflow = self.detectOrderFlowImbalance()
-
-            if not momentum and not volume_spike:
-                return False
-
-            if whale_signal != "BUY":
-                return False
-
-            if orderflow != "BUY":
-                return False
-
-            # evita escalar perto do topo
-            if len(self.stock_data) < 20:
-                return False
-            
-            recent_high = self.stock_data["close_price"].iloc[-20:].max()
-
-            distance_from_top = (recent_high - close_price) / close_price
-            
-            if distance_from_top < 0.005:
-                return False
-
-            if distance_from_top < 0.002:
-                print("⚠️ Muito perto do topo para escalar")
-                return False
-
-            print("🚀 SCALE-IN DETECTADO")
-
-            capital_extra = self.capital * self.scale_size_multiplier
-
-            quantity = capital_extra / close_price
-            quantity = self.adjust_to_step(quantity, self.step_size)
-
-            if quantity <= 0:
-                return False
-
-            self.buyMarketOrder(quantity=quantity)
-
-            self.scaling_done = True
-
-            print("📈 Posição aumentada com sucesso")
-
-            return True
-
-        except Exception as e:
-
-            print("Erro no scale position:", e)
-
-            return False
     
     def hasOpenBuyOrder(self):
         """
@@ -3865,53 +3785,6 @@ class BinanceTraderBot:
             print("Erro no detector de volatilidade:", e)
 
             return False
-        
-    def calculateAdaptivePositionSize(
-        self,
-        score,
-        probability,
-        sweep_signal,
-        trap_signal,
-        whale_signal,
-        volume_spike
-    ):
-
-       base_capital = max(self.capital * 0.25, 6)
-
-       # qualidade do trade
-       strength = min(score / 15, 1)
-
-       # probabilidade
-       strength += probability
-
-       # whale pressure
-       if whale_signal == "BUY":
-           strength += 0.3
-
-       # sweep institucional
-       if sweep_signal:
-           strength += 0.2
-
-       # trap institucional
-       if trap_signal:
-           strength += 0.2
-
-       # volume spike
-       if volume_spike:
-           strength += 0.2
-
-       strength = min(strength, 1.5)
-
-       capital_to_use = base_capital * (1 + strength)
-
-       # limite máximo
-       capital_to_use = min(capital_to_use, self.capital * 0.95)
-
-       # 🔒 mínimo Binance
-       if capital_to_use < 6:
-           capital_to_use = 6
-
-       return capital_to_use
     
     def detectOrderFlowImbalance(self):
 
