@@ -339,14 +339,13 @@ def trader_master_loop():
                         allowed_altcoin = s
                         break        
 
-            #agora começa a analisar simbolos        
-            for symbol in symbols:
-                # filtro dominância
-                if btc_dominance > 0.60:
-                    print("⚠️ Dominância BTC alta. Priorizando TOP1.")
-                    symbols = [symbols[0]] + symbols[1:]
-                    continue
+            # priorizar BTC se dominância estiver alta
+            if btc_dominance > 0.60:
+                print("⚠️ Dominância BTC alta. Priorizando BTC.")
+                symbols = ["BTCUSDT"] + [s for s in symbols if s != "BTCUSDT"]
 
+            # agora começa a analisar símbolos
+            for symbol in symbols:
 
                 if btc_mode == "LOW_ACTIVITY":
 
