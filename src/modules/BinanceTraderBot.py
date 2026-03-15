@@ -1566,6 +1566,8 @@ class BinanceTraderBot:
             
             momentum_acceleration = self.detectMomentumAcceleration()
             
+            momentum_expansion = self.detectMomentumExpansion()
+            
             close_price = self.stock_data["close_price"].iloc[-1]
             position_value = self.last_stock_account_balance * close_price
                     
@@ -1919,6 +1921,9 @@ class BinanceTraderBot:
 
             if momentum_acceleration:
                 score += 2
+            
+            if momentum_expansion:
+                score += 3
             
             if not self.marketRiskFilter():
                 return
@@ -3839,7 +3844,6 @@ class BinanceTraderBot:
 
         r1 = (closes.iloc[-1] - closes.iloc[-2]) / closes.iloc[-2]
         r2 = (closes.iloc[-2] - closes.iloc[-3]) / closes.iloc[-3]
-
         acceleration = r1 - r2
 
         print(f"⚡ Momentum acceleration: {acceleration:.5f}")
@@ -4455,3 +4459,44 @@ class BinanceTraderBot:
         capital_to_use = base_capital * multiplier
 
         return capital_to_use
+    
+    def detectMomentumExpansion(self):
+
+        try:
+
+            closes = self.stock_data["close_price"]
+            volumes = self.stock_data["volume"]
+
+            if len(closes) < 20:
+                return False
+
+            # movimento recente
+            move_short = (closes.iloc[-1] - closes.iloc[-3]) / closes.iloc[-3]
+
+            # movimento anterior
+            move_prev = (closes.iloc[-3] - closes.iloc[-6]) / closes.iloc[-6]
+
+            # aceleração
+            acceleration = move_short - move_prev
+
+            # volume
+            avg_volume = volumes.iloc[-20:].mean()
+            current_volume = volumes.iloc[-1]
+
+            volume_expansion = current_volume > avg_volume * 1.4
+
+            print(f"⚡ Momentum Expansion: {acceleration:.5f}")
+
+            if acceleration > 0.002 and volume_expansion:
+
+                print("🚀 MOMENTUM EXPANSION DETECTADO")
+
+                return True
+
+            return False
+
+        except Exception as e:
+
+            print("Erro no detector de momentum expansion:", e)
+
+            return False
