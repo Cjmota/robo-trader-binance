@@ -150,7 +150,7 @@ class BinanceTraderBot:
         
         self.scanner_ranking = []
         self.last_scan_time = 0
-        self.scan_interval = 10  # segundos entre scans
+        self.scan_interval = 30  # segundos entre scans
         
         self.operation_code = None
         
@@ -3898,7 +3898,7 @@ class BinanceTraderBot:
 
         try:
 
-            if hasattr(self, "trades_cache") and time.time() - self.trades_cache_time < 15:
+            if hasattr(self, "trades_cache") and time.time() - self.trades_cache_time < 45:
                 trades = self.trades_cache
             else:
                 trades = self.client_binance.get_recent_trades(

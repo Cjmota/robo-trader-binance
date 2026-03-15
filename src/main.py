@@ -1122,8 +1122,7 @@ def run_symbol(symbol):
         while True:
 
             bot.execute()
-
-            time.sleep(10)
+            time.sleep(3)
 
     except Exception as e:
 
