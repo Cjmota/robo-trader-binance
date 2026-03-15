@@ -259,6 +259,8 @@ def trader_master_loop():
     current_trader = None
     last_outside_log = False
     last_trade_logged = False
+    best_candidate = None
+    best_score = 0
 
     try:
         if BINANCE_CLIENT is None:
@@ -346,12 +348,6 @@ def trader_master_loop():
                 
             # agora começa a analisar símbolos
             for symbol in symbols:
-
-                if btc_mode == "LOW_ACTIVITY":
-
-                    if symbol != "BTCUSDT" and symbol != allowed_altcoin:
-                        print(f"⚠️ Mercado fraco ({btc_mode}). Limitando altcoins.")
-                        continue
 
                 # loss recente
                 if btc_mode == "LOW_ACTIVITY":
@@ -449,15 +445,28 @@ def trader_master_loop():
 
                     if decision_str in ["TRUE", "BUY", "COMPRAR"]:
 
-                        print(f"🚀 Oportunidade encontrada em {symbol}")
+                        score = abs(momentum)
 
-                        current_trader = temp_trader
-                        symbol_cooldown[symbol] = time.time()
-                        last_traded_symbol = symbol
-                        break
+                        if score > best_score:
+                            best_candidate = temp_trader
+                            best_score = score    
 
                 except Exception as e:
                     print(f"Erro ao analisar {symbol}: {e}")
+                    
+            
+            if best_score < 0.002:
+                print("⚠️ Nenhum ativo com momentum suficiente.")
+                best_candidate = None
+
+            if best_candidate:
+
+                print(f"🚀 Melhor oportunidade encontrada: {best_candidate.operation_code}")
+
+                current_trader = best_candidate
+                symbol_cooldown[best_candidate.operation_code] = time.time()
+                last_traded_symbol = best_candidate.operation_code
+
 
         # executar trader
         if current_trader:
