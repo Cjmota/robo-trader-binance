@@ -1320,6 +1320,9 @@ class BinanceTraderBot:
             fallback_strategy_args=self.fallback_strategy_args,
         )
 
+        if final_decision is None:
+            return ""
+        
         return final_decision
 
     # Define o valor mínimo para vender, baseado no acceptable_loss_percentage

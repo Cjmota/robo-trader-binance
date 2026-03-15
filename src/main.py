@@ -463,12 +463,21 @@ def trader_master_loop():
 
                     decision = temp_trader.getFinalDecisionStrategy()
 
-                    if isinstance(decision, str):
-                        decision_str = decision.upper()
-                    else:
+                    decision_str = ""
+
+                    if decision is None:
                         decision_str = ""
 
-                    print(f"🔎 Decisão da estratégia: {decision_str if decision_str else 'HOLD'}")
+                    elif isinstance(decision, str):
+                        decision_str = decision.upper()
+
+                    elif decision is True:
+                        decision_str = "BUY"
+
+                    elif decision is False:
+                        decision_str = "SELL"
+
+                    print(f"🔎 Decisão da estratégia: {decision_str if decision_str else 'HOLD'}")    
 
                     if decision_str == "BUY":
 
