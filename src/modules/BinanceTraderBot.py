@@ -1558,7 +1558,7 @@ class BinanceTraderBot:
 
                 self.last_scan_time = time.time()  
                 
-            ranking_original = self.scanner_ranking[:3] if self.scanner_ranking else []
+            ranking_original = self.scanner_ranking[:5] if self.scanner_ranking else []
 
             # ativos institucionais prioritários
             smart_money_assets = [
@@ -1582,13 +1582,14 @@ class BinanceTraderBot:
             ranking = list(unique.values())
 
             tested_symbols = set()
+            selected_symbol = None
 
             for symbol, score, change, volume in ranking:
 
                 if symbol in tested_symbols:
                     continue
 
-                self.resetForNewSymbol()        
+                self.resetForNewSymbol()
 
                 print(f"🎯 Testando ativo: {symbol}")
 
@@ -1597,10 +1598,22 @@ class BinanceTraderBot:
                 if not self.updateAllData(verbose=True):
                     continue
 
+                if self.stock_data is None or len(self.stock_data) < 50:
+                    continue
+
                 tested_symbols.add(symbol)
 
-                if self.detectMomentumAcceleration():
-                    break         
+                momentum = self.detectMomentumAcceleration()
+                volume_spike = self.detectPump()
+
+                if momentum or volume_spike:
+                    selected_symbol = symbol
+                    break
+
+
+            if not selected_symbol:
+                print("⚠️ Nenhum ativo com momentum encontrado.")
+                return    
             
             if self.actual_trade_position:
                 profit, pct = self.getCurrentOperationProfit()
