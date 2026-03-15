@@ -1306,11 +1306,6 @@ class BinanceTraderBot:
     # Função que executa estratégias implementadas e retorna a decisão final
     def getFinalDecisionStrategy(self):
 
-        
-        print("🚨 getFinalDecisionStrategy CHAMADA")
-        
-        print("📈 Rodando estratégia principal...")
-        
         final_decision = StrategyRunner.execute(
             self,
             stock_data=self.stock_data,
@@ -1320,10 +1315,10 @@ class BinanceTraderBot:
             fallback_strategy_args=self.fallback_strategy_args,
         )
 
-        if final_decision is None:
+        if not final_decision:
             return ""
-        
-        return final_decision
+
+        return str(final_decision).upper()
 
     # Define o valor mínimo para vender, baseado no acceptable_loss_percentage
     def getMinimumPriceToSell(self):
