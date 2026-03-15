@@ -850,7 +850,7 @@ class BinanceTraderBot:
                     sweep_signal,
                     trap_signal,
                     whale_signal,
-                    volume_spike
+                    volume_spike                    
                 )
 
                 # limite máximo de risco
@@ -1570,8 +1570,7 @@ class BinanceTraderBot:
             
             momentum_acceleration = self.detectMomentumAcceleration()            
             momentum_expansion = self.detectMomentumExpansion()            
-            volume_divergence = self.detectVolumeDivergence()
-            
+                        
             close_price = self.stock_data["close_price"].iloc[-1]
             position_value = self.last_stock_account_balance * close_price
                     
@@ -1590,6 +1589,23 @@ class BinanceTraderBot:
             iceberg_signal = self.detectIcebergOrders()
             
             sweep_signal = self.detectLiquiditySweepReversal()
+            
+            # 🚀 Entrada imediata após sweep institucional
+            if sweep_signal == "BUY" and not self.actual_trade_position:
+
+                print("🧹 Sweep institucional detectado → entrada rápida")
+
+                price = self.stock_data["close_price"].iloc[-1]
+
+                capital_to_use = self.capital * 0.6
+
+                quantity = capital_to_use / price
+                quantity = self.adjust_to_step(quantity, self.step_size)
+
+                if quantity > 0:
+                    self.buyMarketOrder(quantity=quantity)
+                    return
+            
             whale_signal = self.detectWhalePressure()
             
             multi_trend_ok = self.getTrendMultiTimeframe()
@@ -1847,7 +1863,12 @@ class BinanceTraderBot:
 
             spread = (best_ask - best_bid) / best_bid
             
-            liquidity_signal = self.detectLiquidityWall()
+            liquidity_signal = self.detectLiquidityWall()           
+            
+            gap_signal = self.detectLiquidityGap()
+            
+            if gap_signal:
+                print(f"🕳️ Liquidity Gap Signal: {gap_signal}")
 
             liquidation_signal = self.detectLiquidationMove()
 
@@ -2113,6 +2134,10 @@ class BinanceTraderBot:
 
                     elif vacuum_signal:
                         signal = vacuum_signal
+                        
+                    elif gap_signal and signal != "SELL":
+                        print("🕳️ Liquidity gap detectado")
+                        signal = gap_signal
 
                     elif accumulation_signal and multi_trend_ok and not self.actual_trade_position:
 
@@ -2166,7 +2191,8 @@ class BinanceTraderBot:
                     sweep_signal,
                     trap_signal,
                     whale_signal,
-                    volume_spike
+                    volume_spike,
+                    gap_signal
                 )
 
                 # proteção mínimo Binance
@@ -2260,7 +2286,8 @@ class BinanceTraderBot:
                     sweep_signal,
                     trap_signal,
                     whale_signal,
-                    volume_spike
+                    volume_spike,
+                    gap_signal
                 )
                 
                 price = self.stock_data["close_price"].iloc[-1]
@@ -4437,7 +4464,8 @@ class BinanceTraderBot:
         sweep_signal,
         trap_signal,
         whale_signal,
-        volume_spike
+        volume_spike,
+        gap_signal
     ):
 
         base_capital = self.capital * 0.25
@@ -4531,7 +4559,7 @@ class BinanceTraderBot:
         ):
             return self.candles_cache[key]
 
-        candles = self.getCachedKlines(
+        candles = self.client_binance.get_klines(
             symbol=symbol,
             interval=interval,
             limit=limit
@@ -4569,3 +4597,46 @@ class BinanceTraderBot:
             print("Erro detectVolumeDivergence:", e)
 
             return False
+    
+    def detectLiquidityGap(self):
+
+        try:
+
+            depth = self.getCachedOrderBook()
+
+            if not depth or not depth["bids"] or not depth["asks"]:
+                return None
+
+            bids = depth["bids"][:10]
+            asks = depth["asks"][:10]
+
+            bid_prices = [float(b[0]) for b in bids]
+            ask_prices = [float(a[0]) for a in asks]
+
+            bid_gap = max(bid_prices) - min(bid_prices)
+            ask_gap = max(ask_prices) - min(ask_prices)
+
+            mid_price = (bid_prices[0] + ask_prices[0]) / 2
+
+            bid_gap_pct = bid_gap / mid_price
+            ask_gap_pct = ask_gap / mid_price
+
+            print(f"🕳️ Liquidity Gap | bid_gap={bid_gap_pct:.5f} ask_gap={ask_gap_pct:.5f}")
+
+            # gap grande no lado vendedor → tendência de subida
+            if ask_gap_pct > 0.004:
+                print("🚀 Liquidity gap acima → possível pump")
+                return "BUY"
+
+            # gap grande no lado comprador → tendência de queda
+            if bid_gap_pct > 0.004:
+                print("📉 Liquidity gap abaixo → possível dump")
+                return "SELL"
+
+            return None
+
+        except Exception as e:
+
+            print("Erro detectLiquidityGap:", e)
+
+            return None
