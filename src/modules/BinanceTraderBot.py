@@ -91,9 +91,6 @@ class BinanceTraderBot:
         self.api_secret = api_secret
         self.testnet = testnet
         
-        # iniciar gerenciador de poeira
-        threading.Thread(target=self.dust_manager, daemon=True).start()
-        
         self.capital = 15 #traded_quantity  # valor em USDT configurado por ativo
         
         self.trailing_activation = config["TRAILING"]["ACTIVATION"] / 100
@@ -238,6 +235,7 @@ class BinanceTraderBot:
         else:
             raise Exception("❌ Não foi possível conectar à Binance")
                 
+        threading.Thread(target=self.dust_manager, daemon=True).start()
                 
         # Break-even configurável por ativo
         self.break_even_map = {
@@ -4240,7 +4238,7 @@ class BinanceTraderBot:
 
             print(f"🧹 Convertendo poeira ({total_dust_value:.2f} USDT): {assets_string}")
 
-            self.client_binance.transfer_dust(asset=assets_string)
+            self.client_binance.transfer_dust(asset=assets)
 
             print("🟢 Poeira convertida para BNB!")
 
@@ -4336,6 +4334,10 @@ class BinanceTraderBot:
 
             try:
 
+                if not hasattr(self, "client_binance"):
+                    time.sleep(60)
+                    continue
+
                 print("🧹 Iniciando verificação de poeira...")
 
                 total_dust_value = self.convert_dust_to_bnb()
@@ -4346,7 +4348,6 @@ class BinanceTraderBot:
             except Exception as e:
                 print("⚠️ Erro dust manager:", e)
 
-            # roda 1x por dia
             time.sleep(86400)
             
     def fastMarketFilter(self):
