@@ -387,8 +387,10 @@ def trader_master_loop():
 
                 closes = [float(c[4]) for c in candles]
 
+                print(f"Momentum detectado {symbol}: {momentum}")
+
                 # filtro simples de momentum
-                momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.0000001)
+                momentum = (closes[-1] - closes[-10]) / max(closes[-10], 1e-8)
 
                 if abs(momentum) < 0.0015:
                     print("⚠️ Momentum fraco, ignorando")
