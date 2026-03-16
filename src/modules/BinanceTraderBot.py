@@ -4804,7 +4804,12 @@ class BinanceTraderBot:
 
             capital = self.calculateAdaptivePositionSize(
                 score=6,
-                probability=0.65
+                probability=0.65,
+                sweep_signal=None,
+                trap_signal=None,
+                whale_signal=None,
+                volume_spike=False,
+                gap_signal=None
             )
 
             quantity = capital / price

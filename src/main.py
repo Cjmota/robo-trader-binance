@@ -389,7 +389,7 @@ def trader_master_loop():
                     losses = MARKET_MEMORY[symbol]["losses"]
 
                     # se está perdendo mais do que ganhando, ignora
-                    if losses > wins:
+                    if losses > wins * 2:
                         print(f"⚠️ {symbol} ignorado por histórico ruim")
                         continue
 
@@ -506,16 +506,19 @@ def trader_master_loop():
                     
                     explosive_move = abs(momentum) > min_momentum * 3
 
-                    if decision_str in ["BUY", "SELL"] or explosive_move:
+                    if decision_str in ["BUY", "SELL"] or explosive_move or momentum > min_momentum * 2:
 
                         if explosive_move and decision_str != "BUY":
                             print(f"💥 Movimento explosivo detectado em {symbol}")
+
+                        if decision_str is None:
+                            decision_str = "BUY"
 
                         score = abs(momentum) * 2 + abs(acceleration) + volatility
 
                         if score > best_score:
                             best_candidate = temp_trader
-                            best_score = score 
+                            best_score = score
                             print(f"🏆 Novo candidato: {symbol} | score {score:.6f} | decisão {decision_str}")   
 
                 except Exception as e:
