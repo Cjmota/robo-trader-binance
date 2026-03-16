@@ -1513,7 +1513,12 @@ class BinanceTraderBot:
 
                     print("🔎 Escaneando mercado inteligente PRO...")
 
-                    self.scanner_ranking = self.fastMarketScanner()
+                    result = self.fastMarketScanner()
+
+                    if result:
+                        self.scanner_ranking = result
+                    else:
+                        print("⚠️ Scanner retornou vazio.")
 
                     self.last_scan_time = time.time() 
                 
@@ -1553,7 +1558,6 @@ class BinanceTraderBot:
                 print(f"🎯 Testando ativo: {symbol}")
 
                 self.operation_code = symbol
-                self.current_symbol = symbol
 
                 if not self.updateAllData(verbose=True):
                     continue
@@ -4350,14 +4354,14 @@ class BinanceTraderBot:
     
     def fastMarketScanner(self):
 
-        print("🚨 DEBUG: fastMarketScanner V2 rodando")    
         now = time.time()
 
-        # usar cache se ainda estiver válido
         if now - self.scanner_cache_time < self.scanner_cache_ttl:
             return self.scanner_cache
 
         print("🔎 Escaneando mercado rápido...")
+
+        tickers = []  # ← CRÍTICO
 
         try:
             tickers = self.client_binance.get_ticker()
@@ -4365,70 +4369,19 @@ class BinanceTraderBot:
             print("Erro no scanner:", e)
             return []
 
-        if not tickers or not isinstance(tickers, list):
-            print("⚠️ Nenhum ticker recebido.")
+        if not isinstance(tickers, list):
             return []
 
         ranking = []
 
         for t in tickers:
-
             try:
                 symbol = t["symbol"]
-
-                if not symbol.endswith("USDT"):
-                    continue
-
                 price = float(t["lastPrice"])
                 volume = float(t["quoteVolume"])
                 change = float(t["priceChangePercent"])
-
-            except (KeyError, ValueError):
+            except Exception:
                 continue
-
-            # ignorar moedas muito baratas (ruído)
-            if price < 0.00001:
-                continue
-
-            # filtro de liquidez
-            if volume < 5_000_000:
-                continue
-
-            score = 0
-
-            # volume forte
-            if volume > 30_000_000:
-                score += 3
-            elif volume > 15_000_000:
-                score += 2
-            elif volume > 8_000_000:
-                score += 1
-
-            # momentum diário
-            if change > 4:
-                score += 3
-            elif change > 2:
-                score += 2
-            elif change > 1:
-                score += 1
-
-            # bônus para moedas com bom movimento
-            if abs(change) > 5:
-                score += 1
-
-            ranking.append((symbol, score, change, volume))
-
-        ranking.sort(key=lambda x: x[1], reverse=True)
-
-        top = ranking[:6]
-
-        print("🔥 TOP OPORTUNIDADES:", [r[0] for r in top])
-
-        # salvar cache
-        self.scanner_cache = top
-        self.scanner_cache_time = now
-
-        return top
     
     def mediumMarketAnalysis(self):
 

@@ -512,11 +512,6 @@ def trader_master_loop():
             if not current_trader.actual_trade_position:
 
                 print("📉 Operação finalizada")
-                
-                current_trader = None
-                last_traded_symbol = None
-
-                time.sleep(10)
 
                 if last_traded_symbol:
                     symbol_cooldown[last_traded_symbol] = time.time()
@@ -550,13 +545,13 @@ def trader_master_loop():
                         profit
                     ])
                 
+                update_market_memory(current_trader.operation_code, profit)
+                
                 sleep_time = max(3, min(8, TEMPO_ENTRE_TRADES))
                 time.sleep(sleep_time)
 
-                update_market_memory(current_trader.operation_code, profit)
-
                 current_trader = None
-                last_traded_symbol = None
+                last_traded_symbol = None 
 
                 time.sleep(10)
 
@@ -927,7 +922,7 @@ def scan_market_top_symbols(client, limit=10):
     SCANNER_SMART_MONEY.clear()
     SCANNER_RANKING.clear()
 
-    print("🔎 Escaneando mercado inteligente PRO AQUI...")
+    print("🔎 Escaneando mercado inteligente PRO...")
 
     symbols = [
         "SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","LINKUSDT",
@@ -942,15 +937,18 @@ def scan_market_top_symbols(client, limit=10):
 
     try:
 
-        if not isinstance(tickers, list):
+        # 🔥 buscar tickers da Binance
+        tickers = safe_binance_call(client.get_ticker)
+
+        if not tickers or not isinstance(tickers, list):
+            print("⚠️ Nenhum ticker recebido.")
             return []
 
         tickers = sorted(
             tickers,
-            key=lambda x: float(x.get("quoteVolume",0)),
+            key=lambda x: float(x.get("quoteVolume", 0)),
             reverse=True
-        )[:60]
-        
+        )[:60]        
         
         # filtro inicial rápido
         MIN_VOLUME = config["SCANNER"]["MIN_VOLUME"]
