@@ -420,7 +420,7 @@ def trader_master_loop():
                     factor = 0.15
                 elif btc_mode == "HIGH_VOLATILITY":
                     factor = 0.25
-                else
+                else:
                     factor = 0.20
                     
                 volatility = (recent_high - recent_low) / max(recent_low, 1e-8)
