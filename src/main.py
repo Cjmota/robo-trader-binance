@@ -416,13 +416,20 @@ def trader_master_loop():
 
                 # definir momentum mínimo baseado no modo de mercado
                 if btc_mode == "LOW_LIQUIDITY":
-                    min_momentum = 0.0006
+                    factor = 0.10
                 elif btc_mode == "SIDEWAYS":
-                    min_momentum = 0.0008
+                    factor = 0.15
                 elif btc_mode == "HIGH_VOLATILITY":
-                    min_momentum = 0.0012
+                    factor = 0.25
                 else:
-                    min_momentum = 0.0015
+                    factor = 0.20
+
+                recent_high = max(closes[-20:])
+                recent_low = min(closes[-20:])
+
+                volatility = (recent_high - recent_low) / max(recent_low, 1e-8)
+
+                min_momentum = volatility * factor
 
                 explosive_move = abs(momentum) > min_momentum * 3
                 
