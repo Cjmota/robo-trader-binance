@@ -4350,6 +4350,7 @@ class BinanceTraderBot:
     
     def fastMarketScanner(self):
 
+        print("🚨 DEBUG: fastMarketScanner V2 rodando")    
         now = time.time()
 
         # usar cache se ainda estiver válido
