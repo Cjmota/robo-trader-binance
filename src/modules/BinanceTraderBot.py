@@ -1592,7 +1592,9 @@ class BinanceTraderBot:
                 if not self.updateAllData(verbose=True):
                     continue
 
-                if self.stock_data is None or len(self.stock_data) < 50:
+                # 🔒 proteção contra dados insuficientes
+                if self.stock_data is None or len(self.stock_data) < 20:
+                    print("⚠️ Dados insuficientes de candles.")
                     continue
 
                 tested_symbols.add(symbol)
@@ -1675,17 +1677,28 @@ class BinanceTraderBot:
                 )
 
                 quantity = capital_to_use / price
+
                 quantity = self.adjust_to_step(quantity, self.step_size)
 
-                if quantity > 0:
+                # evitar ordem inválida
+                if quantity * price < 5:
+                    print("⚠️ Ordem muito pequena, ignorando")
+                    return
 
-                    print("🚀 Entrada antecipada por pré-explosão")
+                if quantity <= 0:
+                    print("⚠️ Quantidade inválida")
+                    return
 
-                    self.buyMarketOrder(quantity=quantity)
+                print(f"🚀 Enviando ordem | {self.operation_code} | qty {quantity}")
 
-                    self.hourly_trades += 1
-                    self.last_trade_time = time.time()
+                self.buyMarketOrder(quantity=quantity)
 
+                # ajustar para step size da Binance
+                quantity = self.adjust_to_step(quantity, self.step_size)
+
+                # evitar ordem muito pequena
+                if quantity * price < 5:
+                    print("⚠️ Ordem muito pequena, ignorando")
                     return
             
             explosion_setup = self.detectVolatilityExplosionSetup()
@@ -1708,14 +1721,26 @@ class BinanceTraderBot:
 
                 price = self.stock_data["close_price"].iloc[-1]
 
-                capital_to_use = self.capital * 0.6
+                score = 5
+
+                capital_to_use = self.calculateAdaptivePositionSize(
+                    score=score,
+                    probability=0.65
+                )
 
                 quantity = capital_to_use / price
+
+                # ajustar para step size da Binance
                 quantity = self.adjust_to_step(quantity, self.step_size)
 
-                if quantity > 0:
-                    self.buyMarketOrder(quantity=quantity)
+                # evitar ordem inválida
+                if quantity * price < 5:
+                    print("⚠️ Ordem muito pequena, ignorando")
                     return
+
+                print(f"🚀 Enviando ordem | {self.operation_code} | qty {quantity}")
+
+                self.buyMarketOrder(quantity=quantity)
             
             whale_signal = self.detectWhalePressure()
             
@@ -2651,11 +2676,16 @@ class BinanceTraderBot:
         Fecha posição atual a mercado usando o saldo real.
         """
 
-        if not self.actual_trade_position:
-            print("ℹ️ Nenhuma posição aberta para fechar.")
-            return False
-
         try:
+            
+            if not self.actual_trade_position:
+                result = self.entryMode()
+            else:
+                result = self.positionMode()
+            
+            if result is not None:
+                return result
+            
             # 🔄 Atualiza dados antes de fechar
             self.updateAllData(verbose=False)
 
@@ -4842,3 +4872,20 @@ class BinanceTraderBot:
             self.sellMarketOrder()
 
             self.actual_trade_position = False
+        
+    def updateTrailingStop(self, price):
+
+        if not self.actual_trade_position:
+            return
+
+        if self.trailing_stop_price == 0:
+            return
+
+        if price > self.highest_price_since_entry:
+            self.highest_price_since_entry = price
+
+            new_stop = price * (1 - self.trailing_distance)
+
+            if new_stop > self.trailing_stop_price:
+                self.trailing_stop_price = new_stop
+                print(f"📈 Trailing stop atualizado: {self.trailing_stop_price:.6f}")

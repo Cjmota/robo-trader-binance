@@ -1204,4 +1204,3 @@ def run_symbol(symbol):
     except Exception as e:
 
         print(f"Erro no bot {symbol}:", e)
-    
