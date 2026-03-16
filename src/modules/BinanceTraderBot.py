@@ -1491,6 +1491,8 @@ class BinanceTraderBot:
                       
         try:
             
+            avg_volume = 0
+                        
             # -------------------------------------------------
             # 🔒 Se já existe posição aberta, manter ativo atual
 
@@ -1609,6 +1611,8 @@ class BinanceTraderBot:
             if self.stock_data is None or len(self.stock_data) < 50:
                 print("⚠️ Dados insuficientes de candles.")
                 return 
+            # garantir que avg_volume sempre existe
+            avg_volume = self.stock_data["volume"].iloc[-20:].mean()
             
             momentum_acceleration = self.detectMomentumAcceleration()            
             momentum_expansion = self.detectMomentumExpansion()            
@@ -2626,11 +2630,10 @@ class BinanceTraderBot:
     def detectPump(self):
         
         volume = self.stock_data["volume"].iloc[-1]
+        avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
         
         if avg_volume == 0:
             return False
-        
-        avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
 
         close = self.stock_data["close_price"].iloc[-1]
         if len(self.stock_data) < 2:
@@ -4332,7 +4335,7 @@ class BinanceTraderBot:
 
         avg_quote_volume = avg_volume * close_price
 
-        if avg_quote_volume < 8000:
+        if avg_quote_volume < 20000:
             print("⚠️ Liquidez baixa.")
             return False
 
@@ -4382,6 +4385,17 @@ class BinanceTraderBot:
                 change = float(t["priceChangePercent"])
             except Exception:
                 continue
+            
+            # 🔎 filtro do scanner
+            if volume > 500000 and abs(change) > 1:
+                ranking.append((symbol, change, volume))
+        
+        ranking = sorted(ranking, key=lambda x: x[1], reverse=True)
+
+        self.scanner_cache = ranking
+        self.scanner_cache_time = now
+
+        return ranking
     
     def mediumMarketAnalysis(self):
 

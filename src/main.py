@@ -261,7 +261,7 @@ def trader_master_loop():
     last_trade_logged = False
     best_candidate = None
     best_score = 0
-
+    momentum = 0
     try:
         if BINANCE_CLIENT is None:
             BINANCE_CLIENT = Client(API_KEY, API_SECRET)
@@ -865,7 +865,7 @@ def analyze_symbol(client, t, config):
 
         volatility = (max_price - min_price) / min_price
         
-        if volatility < MIN_VOLATILITY:
+        if volatility < MIN_VOLATILITY * 0.8:
             return None
 
         if volatility > MAX_VOLATILITY:
@@ -874,7 +874,10 @@ def analyze_symbol(client, t, config):
         if len(closes) < 30:
             return None
 
-        momentum = (closes[-1] - closes[-5]) / max(closes[-5], 0.0000001)
+        momentum1 = (closes[-1] - closes[-3]) / max(closes[-3], 1e-8)
+        momentum2 = (closes[-3] - closes[-6]) / max(closes[-6], 1e-8)
+
+        acceleration = momentum1 - momentum2
 
         smart_score = calculateSmartScore(
             closes,
@@ -891,7 +894,7 @@ def analyze_symbol(client, t, config):
             lows
         )
 
-        volume_weight = min(volume / 10000000, 5)
+        volume_weight = math.log(volume + 1)
 
         smart_money_signal = detectSmartMoney(
             closes,
@@ -915,7 +918,8 @@ def analyze_symbol(client, t, config):
         return {
             "symbol": symbol,
             "score": score,
-            "momentum": momentum,
+             "momentum": momentum1,
+            "momentum": acceleration,
             "volume": volume
         }
 
@@ -975,11 +979,10 @@ def scan_market_top_symbols(client, limit=10):
             print("⚠️ Nenhum ticker recebido.")
             return []
 
-        tickers = sorted(
-            tickers,
-            key=lambda x: float(x.get("quoteVolume", 0)),
-            reverse=True
-        )[:60]        
+        tickers = [
+            t for t in tickers
+            if t["symbol"].endswith("USDT")
+        ]       
         
         # filtro inicial rápido
         MIN_VOLUME = config["SCANNER"]["MIN_VOLUME"]
@@ -992,7 +995,7 @@ def scan_market_top_symbols(client, limit=10):
 
             if not symbol.endswith("USDT"):
                 continue
-
+            
             volume = float(t.get("quoteVolume",0))
 
             if volume < MIN_VOLUME:
@@ -1005,7 +1008,7 @@ def scan_market_top_symbols(client, limit=10):
 
             change = abs(float(t.get("priceChangePercent",0)))
 
-            if change < 0.1:
+            if change < 0.3:
                 continue  
                     
             # score inicial simples
@@ -1019,13 +1022,13 @@ def scan_market_top_symbols(client, limit=10):
         filtered = filtered[:SCAN_LIMIT]
 
         # pegar top 30
-        symbols = [t for t, _ in filtered[:SCAN_LIMIT]]
+        ticker_objects = [t for t, _ in filtered[:SCAN_LIMIT]]
 
         # análise paralela
         max_workers = min(8, os.cpu_count() or 1)
             
         with ThreadPoolExecutor(max_workers=max_workers) as executor:
-            results = list(executor.map(analyze_symbol_wrapper, symbols))
+            results = list(executor.map(analyze_symbol_wrapper, ticker_objects))
 
         candidates = [
             r for r in results
