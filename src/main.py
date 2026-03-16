@@ -87,7 +87,7 @@ def reload_runtime_config(bot):
     new_config = load_config()
 
     # Estratégias
-    bot.main_strategy = strategy_map[new_config["MAIN_STRATEGY"]]
+    bot.main_strategy = strategy_map.get(new_config["MAIN_STRATEGY"], getVortexTradeStrategy)
     bot.main_strategy_args = new_config.get("MAIN_STRATEGY_ARGS", {})
 
     bot.fallback_strategy = strategy_map[new_config["FALLBACK_STRATEGY"]]
@@ -406,6 +406,8 @@ def trader_master_loop():
                 else:
                     min_momentum = 0.0015
 
+                explosive_move = abs(momentum) > min_momentum * 3
+                
                 # log
                 print(f"📈 {symbol} momentum: {momentum:.5f} | min necessário: {min_momentum}")
 
@@ -460,19 +462,21 @@ def trader_master_loop():
                         fallback_strategy=FALLBACK_STRATEGY,
                         fallback_strategy_args=FALLBACK_STRATEGY_ARGS,
                     )
-
                     temp_trader.setStepSizeAndTickSize()
 
                     if not temp_trader.updateAllData():
                         continue
 
-                    decision = temp_trader.getFinalDecisionStrategy()
+                    decision_str = temp_trader.getFinalDecisionStrategy()
 
-                    decision_str = str(decision).upper() if decision else ""
+                    print(f"🔎 Decisão da estratégia: {decision_str}")
+                    
+                    explosive_move = abs(momentum) > min_momentum * 3
 
-                    print(f"🔎 Decisão da estratégia: {decision_str if decision_str else 'HOLD'}")
+                    if decision_str == "BUY" or explosive_move:
 
-                    if decision_str == "BUY":
+                        if explosive_move and decision_str != "BUY":
+                            print(f"💥 Movimento explosivo detectado em {symbol}")
 
                         score = abs(momentum)
 
@@ -505,9 +509,14 @@ def trader_master_loop():
 
             current_trader.execute()
 
-            if not current_trader.actual_trade_position and not last_trade_logged:
+            if not current_trader.actual_trade_position:
 
-                print("⚠️ Nenhuma posição aberta. Aplicando cooldown...")
+                print("📉 Operação finalizada")
+                
+                current_trader = None
+                last_traded_symbol = None
+
+                time.sleep(10)
 
                 if last_traded_symbol:
                     symbol_cooldown[last_traded_symbol] = time.time()
@@ -516,7 +525,9 @@ def trader_master_loop():
                 exit_price = getattr(current_trader, "last_sell_price", 0)
                 qty = getattr(current_trader, "last_stock_account_balance", 0)
 
-                profit = (exit_price - entry) * qty if entry and exit_price and qty else 0
+                profit = 0
+                if entry and exit_price and qty:
+                    profit = (exit_price - entry) * qty
 
                 last_trade_logged = True
 
@@ -528,8 +539,6 @@ def trader_master_loop():
                     "exit": round(exit_price, 2),
                     "profit": round(profit, 4)
                 })
-                
-                import csv
 
                 with open("trades_log.csv","a",newline="") as f:
 
@@ -540,6 +549,9 @@ def trader_master_loop():
                         current_trader.operation_code,
                         profit
                     ])
+                
+                sleep_time = max(3, min(8, TEMPO_ENTRE_TRADES))
+                time.sleep(sleep_time)
 
                 update_market_memory(current_trader.operation_code, profit)
 
@@ -548,8 +560,7 @@ def trader_master_loop():
 
                 time.sleep(10)
 
-        sleep_time = max(3, min(8, TEMPO_ENTRE_TRADES))
-        time.sleep(sleep_time)
+        time.sleep(max(3, min(8, TEMPO_ENTRE_TRADES)))
 
     print("🛑 Loop do robô finalizado.")
 
@@ -931,7 +942,8 @@ def scan_market_top_symbols(client, limit=10):
 
     try:
 
-        tickers = safe_binance_call(client.get_ticker)
+        if not isinstance(tickers, list):
+            return []
 
         tickers = sorted(
             tickers,

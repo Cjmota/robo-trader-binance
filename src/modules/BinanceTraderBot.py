@@ -91,9 +91,9 @@ class BinanceTraderBot:
         self.api_secret = api_secret
         self.testnet = testnet
         
-        self.capital = 15 #traded_quantity  # valor em USDT configurado por ativo
+        self.capital = traded_quantity #traded_quantity  # valor em USDT configurado por ativo
         
-        self.trailing_activation = config["TRAILING"]["ACTIVATION"] / 100
+        self.config = config or {}
         self.trailing_stop_percent = config["TRAILING"]["DISTANCE"] / 100
         self.trailing_stop_price = 0.0
         self.highest_price_since_entry = 0.0
@@ -151,11 +151,11 @@ class BinanceTraderBot:
         self.scanner_ranking = []
         self.last_scan_time = 0
         self.scan_interval = 30  # segundos entre scans
-        
-        self.operation_code = None
-        
+                
         self.symbol_cooldown = {}
         self.symbol_cooldown_time = 30
+        
+        self.trailing_activation = 0.005  # 0.5%
 
         VALID_INTERVALS = [
             "1m","3m","5m","15m","30m",
@@ -217,6 +217,8 @@ class BinanceTraderBot:
         self.candles_cache = {}
         self.candles_cache_time = {}
         self.candle_cache_ttl = 15
+        
+        self.current_symbol = None
 
         for attempt in range(5):
             try:
@@ -266,6 +268,7 @@ class BinanceTraderBot:
         
         
     def trailingStopTrigger(self):
+        
         if not self.actual_trade_position or self.last_buy_price <= 0:
             return False
 
@@ -275,7 +278,13 @@ class BinanceTraderBot:
         if self.stock_data is None or self.stock_data.empty:
             return False
 
-        close_price = self.stock_data["close_price"].iloc[-1]
+        close_price = float(self.stock_data["close_price"].iloc[-1])
+        
+    def get_last_price(self):
+        
+        if self.stock_data is None or self.stock_data.empty:
+            return None
+        return float(self.stock_data["close_price"].iloc[-1])
 
         # Atualiza o maior preço desde a entrada
         if self.highest_price_since_entry == 0 or close_price > self.highest_price_since_entry:
@@ -474,6 +483,9 @@ class BinanceTraderBot:
         )
 
         # Transforma um um DataFrame Pandas
+        
+        if not candles:
+            return None
         prices = pd.DataFrame(candles)
 
         # Renomea as colunas baseada na Documentação da Binance
@@ -899,6 +911,7 @@ class BinanceTraderBot:
             self.highest_price_since_entry = close_price
             self.trailing_stop_price = 0
             self.break_even_activated = False
+            self.current_symbol = self.operation_code
 
             self.last_trade_time = time.time()
 
@@ -1071,7 +1084,10 @@ class BinanceTraderBot:
                 )
 
                 # 🔥 Resultado da operação
-                avg_price = float(order_sell["fills"][0]["price"]) if "fills" in order_sell else close_price
+                avg_price = close_price
+                if "fills" in order_sell and order_sell["fills"]:
+                    avg_price = float(order_sell["fills"][0]["price"])
+                
                 self.printOperationResult(avg_price, qty_float)
 
                 # 🔄 Atualiza saldo real após execução
@@ -1081,6 +1097,9 @@ class BinanceTraderBot:
                 self.highest_price_since_entry = 0
                 self.trailing_stop_price = 0
                 self.break_even_activated = False
+                
+                if not self.actual_trade_position:
+                    self.current_symbol = None
 
                 remaining_balance = self.last_stock_account_balance
 
@@ -1471,15 +1490,32 @@ class BinanceTraderBot:
     def execute(self):
                       
         try:
+            
+            # -------------------------------------------------
+            # 🔒 Se já existe posição aberta, manter ativo atual
+
+            if self.actual_trade_position and self.current_symbol:
+
+                print(f"🔒 Mantendo operação no ativo atual: {self.current_symbol}")
+
+                # força o bot a continuar operando o ativo da posição
+                self.operation_code = self.current_symbol
+
+                # atualizar dados do ativo atual
+                if not self.updateAllData(verbose=True):
+                    print("⚠️ Falha ao atualizar dados do ativo atual.")
+                    return
                 
-                # atualizar scanner somente quando necessário
-            if time.time() - self.last_scan_time > self.scan_interval:
+            # 🔎 Scanner só roda se não houver posição aberta
+            if not self.actual_trade_position:
 
-                print("🔎 Escaneando mercado inteligente PRO...")
+                if time.time() - self.last_scan_time > self.scan_interval:
 
-                self.scanner_ranking = self.fastMarketScanner()
+                    print("🔎 Escaneando mercado inteligente PRO...")
 
-                self.last_scan_time = time.time()  
+                    self.scanner_ranking = self.fastMarketScanner()
+
+                    self.last_scan_time = time.time() 
                 
             ranking_original = self.scanner_ranking[:5] if self.scanner_ranking else []
 
@@ -1517,6 +1553,7 @@ class BinanceTraderBot:
                 print(f"🎯 Testando ativo: {symbol}")
 
                 self.operation_code = symbol
+                self.current_symbol = symbol
 
                 if not self.updateAllData(verbose=True):
                     continue
@@ -2585,6 +2622,10 @@ class BinanceTraderBot:
     def detectPump(self):
         
         volume = self.stock_data["volume"].iloc[-1]
+        
+        if avg_volume == 0:
+            return False
+        
         avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
 
         close = self.stock_data["close_price"].iloc[-1]
@@ -2616,6 +2657,7 @@ class BinanceTraderBot:
                 return False
 
             current_price = closes.iloc[-1]
+            
             prev_price = closes.iloc[-2]
 
             avg_volume = volumes.iloc[-20:].mean()
@@ -2845,6 +2887,9 @@ class BinanceTraderBot:
                     limit=50
                 )
 
+                if not depth:
+                    return {"bids": [], "asks": []}
+
                 self.cached_orderbook = depth
                 self.last_orderbook_check = time.time()
 
@@ -3038,7 +3083,7 @@ class BinanceTraderBot:
             bid_volume = sum(float(b[1]) for b in bids)
             ask_volume = sum(float(a[1]) for a in asks)
 
-            if self.stock_data.empty:
+            if self.stock_data is None or self.stock_data.empty:
                 return None
 
             total_liquidity = bid_volume + ask_volume
@@ -3539,14 +3584,14 @@ class BinanceTraderBot:
             else:
                 self.actual_trade_position = False
 
-                if self.last_buy_price == 0:
-                    self.last_buy_price = close_price
+            if self.last_buy_price == 0:
+                self.last_buy_price = close_price
 
-                    print("📊 Posição detectada na carteira")
+                print("📊 Posição detectada na carteira")
 
-                else:
+            else:
 
-                    self.actual_trade_position = False
+                self.actual_trade_position = False
 
         except Exception as e:
 
@@ -3953,7 +3998,7 @@ class BinanceTraderBot:
             else:
                 trades = self.client_binance.get_recent_trades(
                     symbol=self.operation_code,
-                    limit=200
+                    limit=100
                 )
                 self.trades_cache = trades
                 self.trades_cache_time = time.time()
@@ -4313,8 +4358,11 @@ class BinanceTraderBot:
 
         print("🔎 Escaneando mercado rápido...")
 
-        tickers = self.client_binance.get_ticker()  # 24h stats de todos os pares
+        tickers = self.client_binance.get_ticker()
 
+        if not isinstance(tickers, list):
+            return []
+        
         ranking = []
 
         for t in tickers:
@@ -4492,6 +4540,9 @@ class BinanceTraderBot:
             multiplier += 0.3
 
         if volume_spike:
+            multiplier += 0.2
+        
+        if gap_signal:
             multiplier += 0.2
 
         if sweep_signal:
