@@ -412,10 +412,6 @@ def trader_master_loop():
                 recent_high = max(closes[-20:])
                 recent_low = min(closes[-20:])
 
-                volatility = (recent_high - recent_low) / max(recent_low, 1e-8)
-
-                min_momentum = volatility * factor
-
                 # cálculo de momentum
                 m1 = (closes[-1] - closes[-3]) / max(closes[-3], 1e-8)
                 m2 = (closes[-3] - closes[-6]) / max(closes[-6], 1e-8)
@@ -437,13 +433,14 @@ def trader_master_loop():
                     factor = 0.25
                 else:
                     factor = 0.20
+                    
+                volatility = (recent_high - recent_low) / max(recent_low, 1e-8)
+
+                min_momentum = volatility * factor
 
                 recent_high = max(closes[-20:])
                 recent_low = min(closes[-20:])
 
-                volatility = (recent_high - recent_low) / max(recent_low, 1e-8)
-
-                min_momentum = volatility * factor
 
                 explosive_move = abs(momentum) > min_momentum * 3
                 
