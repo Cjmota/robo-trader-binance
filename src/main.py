@@ -408,11 +408,25 @@ def trader_master_loop():
 
                 closes = [float(c[4]) for c in candles]
 
-                if len(closes) < 8:
-                    continue
+                # cálculo volatilidade
+                recent_high = max(closes[-20:])
+                recent_low = min(closes[-20:])
+
+                volatility = (recent_high - recent_low) / max(recent_low, 1e-8)
+
+                min_momentum = volatility * factor
 
                 # cálculo de momentum
-                momentum = (closes[-1] - closes[-8]) / max(closes[-8], 1e-8)
+                m1 = (closes[-1] - closes[-3]) / max(closes[-3], 1e-8)
+                m2 = (closes[-3] - closes[-6]) / max(closes[-6], 1e-8)
+
+                momentum = m1
+                acceleration = m1 - m2
+                
+                # filtro de movimento
+                if momentum < min_momentum and acceleration < min_momentum:
+                    print("⚠️ Momentum fraco")
+                    continue
 
                 # definir momentum mínimo baseado no modo de mercado
                 if btc_mode == "LOW_LIQUIDITY":
@@ -905,6 +919,8 @@ def analyze_symbol(client, t, config):
         )
 
         score = smart_score * (1 + volume_weight)
+        
+        score += abs(acceleration) * 50
 
         if accumulation_signal:
             score *= 1.4
