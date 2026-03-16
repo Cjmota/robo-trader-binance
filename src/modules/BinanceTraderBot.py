@@ -4380,6 +4380,17 @@ class BinanceTraderBot:
         for t in tickers:
             try:
                 symbol = t["symbol"]
+                
+                # 🔒 aceitar apenas pares USDT
+                if (
+                    not symbol.endswith("USDT")
+                    or "UP" in symbol
+                    or "DOWN" in symbol
+                    or "3L" in symbol
+                    or "3S" in symbol
+                ):
+                    continue
+                
                 price = float(t["lastPrice"])
                 volume = float(t["quoteVolume"])
                 change = float(t["priceChangePercent"])
@@ -4388,7 +4399,8 @@ class BinanceTraderBot:
             
             # 🔎 filtro do scanner
             if volume > 500000 and abs(change) > 1:
-                ranking.append((symbol, change, volume))
+                score = abs(change) * math.log(volume + 1)
+                ranking.append((symbol, score, change, volume))
         
         ranking = sorted(ranking, key=lambda x: x[1], reverse=True)
 
