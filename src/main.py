@@ -395,7 +395,7 @@ def trader_master_loop():
 
                 stock = symbol.replace("USDT", "")
 
-                print(f"🎯 Testando ativo: {symbol}")
+                print(f"🎯 Testando ativo, esse aqui meu: {symbol}")
                 
                 candles = safe_binance_call(
                     BINANCE_CLIENT.get_klines,

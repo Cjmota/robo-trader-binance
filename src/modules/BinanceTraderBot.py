@@ -1539,7 +1539,6 @@ class BinanceTraderBot:
             else:
                 self.positionMode()
             
-            avg_volume = 0
             volume_divergence = False
                         
             # -------------------------------------------------
