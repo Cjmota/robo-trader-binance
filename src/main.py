@@ -331,7 +331,7 @@ def trader_master_loop():
             best_candidate = None
             best_score = 0
 
-            symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=3)
+            symbols = scan_market_top_symbols(BINANCE_CLIENT, limit=8)
 
             if not symbols:
                 print("⚠️ Nenhuma oportunidade encontrada.")
@@ -434,12 +434,7 @@ def trader_master_loop():
                 m2 = (closes[-3] - closes[-6]) / max(closes[-6], 1e-8)
 
                 momentum = m1
-                acceleration = m1 - m2
-                
-                # filtro de movimento
-                if abs(momentum) < min_momentum and abs(acceleration) < min_momentum:
-                    print("⚠️ Momentum fraco")
-                    continue                
+                acceleration = m1 - m2         
 
                 recent_high = max(closes[-20:])
                 recent_low = min(closes[-20:])
@@ -459,7 +454,7 @@ def trader_master_loop():
                     continue
 
                 # filtro
-                if abs(momentum) < min_momentum:
+                if abs(momentum) < min_momentum and not explosive_move:
                     print(f"⚠️ Momentum fraco ({momentum:.5f} < {min_momentum})")
                     continue
                 
@@ -516,7 +511,7 @@ def trader_master_loop():
                         if explosive_move and decision_str != "BUY":
                             print(f"💥 Movimento explosivo detectado em {symbol}")
 
-                        score = abs(momentum) + abs(acceleration)
+                        score = abs(momentum) * 2 + abs(acceleration) + volatility
 
                         if score > best_score:
                             best_candidate = temp_trader

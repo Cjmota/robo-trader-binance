@@ -200,7 +200,7 @@ class BinanceTraderBot:
         
         self.hourly_trades = 0
         self.last_hour = datetime.now().hour
-        self.max_hourly_trades = 6
+        self.max_hourly_trades = 12
         
         self.last_account_update = 0
         self.cached_account = None
@@ -219,6 +219,16 @@ class BinanceTraderBot:
         self.candle_cache_ttl = 15
         
         self.current_symbol = None
+        
+        self.price_cache = None
+        self.price_cache_time = 0
+        self.price_cache_ttl = 2
+        
+        self.volume_cache = None
+        self.volume_cache_time = 0
+        
+        self.regime_cache = None
+        self.regime_cache_time = 0
 
         for attempt in range(5):
             try:
@@ -397,7 +407,7 @@ class BinanceTraderBot:
             self.last_stock_account_balance = self.getLastStockAccountBalance()
 
             # 4️⃣ Detecta posição real
-            close_price = self.stock_data["close_price"].iloc[-1]
+            close_price = self.getCachedPrice()
             position_value = self.last_stock_account_balance * close_price
 
             MIN_POSITION_VALUE = 5  # mínimo em USDT para considerar posição ativa
@@ -1502,27 +1512,6 @@ class BinanceTraderBot:
 
                 # força o bot a continuar operando o ativo da posição
                 self.operation_code = self.current_symbol
-
-                # atualizar dados do ativo atual
-                if not self.updateAllData(verbose=True):
-                    print("⚠️ Falha ao atualizar dados do ativo atual.")
-                    return
-                
-            # 🔎 Scanner só roda se não houver posição aberta
-            if not self.actual_trade_position:
-
-                if time.time() - self.last_scan_time > self.scan_interval:
-
-                    print("🔎 Escaneando mercado inteligente PRO...")
-
-                    result = self.fastMarketScanner()
-
-                    if result:
-                        self.scanner_ranking = result
-                    else:
-                        print("⚠️ Scanner retornou vazio.")
-
-                    self.last_scan_time = time.time() 
                 
             ranking_original = self.scanner_ranking[:5] if self.scanner_ranking else []
 
@@ -1621,7 +1610,44 @@ class BinanceTraderBot:
             position_value = self.last_stock_account_balance * close_price
                     
             # 🔎 Detectar regime de mercado
-            regime = self.detectMarketRegime()
+            regime = self.getCachedRegime()
+            
+            # 🚀 DETECTOR DE PRÉ-EXPLOSÃO
+            pre_explosion = (
+                self.detectVolatilityCompression()
+                and self.detectMomentumAcceleration()
+                and self.detectPump()
+            )
+
+            if pre_explosion and not self.actual_trade_position:
+
+                print("💣 SETUP PRÉ-EXPLOSÃO DETECTADO")
+
+                price = self.stock_data["close_price"].iloc[-1]
+
+                capital_to_use = self.calculateAdaptivePositionSize(
+                    score=6,
+                    probability=0.65,
+                    sweep_signal=None,
+                    trap_signal=None,
+                    whale_signal=None,
+                    volume_spike=True,
+                    gap_signal=None
+                )
+
+                quantity = capital_to_use / price
+                quantity = self.adjust_to_step(quantity, self.step_size)
+
+                if quantity > 0:
+
+                    print("🚀 Entrada antecipada por pré-explosão")
+
+                    self.buyMarketOrder(quantity=quantity)
+
+                    self.hourly_trades += 1
+                    self.last_trade_time = time.time()
+
+                    return
             
             explosion_setup = self.detectVolatilityExplosionSetup()
             
@@ -2109,7 +2135,7 @@ class BinanceTraderBot:
 
                 else:
 
-                    if not self.tradeQualityFilter():
+                    if not self.tradeQualityFilter() and score < 7:
 
                         print("⛔ Trade bloqueado pelo filtro de qualidade")
 
@@ -2304,7 +2330,7 @@ class BinanceTraderBot:
                     print("🔥 Trade institucional detectado - ignorando filtro")
 
                 else:
-                    if not self.tradeQualityFilter():
+                    if not self.tradeQualityFilter() and score < 7:
                         print("⛔ Trade bloqueado pelo filtro de qualidade")
                         return   
 
@@ -3946,7 +3972,7 @@ class BinanceTraderBot:
 
         print(f"⚡ Momentum acceleration: {acceleration:.5f}")
 
-        if acceleration > 0.001:
+        if acceleration > 0.0004:
             print("⚡ Momentum acelerando")
             return True
 
@@ -3956,9 +3982,10 @@ class BinanceTraderBot:
 
         self.last_buy_price = 0
         self.last_sell_price = 0
-        self.actual_trade_position = False
         self.trailing_stop_price = 0
         self.highest_price_since_entry = 0
+        self.actual_trade_position = False
+        
         
     def marketRiskFilter(self):
 
@@ -4343,7 +4370,7 @@ class BinanceTraderBot:
             print("⚠️ Volatilidade baixa.")
             return False
 
-        regime = self.detectMarketRegime()
+        regime = self.getCachedRegime()
 
         if regime == "SIDEWAYS":
             print("⚠️ Mercado lateral.")
@@ -4681,3 +4708,47 @@ class BinanceTraderBot:
             print("Erro detectLiquidityGap:", e)
 
             return None
+        
+    def getCachedPrice(self):
+
+        now = time.time()
+
+        if self.price_cache and now - self.price_cache_time < self.price_cache_ttl:
+            return self.price_cache
+
+        ticker = self.client_binance.get_symbol_ticker(symbol=self.operation_code)
+
+        price = float(ticker["price"])
+
+        self.price_cache = price
+        self.price_cache_time = now
+
+        return price
+    
+    def getCachedAvgVolume(self):
+
+        now = time.time()
+
+        if self.volume_cache and now - self.volume_cache_time < 5:
+            return self.volume_cache
+
+        avg_volume = self.stock_data["volume"].iloc[-20:].mean()
+
+        self.volume_cache = avg_volume
+        self.volume_cache_time = now
+
+        return avg_volume
+    
+    def getCachedRegime(self):
+
+        now = time.time()
+
+        if self.regime_cache and now - self.regime_cache_time < 10:
+            return self.regime_cache
+
+        regime = self.getCachedRegime()
+
+        self.regime_cache = regime
+        self.regime_cache_time = now
+
+        return regime

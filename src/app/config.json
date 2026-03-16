@@ -8,15 +8,15 @@
     "SCANNER": {
         "MIN_VOLUME": 3000000,
         "MIN_TRADES": 1500,
-        "MIN_VOLATILITY": 0.003,
-        "MAX_VOLATILITY": 0.08,
+        "MIN_VOLATILITY": 0.006,
+        "MAX_VOLATILITY": 0.05,
         "SPREAD_LIMIT": 0.001,
-        "PUMP_PROTECTION": 0.10,
+        "PUMP_PROTECTION": 0.06,
         "SCAN_LIMIT": 100
     },
 
     "RISK": {
-        "MAX_TRADES_PER_DAY": 30,
+        "MAX_TRADES_PER_DAY": 80,
         "SYMBOL_COOLDOWN": 900,
         "LOSS_COOLDOWN": 3600,
         "MAX_POSITION_PERCENT": 0.05
@@ -29,8 +29,8 @@
     },
 
     "TRAILING": {
-    "ACTIVATION": 0.5,
-    "DISTANCE": 0.6
+    "ACTIVATION": 0.7,
+    "DISTANCE": 0.5
     },
 
     "BREAK_EVEN": {
@@ -44,7 +44,7 @@
     "TP_AMOUNT_PERCENTAGE": [60, 40],
 
     "CANDLE_PERIOD": "5m",
-    "TEMPO_ENTRE_TRADES": 30,
+    "TEMPO_ENTRE_TRADES": 60,
     "DELAY_ENTRE_ORDENS": 10,
     "stocks_traded_list": [
         {
