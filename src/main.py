@@ -511,17 +511,17 @@ def trader_master_loop():
                     
                     explosive_move = abs(momentum) > min_momentum * 3
 
-                    if decision_str == "BUY" or explosive_move:
+                    if decision_str in ["BUY", "SELL"] or explosive_move:
 
                         if explosive_move and decision_str != "BUY":
                             print(f"💥 Movimento explosivo detectado em {symbol}")
 
-                        score = abs(momentum)
+                        score = abs(momentum) + abs(acceleration)
 
                         if score > best_score:
                             best_candidate = temp_trader
                             best_score = score 
-                            print(f"🏆 Novo candidato: {symbol} | score {score:.6f}")   
+                            print(f"🏆 Novo candidato: {symbol} | score {score:.6f} | decisão {decision_str}")   
 
                 except Exception as e:
                     print(f"Erro ao analisar {symbol}: {e}")
