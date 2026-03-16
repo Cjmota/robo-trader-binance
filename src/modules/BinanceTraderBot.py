@@ -278,7 +278,7 @@ class BinanceTraderBot:
         
         
     def trailingStopTrigger(self):
-        
+
         if not self.actual_trade_position or self.last_buy_price <= 0:
             return False
 
@@ -289,6 +289,37 @@ class BinanceTraderBot:
             return False
 
         close_price = float(self.stock_data["close_price"].iloc[-1])
+
+        # atualizar maior preço desde entrada
+        if self.highest_price_since_entry == 0 or close_price > self.highest_price_since_entry:
+            self.highest_price_since_entry = close_price
+
+        # ativar trailing só depois de lucro mínimo
+        activation_price = self.last_buy_price * (1 + self.trailing_activation)
+
+        if self.highest_price_since_entry < activation_price:
+            return False
+
+        # calcular novo trailing
+        new_trailing = self.highest_price_since_entry * (1 - self.trailing_stop_percent)
+
+        # trailing só sobe
+        if new_trailing > self.trailing_stop_price:
+            self.trailing_stop_price = new_trailing
+            print(f"📈 Trailing Stop atualizado: {self.trailing_stop_price:.6f}")
+
+        # acionar venda
+        if self.trailing_stop_price > 0 and close_price <= self.trailing_stop_price:
+
+            print("🔴 Trailing Stop acionado!")
+
+            self.cancelAllOrders()
+            time.sleep(1)
+            self.sellMarketOrder()
+
+            return True
+
+        return False
         
     def get_last_price(self):
         
@@ -4746,7 +4777,7 @@ class BinanceTraderBot:
         if self.regime_cache and now - self.regime_cache_time < 10:
             return self.regime_cache
 
-        regime = self.getCachedRegime()
+        regime = self.detectMarketRegime()  # ✅ correto
 
         self.regime_cache = regime
         self.regime_cache_time = now
