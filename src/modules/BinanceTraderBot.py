@@ -22,6 +22,8 @@ from src.strategies.moving_average import getMovingAverageTradeStrategy
 
 from src.utils.trade_logger import log_trade
 
+from src.utils.market_model import multiTimeframeTrend
+
 from src.indicators import Indicators
 
 from src import main
@@ -1533,14 +1535,12 @@ class BinanceTraderBot:
         try:
             
             if not self.actual_trade_position:
-
-                return self.entryMode()
-
+                self.entryMode()
             else:
-
-                return self.positionMode()
+                self.positionMode()
             
             avg_volume = 0
+            volume_divergence = False
                         
             # -------------------------------------------------
             # 🔒 Se já existe posição aberta, manter ativo atual
@@ -1633,9 +1633,6 @@ class BinanceTraderBot:
             # 2️⃣ análise intermediária
             if not self.mediumMarketAnalysis():
                 return
-
-            # 3️⃣ análise pesada
-            institutional_signals = self.heavyMarketAnalysis()         
         
             # proteção contra poucos candles
             if self.stock_data is None or len(self.stock_data) < 50:
@@ -1700,6 +1697,8 @@ class BinanceTraderBot:
                 if quantity * price < 5:
                     print("⚠️ Ordem muito pequena, ignorando")
                     return
+                
+                self.buyMarketOrder(quantity=quantity)
             
             explosion_setup = self.detectVolatilityExplosionSetup()
             
@@ -2167,6 +2166,19 @@ class BinanceTraderBot:
                 signal = "SELL"
             else:
                 signal = None
+            
+            # -----------------------------
+            # FILTRO MULTI TIMEFRAME
+
+            trend = multiTimeframeTrend(self, self.operation_code)
+
+            if trend == "DOWN" and signal == "BUY":
+                print("⚠️ Tendência maior contra BUY")
+                return
+
+            if trend == "UP" and signal == "SELL":
+                print("⚠️ Tendência maior contra SELL")
+                return
 
             # ---------------------------------------------
             # CONFIRMAÇÃO DE CANDLE
@@ -2364,7 +2376,7 @@ class BinanceTraderBot:
                 print("⚠️ Divergência de volume detectada, evitando compra")
                 return    
 
-            if signal in [True, "BUY"] and probability >= 0.45 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"]:
+            if signal == "BUY" and probability >= 0.45 and regime in ["TREND","EXPLOSIVE","PRE_BREAKOUT"]:
 
                 if not confirmation:
                     print("⏳ Aguardando confirmação do candle")
