@@ -262,6 +262,7 @@ def trader_master_loop():
     best_candidate = None
     best_score = 0
     momentum = 0
+    factor = 20
     try:
         if BINANCE_CLIENT is None:
             BINANCE_CLIENT = Client(API_KEY, API_SECRET)
@@ -412,6 +413,20 @@ def trader_master_loop():
                 recent_high = max(closes[-20:])
                 recent_low = min(closes[-20:])
 
+                # definir momentum mínimo baseado no modo de mercado
+                if btc_mode == "LOW_LIQUIDITY":
+                    factor = 0.10
+                elif btc_mode == "SIDEWAYS":
+                    factor = 0.15
+                elif btc_mode == "HIGH_VOLATILITY":
+                    factor = 0.25
+                else
+                    factor = 0.20
+                    
+                volatility = (recent_high - recent_low) / max(recent_low, 1e-8)
+
+                min_momentum = volatility * factor
+                
                 # cálculo de momentum
                 m1 = (closes[-1] - closes[-3]) / max(closes[-3], 1e-8)
                 m2 = (closes[-3] - closes[-6]) / max(closes[-6], 1e-8)
@@ -422,25 +437,10 @@ def trader_master_loop():
                 # filtro de movimento
                 if momentum < min_momentum and acceleration < min_momentum:
                     print("⚠️ Momentum fraco")
-                    continue
-
-                # definir momentum mínimo baseado no modo de mercado
-                if btc_mode == "LOW_LIQUIDITY":
-                    factor = 0.10
-                elif btc_mode == "SIDEWAYS":
-                    factor = 0.15
-                elif btc_mode == "HIGH_VOLATILITY":
-                    factor = 0.25
-                else:
-                    factor = 0.20
-                    
-                volatility = (recent_high - recent_low) / max(recent_low, 1e-8)
-
-                min_momentum = volatility * factor
+                    continue                
 
                 recent_high = max(closes[-20:])
                 recent_low = min(closes[-20:])
-
 
                 explosive_move = abs(momentum) > min_momentum * 3
                 
@@ -931,8 +931,8 @@ def analyze_symbol(client, t, config):
         return {
             "symbol": symbol,
             "score": score,
-             "momentum": momentum1,
-            "momentum": acceleration,
+            "momentum": momentum1,
+            "acceleration": acceleration,
             "volume": volume
         }
 
