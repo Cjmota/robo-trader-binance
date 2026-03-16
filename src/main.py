@@ -415,17 +415,19 @@ def trader_master_loop():
 
                 # definir momentum mínimo baseado no modo de mercado
                 if btc_mode == "LOW_LIQUIDITY":
-                    factor = 0.10
+                    factor = 0.03
                 elif btc_mode == "SIDEWAYS":
-                    factor = 0.15
+                    factor = 0.05
                 elif btc_mode == "HIGH_VOLATILITY":
-                    factor = 0.25
+                    factor = 0.08
                 else:
-                    factor = 0.20
+                    factor = 0.06
                     
                 volatility = (recent_high - recent_low) / max(recent_low, 1e-8)
 
                 min_momentum = volatility * factor
+                
+                min_momentum = max(min_momentum, 0.0006)
                 
                 # cálculo de momentum
                 m1 = (closes[-1] - closes[-3]) / max(closes[-3], 1e-8)
@@ -435,7 +437,7 @@ def trader_master_loop():
                 acceleration = m1 - m2
                 
                 # filtro de movimento
-                if momentum < min_momentum and acceleration < min_momentum:
+                if momentum < min_momentum and abs(acceleration) < min_momentum:
                     print("⚠️ Momentum fraco")
                     continue                
 
