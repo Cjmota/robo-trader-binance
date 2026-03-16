@@ -272,6 +272,24 @@ def trader_master_loop():
 
     while BOT_RUNNING:
 
+        # 🔒 Se já existe posição aberta, não escanear mercado
+        if current_trader and current_trader.actual_trade_position:
+
+            CURRENT_TRADER = current_trader
+            BINANCE_CLIENT = current_trader.client_binance
+
+            current_trader.execute()
+
+            time.sleep(max(3, min(8, TEMPO_ENTRE_TRADES)))
+            continue
+        
+        # 🔓 Se não há mais posição, liberar scanner
+        if current_trader and not current_trader.actual_trade_position:
+
+            print("📉 Trade encerrado. Liberando scanner.")
+
+            current_trader = None
+
         try:
             if current_trader:
                 reload_runtime_config(current_trader)
@@ -494,20 +512,26 @@ def trader_master_loop():
 
             if best_candidate:
 
-                print(f"🚀 Melhor oportunidade encontrada: {best_candidate.operation_code}")
+                with thread_lock:
 
-                current_trader = best_candidate
-                symbol_cooldown[best_candidate.operation_code] = time.time()
-                last_traded_symbol = best_candidate.operation_code
+                    if current_trader is None:
+
+                        print(f"🚀 Melhor oportunidade encontrada: {best_candidate.operation_code}")
+
+                        current_trader = best_candidate
+                        symbol_cooldown[best_candidate.operation_code] = time.time()
+                        last_traded_symbol = best_candidate.operation_code
 
 
         # executar trader
         if current_trader:
 
-            CURRENT_TRADER = current_trader
-            BINANCE_CLIENT = current_trader.client_binance
+            with thread_lock:
 
-            current_trader.execute()
+                CURRENT_TRADER = current_trader
+                BINANCE_CLIENT = current_trader.client_binance
+
+                current_trader.execute()
 
             if not current_trader.actual_trade_position:
 
