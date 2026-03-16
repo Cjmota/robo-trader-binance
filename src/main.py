@@ -927,7 +927,7 @@ def scan_market_top_symbols(client, limit=10):
     SCANNER_SMART_MONEY.clear()
     SCANNER_RANKING.clear()
 
-    print("🔎 Escaneando mercado inteligente PRO...")
+    print("🔎 Escaneando mercado inteligente PRO AQUI...")
 
     symbols = [
         "SOLUSDT","XRPUSDT","DOGEUSDT","ADAUSDT","LINKUSDT",
