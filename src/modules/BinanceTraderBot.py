@@ -4358,24 +4358,33 @@ class BinanceTraderBot:
 
         print("🔎 Escaneando mercado rápido...")
 
-        tickers = self.client_binance.get_ticker()
-
-        if not isinstance(tickers, list):
+        try:
+            tickers = self.client_binance.get_ticker()
+        except Exception as e:
+            print("Erro no scanner:", e)
             return []
-        
+
+        if not tickers or not isinstance(tickers, list):
+            print("⚠️ Nenhum ticker recebido.")
+            return []
+
         ranking = []
 
         for t in tickers:
 
-            symbol = t["symbol"]
+            try:
+                symbol = t["symbol"]
 
-            if not symbol.endswith("USDT"):
+                if not symbol.endswith("USDT"):
+                    continue
+
+                price = float(t["lastPrice"])
+                volume = float(t["quoteVolume"])
+                change = float(t["priceChangePercent"])
+
+            except (KeyError, ValueError):
                 continue
 
-            price = float(t["lastPrice"])
-            volume = float(t["quoteVolume"])
-            change = float(t["priceChangePercent"])
-            
             # ignorar moedas muito baratas (ruído)
             if price < 0.00001:
                 continue
@@ -4404,8 +4413,8 @@ class BinanceTraderBot:
 
             # bônus para moedas com bom movimento
             if abs(change) > 5:
-                score += 1           
-            
+                score += 1
+
             ranking.append((symbol, score, change, volume))
 
         ranking.sort(key=lambda x: x[1], reverse=True)
