@@ -16,28 +16,55 @@ def getVortexTradeStrategy(
     if stock_data is None or len(stock_data) < window + 5:
         return HOLD
 
-    stock_data = stock_data.copy()
+    df = stock_data.copy()
 
-    # calcula vortex
-    stock_data["VI+"] = Indicators.getVortex(stock_data, window=window, positive=True)
-    stock_data["VI-"] = Indicators.getVortex(stock_data, window=window, positive=False)
+    # -------------------------
+    # calcular vortex
 
-    vi_plus = stock_data["VI+"]
-    vi_minus = stock_data["VI-"]
+    df["VI+"] = Indicators.getVortex(df, window=window, positive=True)
+    df["VI-"] = Indicators.getVortex(df, window=window, positive=False)
 
-    last_vi_plus = vi_plus.iloc[-1]
-    last_vi_minus = vi_minus.iloc[-1]
+    df.dropna(inplace=True)
+
+    if len(df) < 3:
+        return HOLD
+
+    latest = df.iloc[-1]
+    prev = df.iloc[-2]
+
+    last_vi_plus = latest["VI+"]
+    last_vi_minus = latest["VI-"]
+
+    prev_vi_plus = prev["VI+"]
+    prev_vi_minus = prev["VI-"]
 
     decision = HOLD
 
-    # filtro de força
-    STRONG_TREND_THRESHOLD = 1.05
+    # força mínima da tendência
+    TREND_DIFF = 0.05
 
-    if last_vi_plus > last_vi_minus and last_vi_plus >= STRONG_TREND_THRESHOLD:
+    # -------------------------
+    # BUY: cruzamento VI+
+
+    if (
+        prev_vi_plus <= prev_vi_minus
+        and last_vi_plus > last_vi_minus
+        and (last_vi_plus - last_vi_minus) > TREND_DIFF
+    ):
         decision = BUY
 
-    elif last_vi_minus > last_vi_plus and last_vi_minus >= STRONG_TREND_THRESHOLD:
+    # -------------------------
+    # SELL: cruzamento VI-
+
+    elif (
+        prev_vi_minus <= prev_vi_plus
+        and last_vi_minus > last_vi_plus
+        and (last_vi_minus - last_vi_plus) > TREND_DIFF
+    ):
         decision = SELL
+
+    # -------------------------
+    # LOG
 
     if verbose:
 
@@ -45,6 +72,7 @@ def getVortexTradeStrategy(
         print("📊 Estratégia: Vortex")
         print(f" | VI+: {last_vi_plus:.3f}")
         print(f" | VI-: {last_vi_minus:.3f}")
+        print(f" | Diferença: {abs(last_vi_plus - last_vi_minus):.3f}")
         print(f" | Decisão: {decision}")
         print("-------")
 

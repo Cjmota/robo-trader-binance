@@ -16,35 +16,56 @@ def runEnsembleStrategy(bot, stock_data, verbose=True):
 
     regime = detectMarketRegime(stock_data)
 
+    score = 0
     signals = []
+
+    def apply_weight(signal, weight):
+
+        nonlocal score
+
+        signals.append(signal)
+
+        if signal == BUY:
+            score += weight
+
+        elif signal == SELL:
+            score -= weight
+
+    # -----------------------------
+    # TREND MARKET
 
     if regime == "TREND":
 
-        signals.append(getVortexTradeStrategy(stock_data=stock_data))
-        signals.append(getMovingAverageTradeStrategy(stock_data=stock_data))
-        signals.append(getAdvancedTradeStrategy_v3(stock_data=stock_data))
+        apply_weight(getVortexTradeStrategy(stock_data=stock_data), 2)
+        apply_weight(getMovingAverageTradeStrategy(stock_data=stock_data), 1)
+        apply_weight(getAdvancedTradeStrategy_v3(stock_data=stock_data), 2)
+
+    # -----------------------------
+    # RANGE MARKET
 
     elif regime == "RANGE":
 
-        signals.append(getRsiTradeStrategy(stock_data=stock_data))
-        signals.append(getMovingAverageRSIVolumeStrategy(stock_data=stock_data))
+        apply_weight(getRsiTradeStrategy(stock_data=stock_data), 1)
+        apply_weight(getMovingAverageRSIVolumeStrategy(stock_data=stock_data), 1)
+
+    # -----------------------------
+    # OUTROS REGIMES
 
     else:
 
-        signals.append(utBotAlerts(stock_data=stock_data))
-        signals.append(getVortexTradeStrategy(stock_data=stock_data))
-
-    buy = signals.count(BUY)
-    sell = signals.count(SELL)
+        apply_weight(utBotAlerts(stock_data=stock_data), 1)
+        apply_weight(getVortexTradeStrategy(stock_data=stock_data), 2)
 
     if verbose:
+
         print("📊 Regime:", regime)
         print("📊 Signals:", signals)
+        print("📊 Score:", score)
 
-    if buy > sell:
+    if score > 0:
         return BUY
 
-    if sell > buy:
+    if score < 0:
         return SELL
 
     return HOLD

@@ -19,7 +19,9 @@ def getRsiTradeStrategy(
 
     stock_data = stock_data.copy()
 
-    # Calcula RSI
+    # -------------------------
+    # RSI
+
     stock_data["RSI"] = Indicators.getRSI(
         stock_data["close_price"],
         last_only=False
@@ -28,8 +30,11 @@ def getRsiTradeStrategy(
     rsi_series = stock_data["RSI"]
 
     last_rsi = rsi_series.iloc[-1]
+    prev_rsi = rsi_series.iloc[-2]
 
+    # -------------------------
     # identificar picos e vales
+
     peaks = stock_data[rsi_series > high].index
     valleys = stock_data[rsi_series < low].index
 
@@ -38,25 +43,37 @@ def getRsiTradeStrategy(
 
     decision = HOLD
 
-    # último evento foi vale
-    if last_valley is not None and (
-        last_peak is None or last_valley > last_peak
+    # -------------------------
+    # BUY: saiu da sobrevenda
+
+    if (
+        last_valley is not None
+        and (last_peak is None or last_valley > last_peak)
+        and prev_rsi < low
+        and last_rsi > low
     ):
         decision = BUY
 
-    # último evento foi pico
+    # -------------------------
+    # SELL: saiu da sobrecompra
+
     elif (
         last_peak is not None
         and (last_valley is None or last_peak > last_valley)
-        and last_rsi > high
+        and prev_rsi > high
+        and last_rsi < high
     ):
         decision = SELL
+
+    # -------------------------
+    # Log
 
     if verbose:
 
         print("-------")
         print("📊 Estratégia: RSI")
         print(f" | RSI atual: {last_rsi:.2f}")
+        print(f" | RSI anterior: {prev_rsi:.2f}")
         print(f" | Último vale: {last_valley}")
         print(f" | Último pico: {last_peak}")
         print(f" | Decisão: {decision}")

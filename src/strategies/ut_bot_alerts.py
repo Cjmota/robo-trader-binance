@@ -9,11 +9,12 @@ HOLD = None
 def calculate_atr(high, low, close, period=10):
 
     tr1 = high - low
-    tr2 = np.abs(high - close.shift(1))
-    tr3 = np.abs(low - close.shift(1))
+    tr2 = (high - close.shift(1)).abs()
+    tr3 = (low - close.shift(1)).abs()
 
-    tr = np.maximum(tr1, np.maximum(tr2, tr3))
-    atr = tr.rolling(window=period).mean()
+    tr = pd.concat([tr1, tr2, tr3], axis=1).max(axis=1)
+
+    atr = tr.rolling(window=period, min_periods=period).mean()
 
     return atr
 
@@ -35,30 +36,28 @@ def utBotAlerts(
 
     atr = calculate_atr(high, low, close, atr_period)
 
-    trailing_stop = pd.Series(np.zeros(len(close)), index=close.index)
+    trailing_stop = pd.Series(index=close.index, dtype=float)
+
+    trailing_stop.iloc[0] = close.iloc[0]
 
     for i in range(1, len(close)):
 
-        if close.iloc[i] > trailing_stop.iloc[i - 1] and close.iloc[i - 1] > trailing_stop.iloc[i - 1]:
+        if pd.isna(atr.iloc[i]):
+            trailing_stop.iloc[i] = trailing_stop.iloc[i - 1]
+            continue
+
+        if close.iloc[i] > trailing_stop.iloc[i - 1]:
 
             trailing_stop.iloc[i] = max(
                 trailing_stop.iloc[i - 1],
                 close.iloc[i] - atr_multiplier * atr.iloc[i]
             )
 
-        elif close.iloc[i] < trailing_stop.iloc[i - 1] and close.iloc[i - 1] < trailing_stop.iloc[i - 1]:
+        else:
 
             trailing_stop.iloc[i] = min(
                 trailing_stop.iloc[i - 1],
                 close.iloc[i] + atr_multiplier * atr.iloc[i]
-            )
-
-        else:
-
-            trailing_stop.iloc[i] = (
-                close.iloc[i] - atr_multiplier * atr.iloc[i]
-                if close.iloc[i] > trailing_stop.iloc[i - 1]
-                else close.iloc[i] + atr_multiplier * atr.iloc[i]
             )
 
     pos = np.zeros(len(close))
@@ -89,6 +88,8 @@ def utBotAlerts(
 
         print("-------")
         print("📊 Estratégia: UT Bot Alerts")
+        print(f" | Último preço: {close.iloc[-1]:.4f}")
+        print(f" | Trailing stop: {trailing_stop.iloc[-1]:.4f}")
         print(f" | Decisão: {decision}")
         print("-------")
 
