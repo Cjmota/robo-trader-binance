@@ -642,31 +642,46 @@ def calculateSmartScore(closes, volumes, highs, lows, price_change):
             return 0
 
         # momentum
-        momentum = (closes[-1] - closes[-6]) / max(closes[-6], 0.00000001)
+        momentum1 = (closes[-1] - closes[-3]) / max(closes[-3], 1e-8)
+        momentum2 = (closes[-3] - closes[-6]) / max(closes[-6], 1e-8)
 
-        # volume spike
-        avg_volume = sum(volumes[-20:]) / len(volumes[-20:])
-        volume_score = volumes[-1] / max(avg_volume, 1)
+        acceleration = momentum1 - momentum2
 
-        # volatilidade
+        momentum_score = abs(momentum1) * MOMENTUM_MULTIPLIER
+        acceleration_score = abs(acceleration) * 30
+
+        avg_volume = sum(volumes[-20:]) / 20
+        volume_ratio = volumes[-1] / max(avg_volume, 1)
+        volume_ratio = min(volume_ratio, 5)
+
+        volume_score = volume_ratio * 25
+
         max_price = max(highs[-20:])
         min_price = min(lows[-20:])
-        volatility = (max_price - min_price) / max(min_price, 0.0000001)
+        volatility = (max_price - min_price) / max(min_price, 1e-8)
 
-        # tendência
+        volatility_score = volatility * 20
+
         ma7 = sum(closes[-7:]) / 7
         ma25 = sum(closes[-25:]) / 25
 
-        trend_strength = abs(ma7 - ma25) / max(ma25, 0.0000001)
+        trend_strength = abs(ma7 - ma25) / max(ma25, 1e-8)
+
+        trend_score = trend_strength * TREND_STRENGTH_MULTIPLIER
+
+        price_range = (max(closes[-15:]) - min(closes[-15:])) / max(min(closes[-15:]), 1e-8)
+
+        compression_score = 40 if price_range < 0.012 else 0
 
         score = (
-            abs(momentum) * MOMENTUM_MULTIPLIER +
-            volume_score * 25 +
-            volatility * 20 +
-            trend_strength * TREND_STRENGTH_MULTIPLIER +
+            momentum_score +
+            acceleration_score +
+            volume_score +
+            volatility_score +
+            trend_score +
+            compression_score +
             min(abs(price_change), 10)
         )
-
         return score
 
     except:
