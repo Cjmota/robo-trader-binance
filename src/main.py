@@ -262,7 +262,7 @@ def trader_master_loop():
     best_candidate = None
     best_score = 0
     momentum = 0
-    factor = 20
+
     try:
         if BINANCE_CLIENT is None:
             BINANCE_CLIENT = Client(API_KEY, API_SECRET)
@@ -437,7 +437,7 @@ def trader_master_loop():
                 acceleration = m1 - m2
                 
                 # filtro de movimento
-                if momentum < min_momentum and abs(acceleration) < min_momentum:
+                if abs(momentum) < min_momentum and abs(acceleration) < min_momentum:
                     print("⚠️ Momentum fraco")
                     continue                
 
@@ -1056,7 +1056,7 @@ def scan_market_top_symbols(client, limit=10):
             return []
 
         SCANNER_RANKING[:] = [
-            (c["symbol"], c["score"], c["momentum"], c["volume"])
+            (c.get("symbol"), c.get("score"), c.get("momentum"), c.get("volume"))
             for c in candidates[:10]
         ]
 
