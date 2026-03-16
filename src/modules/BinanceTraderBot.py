@@ -1532,6 +1532,14 @@ class BinanceTraderBot:
                       
         try:
             
+            if not self.actual_trade_position:
+
+                return self.entryMode()
+
+            else:
+
+                return self.positionMode()
+            
             avg_volume = 0
                         
             # -------------------------------------------------
@@ -4783,3 +4791,49 @@ class BinanceTraderBot:
         self.regime_cache_time = now
 
         return regime
+    
+    def entryMode(self):
+
+        regime = self.getCachedRegime()
+
+        decision = self.getFinalDecisionStrategy()
+
+        if decision == "BUY":
+
+            price = self.getCachedPrice()
+
+            capital = self.calculateAdaptivePositionSize(
+                score=6,
+                probability=0.65
+            )
+
+            quantity = capital / price
+            quantity = self.adjust_to_step(quantity, self.step_size)
+
+            if quantity > 0:
+
+                print("🚀 Entrada confirmada")
+
+                self.buyMarketOrder(quantity)
+
+                self.actual_trade_position = True
+
+                return
+            
+    def positionMode(self):
+
+        price = self.getCachedPrice()
+
+        self.updateTrailingStop(price)
+
+        self.checkStopLoss(price)
+
+        self.checkTakeProfit(price)
+
+        if self.detectWhaleExit():
+
+            print("🐋 Whale exit detectado")
+
+            self.sellMarketOrder()
+
+            self.actual_trade_position = False
