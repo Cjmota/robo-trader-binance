@@ -520,15 +520,15 @@ def trader_master_loop():
 
                         if score > best_score:
                             best_candidate = temp_trader
-                            best_score = score    
+                            best_score = score 
+                            print(f"🏆 Novo candidato: {symbol} | score {score:.6f}")   
 
                 except Exception as e:
                     print(f"Erro ao analisar {symbol}: {e}")
                     
             
-            if best_score < min_momentum:
+            if best_candidate is None:
                 print("⚠️ Nenhum ativo com momentum suficiente.")
-                best_candidate = None
 
             if best_candidate:
 
