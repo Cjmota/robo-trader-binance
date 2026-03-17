@@ -511,7 +511,7 @@
                 botMemory: document.getElementById("botMemory")
             }
 
-            async function api(url){
+            async function(url){
 
                 try{
                     let res = await fetch(url)
@@ -693,8 +693,8 @@
 
             async function updateTradeStats() {
 
-                let trades = await api("/trades")
-                if(!trades) return
+                let res = await api("/api/trades")
+                let trades = res.trades || res
 
                 let total = trades ? trades.length : 0;
 
