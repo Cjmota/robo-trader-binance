@@ -51,7 +51,7 @@ class TradingEngine:
         # 🧠 ESTRATÉGIA
         
         decision = self.strategy_runner.execute(
-            bot=self,
+            bot=self.bot,
             main_strategy=vortex_rsi_volume_strategy,
             fallback_strategy=None,  # ou RSI simples depois
             stock_data=df
