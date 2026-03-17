@@ -895,7 +895,7 @@
 
                 if (!profitChart) return;
 
-                let data = await api("/equity")
+                let data = await api("/api/equity")
                 if(!data) return
 
                 let now = new Date().toLocaleTimeString();
@@ -977,7 +977,7 @@
 
             async function updateBotInfo(){
 
-                let data = await api("/botinfo")
+                let data = await api("/api/botinfo")
                 if(!data) return
 
                 if(!data.active){
