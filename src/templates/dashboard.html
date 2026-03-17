@@ -1037,7 +1037,7 @@
 
                 try {
 
-                    let data = await api("/api/scanner")
+                    let data = await api("/scanner")
                     if(!data) return
 
                     let table = document.getElementById("scannerTable")
@@ -1194,7 +1194,7 @@ ${c.symbol}<br>${c.change}%
 
                 try {
 
-                    let tardes = await api("/trades")
+                    let trades = await api("/trades")
                     if(!trades) return
 
                     let table = document.getElementById("tradesTable")

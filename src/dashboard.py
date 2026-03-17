@@ -105,19 +105,28 @@ def botinfo():
 def start():
     global bot_thread
 
-    if not main.BOT_RUNNING:
-        main.BOT_RUNNING = True
-        bot_thread = threading.Thread(target=main.safe_trader_master_loop, daemon=True)
-        bot_thread.start()
+    if main.BOT_RUNNING:
+        return jsonify({"status": "already_running"})
 
-    return jsonify({"running": main.BOT_RUNNING})
+    main.BOT_RUNNING = True
+
+    bot_thread = threading.Thread(
+        target=main.safe_trader_master_loop,
+        daemon=True
+    )
+    bot_thread.start()
+
+    return jsonify({"status": "started"})
 
 
 @app.route("/stop", methods=["POST"])
 def stop():
-    main.BOT_RUNNING = False
-    return jsonify({"running": False})
+    if not main.BOT_RUNNING:
+        return jsonify({"status": "already_stopped"})
 
+    main.BOT_RUNNING = False
+
+    return jsonify({"status": "stopped"})
 
 @app.route("/trades")
 def trades():
