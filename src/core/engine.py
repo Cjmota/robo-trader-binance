@@ -38,12 +38,12 @@ class TradingEngine:
         while main.BOT_RUNNING:
 
             try:
-                self.execute_cycle()  # ou o nome do seu método principal
+                self.run_cycle()  # ou o nome do seu método principal
 
             except Exception as e:
                 print("Erro no loop:", e)
 
-            time.sleep(2)
+            time.sleep(self.loop_interval)
 
     # -----------------------------------------
     # 🧠 CICLO PRINCIPAL
