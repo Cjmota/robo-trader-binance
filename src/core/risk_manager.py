@@ -15,13 +15,12 @@ class RiskManager:
 
     def register_trade(self, profit):
 
-        self.daily_profit += profit
-
-        if profit < 0:
+        if profit > 0:
+            self.daily_profit += profit
+            self.consecutive_losses = 0
+        else:
             self.daily_loss += abs(profit)
             self.consecutive_losses += 1
-        else:
-            self.consecutive_losses = 0
 
         self.check_limits()
 
@@ -58,3 +57,4 @@ class RiskManager:
         adjusted = base_value * (1 - reduction)
 
         return adjusted
+    
