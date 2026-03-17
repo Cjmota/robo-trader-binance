@@ -4,7 +4,7 @@ import time
 
 class BinanceTraderBot:
 
-    def __init__(self, symbol, client, config):
+    def __init__(self, symbol, client, config, risk_manager=None):
 
         self.symbol = symbol
         self.client = client
@@ -17,6 +17,8 @@ class BinanceTraderBot:
         self.highest_price = 0
         self.last_trade_time = 0
         self.operation_code = symbol
+        
+        self.risk_manager = risk_manager
 
     # -----------------------------------------
     # 📊 DATA
