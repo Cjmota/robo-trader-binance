@@ -18,6 +18,9 @@ load_dotenv()
 API_KEY = os.getenv("BINANCE_API_KEY")
 API_SECRET = os.getenv("BINANCE_SECRET_KEY")
 
+BOT_RUNNING = False
+CURRENT_TRADER = None
+
 
 # -----------------------------------------
 # ⚙️ CONFIG
@@ -95,11 +98,18 @@ engine = TradingEngine(
 
 def safe_trader_master_loop():
 
+    global BOT_RUNNING
+
     print("🔥 BOT INICIADO")
 
     while True:
+
+        if not BOT_RUNNING:
+            time.sleep(1)
+            continue
+
         try:
-            engine.start()
+            engine.run_once()
 
         except Exception as e:
             print("❌ ERRO NO BOT:", e)

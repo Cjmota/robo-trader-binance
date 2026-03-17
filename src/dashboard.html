@@ -515,12 +515,18 @@
 
                 try{
                     let res = await fetch(url)
+
+                    if(!res.ok){
+                        console.log("HTTP error:", url, res.status)
+                        return null
+                    }
+
                     return await res.json()
+
                 }catch(e){
                     console.log("API error:", url, e)
                     return null
                 }
-
             }    
 
 
@@ -1277,7 +1283,7 @@ ${c.symbol}<br>${c.change}%
 
                 try{
 
-                    await Promise.all([
+                    await Promise.allSettled([
                         updateStatus(),
                         updateScanner(),
                         updateBotInfo(),
