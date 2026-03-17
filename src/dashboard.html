@@ -1206,9 +1206,11 @@ ${c.symbol}<br>${c.change}%
 
                     let trades = await api("/api/trades")
 
-                    // 🔒 proteção
+                    console.log("DEBUG trades:", trades, Array.isArray(trades))
+
+                    // 🔒 proteção máxima
                     if (!Array.isArray(trades)) {
-                        console.log("Formato inválido:", trades)
+                        console.log("Trades inválido:", trades)
                         return
                     }
 
@@ -1221,7 +1223,9 @@ ${c.symbol}<br>${c.change}%
 
                     let html = ""
 
-                    trades.slice().reverse().forEach(t => {
+                    for (let i = trades.length - 1; i >= 0; i--) {
+
+                        let t = trades[i]
 
                         let color = t.profit > 0 ? "#22c55e" : "#ef4444"
 
@@ -1235,7 +1239,7 @@ ${c.symbol}<br>${c.change}%
                             <td style="color:${color}">${t.profit}</td>
                         </tr>
                         `
-                    })
+                    }
 
                     table.innerHTML = html
 
