@@ -1,61 +1,33 @@
 import time
-import threading
-
 
 class TradingEngine:
 
-    def __init__(
-        self,
-        bot,
-        scanner,
-        strategy_runner,
-        decision_engine,
-        config
-    ):
+    def __init__(self, bot, scanner, strategy_runner, decision_engine, config):
 
         self.bot = bot
         self.scanner = scanner
         self.strategy_runner = strategy_runner
         self.decision_engine = decision_engine
-
         self.config = config
 
-        self.running = False
-
-        self.loop_interval = config.get("ENGINE", {}).get("LOOP_INTERVAL", 10)
-
-        self.current_symbol = None
+        self.last_trade_time = 0
+        self.trade_count_today = 0
 
     # -----------------------------------------
-    # 🚀 START
+    # 🔁 CICLO ÚNICO (CORE DO BOT)
 
-    def start(self):
+    def run_once(self):
 
-        from src import main  # importa o controle do Flask
+        # -----------------------------------------
+        # ⛔ RATE LIMIT / TEMPO ENTRE TRADES
 
-        print("🚀 Engine iniciada")
+        now = time.time()
 
-        while main.BOT_RUNNING:
-            
-            print(f"🔁 Rodando ciclo | BOT_RUNNING={main.BOT_RUNNING}")
+        if now - self.last_trade_time < self.config["TEMPO_ENTRE_TRADES"]:
+            return
 
-            try:
-                self.run_cycle()  # ou o nome do seu método principal
-
-            except Exception as e:
-                print("Erro no loop:", e)
-
-            time.sleep(self.loop_interval)
-
-    # -----------------------------------------
-    # 🧠 CICLO PRINCIPAL
-
-    def run_cycle(self):
-
-        print("\n🔄 Novo ciclo")
-
-        # -------------------------------------
-        # 1️⃣ SCANNER
+        # -----------------------------------------
+        # 🔍 SCANNER
 
         symbol = self.scanner()
 
@@ -63,125 +35,88 @@ class TradingEngine:
             print("⚠️ Nenhum ativo encontrado")
             return
 
-        self.current_symbol = symbol
         self.bot.set_symbol(symbol)
 
-        print(f"🎯 Ativo selecionado: {symbol}")
+        # -----------------------------------------
+        # 📊 DADOS
 
-        # -------------------------------------
-        # 2️⃣ DATA
+        df = self.bot.get_data()
 
-        data = self.bot.get_data()
-
-        if data is None or data.empty:
+        if df is None or df.empty:
             print("⚠️ Sem dados")
             return
 
-        # -------------------------------------
-        # 3️⃣ REGIME (simples por enquanto)
+        # -----------------------------------------
+        # 🧠 ESTRATÉGIA
 
-        regime = self.detect_regime(data)
-
-        # -------------------------------------
-        # 4️⃣ STRATEGY
-
-        signal = self.strategy_runner.execute(
-            bot=self.bot,
-            main_strategy=self.bot.main_strategy,
-            fallback_strategy=self.bot.fallback_strategy,
-            stock_data=data,
-            main_strategy_args=self.bot.main_strategy_args,
-            fallback_strategy_args=self.bot.fallback_strategy_args,
+        decision = self.strategy_runner.execute(
+            self.bot,
+            stock_data=df,
+            main_strategy=self.config["MAIN_STRATEGY"],
+            main_strategy_args=self.config["MAIN_STRATEGY_ARGS"],
+            fallback_strategy=self.config["FALLBACK_STRATEGY"],
+            fallback_strategy_args=self.config["FALLBACK_STRATEGY_ARGS"]
         )
 
-        if signal not in ["BUY", "SELL"]:
-            print("⏸️ HOLD")
+        if not decision:
             return
 
-        # -------------------------------------
-        # 5️⃣ SCORE (simples - pode melhorar depois)
+        # -----------------------------------------
+        # 🎯 DECISÃO FINAL
 
-        score = self.calculate_score(data)
-        probability = self.calculate_probability(score)
+        action = self.decision_engine.get_final_decision(decision)
 
-        # -------------------------------------
-        # 6️⃣ DECISION ENGINE
+        print(f"📊 {symbol} → {action}")
 
-        decision = self.decision_engine.evaluate(
-            bot=self.bot,
-            signal=signal,
-            score=score,
-            probability=probability,
-            regime=regime,
-            spread=0.001,
-            volume_spike=True,
-            momentum=True,
-            orderflow="BUY" if signal == "BUY" else "SELL"
-        )
+        # -----------------------------------------
+        # 💰 EXECUÇÃO
 
-        # -------------------------------------
-        # 7️⃣ EXECUÇÃO
+        self.execute_trade(action)
 
-        if decision == "BUY" and not self.bot.position_open:
+    # -----------------------------------------
+    # 💰 EXECUÇÃO DE ORDENS
 
-            quantity = self.calculate_quantity()
+    def execute_trade(self, action):
 
-            self.bot.buy(quantity)
+        price = self.bot.get_price()
 
-        elif decision == "SELL" and self.bot.position_open:
+        # -----------------------------------------
+        # 🔻 SELL
 
+        if action == "SELL" and self.bot.position_open:
             self.bot.sell()
+            self.last_trade_time = time.time()
+            self.trade_count_today += 1
+            return
 
-        # -------------------------------------
-        # 8️⃣ RISK (sempre rodar)
+        # -----------------------------------------
+        # 🚀 BUY
 
-        price = self.bot.get_price()
+        if action == "BUY" and not self.bot.position_open:
 
-        self.bot.trailing_stop(price)
+            capital = self.get_position_size(price)
 
-    # -----------------------------------------
-    # 📊 REGIME
+            if capital <= 0:
+                return
 
-    def detect_regime(self, data):
+            self.bot.quantity = capital / price
+            self.bot.buy(self.bot.quantity)
 
-        volatility = data["close"].pct_change().std()
-
-        if volatility < 0.002:
-            return "SIDEWAYS"
-        else:
-            return "TREND"
-
-    # -----------------------------------------
-    # 📊 SCORE
-
-    def calculate_score(self, data):
-
-        last = data["close"].iloc[-1]
-        prev = data["close"].iloc[-2]
-
-        change = (last - prev) / prev
-
-        score = 5
-
-        if change > 0:
-            score += 2
-
-        return score
+            self.last_trade_time = time.time()
+            self.trade_count_today += 1
 
     # -----------------------------------------
-    # 📊 PROBABILIDADE
+    # 🛡️ POSITION SIZING
 
-    def calculate_probability(self, score):
+    def get_position_size(self, price):
 
-        return min(score / 10, 1.0)
+        try:
+            balance = float(self.bot.client.get_asset_balance(asset="USDT")["free"])
+        except:
+            return 0
 
-    # -----------------------------------------
-    # 💰 QUANTIDADE
+        max_pct = self.config["RISK"]["MAX_POSITION_PERCENT"]
 
-    def calculate_quantity(self):
+        capital = balance * max_pct
 
-        price = self.bot.get_price()
-
-        capital = 50  # fixo por enquanto
-
-        return round(capital / price, 6)
+        return capital

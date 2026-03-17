@@ -96,11 +96,16 @@ engine = TradingEngine(
 # -----------------------------------------
 # ▶️ START SEGURO
 
+BOT_RUNNING = False
+CURRENT_TRADER = None
+
 def safe_trader_master_loop():
 
-    global BOT_RUNNING
+    global BOT_RUNNING, CURRENT_TRADER
 
     print("🔥 BOT INICIADO")
+
+    CURRENT_TRADER = bot
 
     while True:
 
@@ -113,8 +118,8 @@ def safe_trader_master_loop():
 
         except Exception as e:
             print("❌ ERRO NO BOT:", e)
-            print("🔁 Reiniciando em 5s...")
-            time.sleep(5)
+
+        time.sleep(2)
 
 
 # -----------------------------------------
