@@ -1,10 +1,12 @@
 from flask import Flask, render_template, request, jsonify
+from src.main import safe_trader_master_loop
 from datetime import datetime
 import threading
 import json
 import os
 import logging
 import numpy as np
+import os
 
 from src import main
 from src.utils.performance import calculate_metrics
@@ -60,7 +62,8 @@ def save_config(cfg):
         json.dump(cfg, f, indent=4)
 
 def get_trader():
-    return main.CURRENT_TRADER
+    return getattr(main, "CURRENT_TRADER", None)
+
 
 # ----------------------------------------
 # ROUTES
@@ -71,14 +74,20 @@ def home():
     return render_template("dashboard.html", metrics=calculate_metrics())
 
 
+
 @app.route("/status")
 def status():
-    t = get_trader()
+    
+    t = None
+    try:
+        t = get_trader()
+    except:
+        pass
 
     return jsonify({
-        "running": main.BOT_RUNNING,
-        "asset": t.operation_code if t else "Nenhum",
-        "position": "Comprado" if t and t.actual_trade_position else "Sem posição",
+        "running": getattr(main, "BOT_RUNNING", False),
+        "asset": getattr(t, "operation_code", "Nenhum") if t else "Nenhum",
+        "position": "Comprado" if t and getattr(t, "actual_trade_position", False) else "Sem posição",
         "daily_profit": round(getattr(t, "daily_profit", 0), 4) if t else 0
     })
 
@@ -119,7 +128,7 @@ def stop_bot():
 
 @app.route("/trades")
 def trades():
-    return jsonify(main.TRADE_HISTORY[-200:])
+    return jsonify(getattr(main, "TRADE_HISTORY", []))
 
 
 # ----------------------------------------
@@ -223,3 +232,10 @@ def health():
         "running": main.BOT_RUNNING,
         "time": datetime.now().isoformat()
     }
+
+
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 5000))
+    app.run(host="0.0.0.0", port=port)

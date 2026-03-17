@@ -10,7 +10,6 @@ from src.strategies.StrategyRunner import StrategyRunner
 from src.exchange.BinanceTraderBot import BinanceTraderBot
 from src.scanner.market_scanner_pro import scan_market_pro
 
-
 # -----------------------------------------
 # 🔐 ENV
 
