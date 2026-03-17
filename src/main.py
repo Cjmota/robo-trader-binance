@@ -12,6 +12,8 @@ from src.exchange.BinanceTraderBot import BinanceTraderBot
 
 from src.scanner.market_scanner_pro import scan_market_pro
 
+from src import main  # se der erro, te explico depois
+
 # -----------------------------------------
 # 🔐 ENV
 
@@ -72,8 +74,12 @@ engine = TradingEngine(
 # -----------------------------------------
 # ▶️ START
 
-if __name__ == "__main__":
+def safe_trader_master_loop():
 
-    print("🤖 Sistema iniciado (PRO)")
+    print("🔥 BOT INICIADO PELO DASHBOARD")
 
-    engine.start()
+    try:
+        engine.start()
+
+    except Exception as e:
+        print("❌ ERRO NO BOT:", e)

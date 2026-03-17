@@ -31,20 +31,19 @@ class TradingEngine:
 
     def start(self):
 
-        print("\n🚀 ENGINE INICIADO")
+        from src import main  # importa o controle do Flask
 
-        self.running = True
+        print("🚀 Engine iniciada")
 
-        while self.running:
+        while main.BOT_RUNNING:
 
             try:
-
-                self.run_cycle()
+                self.execute_cycle()  # ou o nome do seu método principal
 
             except Exception as e:
-                print(f"❌ Erro no engine: {e}")
+                print("Erro no loop:", e)
 
-            time.sleep(self.loop_interval)
+            time.sleep(2)
 
     # -----------------------------------------
     # 🧠 CICLO PRINCIPAL
