@@ -16,6 +16,7 @@ class BinanceTraderBot:
 
         self.highest_price = 0
         self.last_trade_time = 0
+        self.operation_code = symbol
 
     # -----------------------------------------
     # 📊 DATA
@@ -157,3 +158,20 @@ class BinanceTraderBot:
         cooldown = self.config.get("TRADE_COOLDOWN", 10)
 
         return time.time() - self.last_trade_time > cooldown
+    
+    def set_symbol(self, symbol):
+
+        if self.symbol == symbol:
+            return
+
+        print(f"🔄 Mudando ativo: {self.symbol} → {symbol}")
+
+        self.symbol = symbol
+        self.operation_code = symbol  # 🔥 compatibilidade
+
+        # reset estado
+        self.position_open = False
+        self.entry_price = 0
+        self.quantity = 0
+        self.trailing_price = 0
+        self.highest_price = 0

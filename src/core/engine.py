@@ -64,7 +64,17 @@ class TradingEngine:
         # -----------------------------------------
         # 🎯 DECISÃO FINAL
 
-        action = self.decision_engine.get_final_decision(decision)
+        action = self.decision_engine.evaluate(
+            bot=self.bot,
+            signal=decision.get("signal"),
+            score=decision.get("score", 0),
+            probability=decision.get("probability", 0),
+            regime=decision.get("regime", "UNKNOWN"),
+            spread=decision.get("spread", 0),
+            volume_spike=decision.get("volume_spike", False),
+            momentum=decision.get("momentum", False),
+            orderflow=decision.get("orderflow", "NEUTRAL")
+        )
 
         print(f"📊 {symbol} → {action}")
 

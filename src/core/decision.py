@@ -121,3 +121,17 @@ class DecisionEngine:
                 return False
 
         return True
+    
+    def decide(self, decision):
+
+        return self.evaluate(
+            bot=decision.get("bot"),
+            signal=decision.get("signal"),
+            score=decision.get("score", 0),
+            probability=decision.get("probability", 0),
+            regime=decision.get("regime", "UNKNOWN"),
+            spread=decision.get("spread", 0),
+            volume_spike=decision.get("volume_spike", False),
+            momentum=decision.get("momentum", False),
+            orderflow=decision.get("orderflow", "NEUTRAL")
+        )
