@@ -44,6 +44,7 @@ config = load_config()
 
 client = Client(API_KEY, API_SECRET)
 
+risk_manager = RiskManager(config)
 
 # -----------------------------------------
 # 🤖 BOT BASE
@@ -51,7 +52,8 @@ client = Client(API_KEY, API_SECRET)
 bot = BinanceTraderBot(
     symbol="BTCUSDT",  # inicial (scanner troca depois)
     client=client,
-    config=config
+    config=config,
+    risk_manager=risk_manager
 )
 
 
@@ -60,7 +62,6 @@ bot = BinanceTraderBot(
 
 strategy_runner = StrategyRunner()
 decision_engine = DecisionEngine(config)
-
 
 # -----------------------------------------
 # 🔍 SCANNER (cache simples)
@@ -86,7 +87,6 @@ def get_best_symbol():
 # 🧠 COMPONENTES
 strategy_runner = StrategyRunner()
 decision_engine = DecisionEngine(config)
-risk_manager = RiskManager(config)  # 🔥 AQUI
 
 # -----------------------------------------
 # ⚙️ ENGINE
