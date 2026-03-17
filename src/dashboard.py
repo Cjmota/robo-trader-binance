@@ -19,6 +19,10 @@ logging.basicConfig(filename="dashboard.log", level=logging.INFO)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
+@app.errorhandler(404)
+def not_found(e):
+    return jsonify({"error": "not found"}), 404
+
 CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app", "config.json")
 
 EQUITY_HISTORY = []
@@ -73,42 +77,41 @@ def get_trader():
 def home():
     return render_template("dashboard.html", metrics=calculate_metrics())
 
-
-
-@app.route("/status")
-def status():
-    
-    t = None
+@app.route("/api/status")
+def api_status():
     try:
-        t = get_trader()
+        t = getattr(main, "CURRENT_TRADER", None)
+
+        return jsonify({
+            "running": getattr(main, "BOT_RUNNING", False),
+            "asset": getattr(t, "operation_code", "Nenhum") if t else "Nenhum",
+            "position": "Comprado" if t and getattr(t, "actual_trade_position", False) else "Sem posição",
+            "daily_profit": round(getattr(t, "daily_profit", 0), 4) if t else 0
+        })
+    except Exception as e:
+        return jsonify({"error": str(e)})
+
+@app.route("/api/botinfo")
+def api_botinfo():
+    try:
+        t = getattr(main, "CURRENT_TRADER", None)
+
+        if not t:
+            return jsonify({"active": False})
+
+        pnl_usdt, pnl_pct = t.getCurrentOperationProfit()
+
+        return jsonify({
+            "active": True,
+            "asset": t.operation_code,
+            "pnl_usdt": pnl_usdt,
+            "pnl_pct": pnl_pct,
+            "strategy": t.main_strategy.__name__,
+            "cooldowns": "-",
+            "memory_assets": "-"
+        })
     except:
-        pass
-
-    return jsonify({
-        "running": getattr(main, "BOT_RUNNING", False),
-        "asset": getattr(t, "operation_code", "Nenhum") if t else "Nenhum",
-        "position": "Comprado" if t and getattr(t, "actual_trade_position", False) else "Sem posição",
-        "daily_profit": round(getattr(t, "daily_profit", 0), 4) if t else 0
-    })
-
-
-@app.route("/botinfo")
-def botinfo():
-    t = get_trader()
-
-    if not t:
         return jsonify({"active": False})
-
-    pnl_usdt, pnl_pct = t.getCurrentOperationProfit()
-
-    return jsonify({
-        "active": True,
-        "asset": t.operation_code,
-        "pnl_usdt": pnl_usdt,
-        "pnl_pct": pnl_pct,
-        "strategy": t.main_strategy.__name__
-    })
-
 
 @app.route("/start", methods=["POST"])
 def start_bot():
@@ -126,8 +129,8 @@ def stop_bot():
     main.BOT_RUNNING = False
     return jsonify({"status":"stopped"})
 
-@app.route("/trades")
-def trades():
+@app.route("/api/trades")
+def api_trades():
     return jsonify(getattr(main, "TRADE_HISTORY", []))
 
 
@@ -135,91 +138,52 @@ def trades():
 # EQUITY (simplificado)
 # ----------------------------------------
 
-@app.route("/equity")
-def equity():
-    global INITIAL_EQUITY
-
-    try:
-        client = main.BINANCE_CLIENT
-        if not client:
-            return jsonify({"equity": 0})
-
-        account = client.get_account()
-
-        total = 0
-        for a in account["balances"]:
-            qty = float(a["free"]) + float(a["locked"])
-            if qty <= 0:
-                continue
-
-            if a["asset"] == "USDT":
-                total += qty
-            else:
-                try:
-                    price = float(client.get_symbol_ticker(symbol=a["asset"]+"USDT")["price"])
-                    total += qty * price
-                except:
-                    pass
-
-        if INITIAL_EQUITY is None:
-            INITIAL_EQUITY = total
-
-        EQUITY_HISTORY.append(total)
-        if len(EQUITY_HISTORY) > 300:
-            EQUITY_HISTORY.pop(0)
-
-        arr = np.array(EQUITY_HISTORY)
-
-        returns = np.diff(arr) / arr[:-1] if len(arr) > 1 else np.array([0])
-        sharpe = (np.mean(returns)/np.std(returns))*np.sqrt(252) if np.std(returns) else 0
-
-        return jsonify({
-            "equity": round(total,2),
-            "pnl_pct": round(((total/INITIAL_EQUITY)-1)*100,2),
-            "sharpe": round(sharpe,2)
-        })
-
-    except Exception as e:
-        logging.error("equity error", exc_info=True)
-        return jsonify({"equity": 0})
-
+@app.route("/api/equity")
+def api_equity():
+    return jsonify({
+        "equity": 1000,
+        "btc_price": 60000,
+        "cumulative_pct": 2.5,
+        "max_drawdown": -1.2,
+        "sharpe": 1.5
+    })
 
 # ----------------------------------------
 # SCANNER
 # ----------------------------------------
 
-@app.route("/scanner")
-def scanner():
-    return jsonify([
-        {
-            "symbol": s[0],
-            "score": round(s[1],2),
-            "momentum": round(s[2],4)
-        }
-        for s in main.SCANNER_RANKING
-    ])
+@app.route("/api/scanner")
+def api_scanner():
+    data = getattr(main, "SCANNER_RANKING", [])
+
+    return jsonify({
+        "ranking": [
+            {
+                "symbol": s[0],
+                "score": float(s[1]),
+                "momentum": float(s[2]),
+                "volume": 1000000
+            }
+            for s in data
+        ],
+        "smart_money": ["BUY BTC", "SELL ETH"]
+    })
 
 
 # ----------------------------------------
 # CONFIG
 # ----------------------------------------
 
-@app.route("/config", methods=["GET"])
-def get_cfg():
+@app.route("/api/config", methods=["GET"])
+def api_get_config():
     return load_config()
 
 
-@app.route("/config", methods=["POST"])
-def set_cfg():
-    cfg = load_config()
+@app.route("/api/config", methods=["POST"])
+def api_set_config():
     data = request.json
-
-    cfg["RISK"]["MAX_TRADES_PER_DAY"] = int(data["MAX_TRADES_PER_DAY"])
-    cfg["STOP_LOSS_PERCENTAGE"] = float(data["STOP_LOSS_PERCENTAGE"])
-
-    save_config(cfg)
+    save_config(data)
     return {"status": "ok"}
-
 
 # ----------------------------------------
 # HEALTH
@@ -233,8 +197,22 @@ def health():
         "time": datetime.now().isoformat()
     }
 
+@app.route("/api/heatmap")
+def api_heatmap():
+    return jsonify([
+        {"symbol": "BTC", "change": 2.1},
+        {"symbol": "ETH", "change": -1.3}
+    ])
 
-
+@app.route("/api/performance")
+def api_performance():
+    return jsonify({
+        "total_trades": 10,
+        "win_rate": 0.6,
+        "profit_factor": 1.8,
+        "expectancy": 0.02,
+        "sharpe": 1.5
+    })
 
 if __name__ == "__main__":
     port = int(os.environ.get("PORT", 5000))
