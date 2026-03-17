@@ -1,5 +1,15 @@
 import pandas as pd
-from src.indicators import Indicators
+from src.indicators.vortex import vortex
+from src.indicators.rsi import rsi
+
+BUY = "BUY"
+SELL = "SELL"
+HOLD = "HOLD"
+
+
+import pandas as pd
+from src.indicators.vortex import vortex
+from src.indicators.rsi import rsi
 
 BUY = "BUY"
 SELL = "SELL"
@@ -16,9 +26,10 @@ def vortex_rsi_volume_strategy(bot=None, stock_data=None, verbose=True):
     # -------------------------
     # INDICADORES
 
-    df["VI+"] = Indicators.getVortex(df, window=14, positive=True)
-    df["VI-"] = Indicators.getVortex(df, window=14, positive=False)
-    df["RSI"] = Indicators.getRSI(df, window=14)
+    df["VI+"] = vortex(df, window=14, positive=True)
+    df["VI-"] = vortex(df, window=14, positive=False)
+
+    df["RSI"] = rsi(df["close_price"], window=14, last_only=False)
 
     df["VOL_MEAN"] = df["volume"].rolling(20).mean()
 
@@ -28,13 +39,12 @@ def vortex_rsi_volume_strategy(bot=None, stock_data=None, verbose=True):
         return {"signal": HOLD}
 
     latest = df.iloc[-1]
-    prev = df.iloc[-2]
 
     # -------------------------
     # 📊 VALORES
 
     vi_diff = latest["VI+"] - latest["VI-"]
-    rsi = latest["RSI"]
+    rsi_val = latest["RSI"]
     volume_ok = latest["volume"] > latest["VOL_MEAN"]
 
     # -------------------------
@@ -42,31 +52,24 @@ def vortex_rsi_volume_strategy(bot=None, stock_data=None, verbose=True):
 
     score = 0
 
-    # tendência (peso forte)
     if vi_diff > 0:
         score += 1
     else:
         score -= 1
 
-    # RSI (timing)
-    if rsi < 35:
+    if rsi_val < 35:
         score += 0.5
-    elif rsi > 65:
+    elif rsi_val > 65:
         score -= 0.5
 
-    # volume (confirmação)
     if volume_ok:
         score += 0.3 if score > 0 else -0.3
 
-    # -------------------------
-    # NORMALIZAÇÃO
-
-    max_score = 1.8
-    final_score = score / max_score
+    final_score = score / 1.8
     probability = abs(final_score)
 
     # -------------------------
-    # DECISÃO
+    # 🎯 DECISÃO
 
     if final_score > 0.25:
         signal = BUY
@@ -75,12 +78,8 @@ def vortex_rsi_volume_strategy(bot=None, stock_data=None, verbose=True):
     else:
         signal = HOLD
 
-    # -------------------------
-    # LOG
-
     if verbose:
-        print("📊 Vortex+RSI+Volume")
-        print(f"Score: {final_score:.3f} | Prob: {probability:.3f} | RSI: {rsi:.1f}")
+        print(f"📊 Score: {final_score:.3f} | Prob: {probability:.3f}")
 
     return {
         "signal": signal,

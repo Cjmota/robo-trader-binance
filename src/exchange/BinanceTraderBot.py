@@ -31,7 +31,9 @@ class BinanceTraderBot:
 
         df = pd.DataFrame(candles)
 
-        df["close"] = pd.to_numeric(df[4])
+        df["close_price"] = pd.to_numeric(df[4])
+        df["high_price"] = pd.to_numeric(df[2])
+        df["low_price"] = pd.to_numeric(df[3])
         df["volume"] = pd.to_numeric(df[5])
 
         return df
@@ -131,24 +133,6 @@ class BinanceTraderBot:
             return True
 
         return False
-
-    # -----------------------------------------
-    # 🔄 SYMBOL
-
-    def set_symbol(self, symbol):
-
-        if self.symbol == symbol:
-            return
-
-        print(f"🔄 Mudando ativo: {self.symbol} → {symbol}")
-
-        self.symbol = symbol
-
-        # reset estado
-        self.position_open = False
-        self.entry_price = 0
-        self.quantity = 0
-        self.highest_price = 0
 
     # -----------------------------------------
     # ⏱️ PROTEÇÃO TEMPO
