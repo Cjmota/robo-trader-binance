@@ -133,7 +133,6 @@ def stop_bot():
 def api_trades():
     return jsonify(getattr(main, "TRADE_HISTORY", []))
 
-
 # ----------------------------------------
 # EQUITY (simplificado)
 # ----------------------------------------
@@ -181,10 +180,23 @@ def api_get_config():
 
 @app.route("/api/config", methods=["POST"])
 def api_set_config():
+    cfg = load_config()
     data = request.json
-    save_config(data)
-    return {"status": "ok"}
 
+    # 🔧 ajustes simples
+    cfg["STOP_LOSS_PERCENTAGE"] = data["STOP_LOSS_PERCENTAGE"]
+    cfg["TP_AT_PERCENTAGE"] = data["TP_AT_PERCENTAGE"]
+    cfg["TEMPO_ENTRE_TRADES"] = data["TEMPO_ENTRE_TRADES"]
+
+    # 🔧 RISK (aqui estava o erro principal)
+    cfg["RISK"]["MAX_POSITION_PERCENT"] = data["MAX_POSITION_PERCENT"] / 100
+    cfg["RISK"]["MAX_TRADES_PER_DAY"] = data["MAX_TRADES_PER_DAY"]
+    cfg["RISK"]["SYMBOL_COOLDOWN"] = data["SYMBOL_COOLDOWN"]
+    cfg["RISK"]["LOSS_COOLDOWN"] = data["LOSS_COOLDOWN"]
+
+    save_config(cfg)
+
+    return jsonify({"status": "ok"})
 # ----------------------------------------
 # HEALTH
 # ----------------------------------------
@@ -203,7 +215,7 @@ def api_heatmap():
         {"symbol": "BTC", "change": 2.1},
         {"symbol": "ETH", "change": -1.3}
     ])
-
+    
 @app.route("/api/performance")
 def api_performance():
     return jsonify({

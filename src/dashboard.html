@@ -1194,8 +1194,8 @@ ${c.symbol}<br>${c.change}%
 
                 try {
 
-                    let tardes = await api("api/trades")
-                    if(!trades) return
+                    let trades = await api("api/trades")
+                    if(!Array.isArray(trades)) return
 
                     let table = document.getElementById("tradesTable")
 
