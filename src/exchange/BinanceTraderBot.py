@@ -1,4 +1,6 @@
 import pandas as pd
+import time
+
 
 class BinanceTraderBot:
 
@@ -12,9 +14,7 @@ class BinanceTraderBot:
         self.entry_price = 0
         self.quantity = 0
 
-        self.trailing_price = 0
         self.highest_price = 0
-
         self.last_trade_time = 0
 
     # -----------------------------------------
@@ -40,37 +40,67 @@ class BinanceTraderBot:
 
     def buy(self, quantity):
 
-        order = self.client.create_order(
-            symbol=self.symbol,
-            side="BUY",
-            type="MARKET",
-            quantity=quantity
-        )
+        if self.position_open:
+            print("⚠️ Já existe posição aberta")
+            return None
 
-        self.position_open = True
-        self.entry_price = self.get_price()
+        try:
+            order = self.client.create_order(
+                symbol=self.symbol,
+                side="BUY",
+                type="MARKET",
+                quantity=quantity
+            )
 
-        print(f"🚀 BUY {self.symbol}")
+            price = self.get_price()
 
-        return order
+            self.position_open = True
+            self.entry_price = price
+            self.quantity = quantity
+            self.highest_price = price
+            self.last_trade_time = time.time()
+
+            print(f"🚀 BUY {self.symbol} @ {price}")
+
+            return order
+
+        except Exception as e:
+            print("❌ Erro no BUY:", e)
+            return None
 
     # -----------------------------------------
     # 🔻 SELL
 
     def sell(self):
 
-        order = self.client.create_order(
-            symbol=self.symbol,
-            side="SELL",
-            type="MARKET",
-            quantity=self.quantity
-        )
+        if not self.position_open:
+            print("⚠️ Nenhuma posição para vender")
+            return None
 
-        self.position_open = False
+        try:
+            order = self.client.create_order(
+                symbol=self.symbol,
+                side="SELL",
+                type="MARKET",
+                quantity=self.quantity
+            )
 
-        print(f"🔻 SELL {self.symbol}")
+            price = self.get_price()
 
-        return order
+            print(f"🔻 SELL {self.symbol} @ {price}")
+
+            self.position_open = False
+            self.entry_price = 0
+            self.quantity = 0
+            self.highest_price = 0
+
+            self.last_trade_time = time.time()
+
+            return order
+
+        except Exception as e:
+            print("❌ Erro no SELL:", e)
+            return None
 
     # -----------------------------------------
     # 📈 PRICE
@@ -81,7 +111,7 @@ class BinanceTraderBot:
         return float(ticker["price"])
 
     # -----------------------------------------
-    # 🧠 RISK
+    # 🧠 TRAILING STOP
 
     def trailing_stop(self, price):
 
@@ -91,19 +121,23 @@ class BinanceTraderBot:
         if price > self.highest_price:
             self.highest_price = price
 
-        trail = self.highest_price * (1 - 0.01)
+        trail_percent = self.config.get("TRAILING_PERCENT", 0.01)
+        trail_price = self.highest_price * (1 - trail_percent)
 
-        if price < trail:
+        if price < trail_price:
             print("🔴 Trailing acionado")
             self.sell()
             return True
 
         return False
 
+    # -----------------------------------------
+    # 🔄 SYMBOL
+
     def set_symbol(self, symbol):
 
         if self.symbol == symbol:
-            return  # evita reset desnecessário
+            return
 
         print(f"🔄 Mudando ativo: {self.symbol} → {symbol}")
 
@@ -113,7 +147,13 @@ class BinanceTraderBot:
         self.position_open = False
         self.entry_price = 0
         self.quantity = 0
+        self.highest_price = 0
 
-        self.trailing_price = 0
-        self.highest_price = 0          
-            
+    # -----------------------------------------
+    # ⏱️ PROTEÇÃO TEMPO
+
+    def can_trade(self):
+
+        cooldown = self.config.get("TRADE_COOLDOWN", 10)
+
+        return time.time() - self.last_trade_time > cooldown
