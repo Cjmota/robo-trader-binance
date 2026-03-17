@@ -3,21 +3,24 @@ import time
 
 class TradingEngine:
 
-    def __init__(self, bot, scanner, strategy_runner, decision_engine, config):
+    def __init__(self, bot, scanner, strategy_runner, decision_engine, config, risk_manager):
 
         self.bot = bot
         self.scanner = scanner
         self.strategy_runner = strategy_runner
         self.decision_engine = decision_engine
         self.config = config
-
-        self.last_trade_time = 0
-        self.trade_count_today = 0
+        self.risk_manager = risk_manager  # 🔥 AQUI
 
     # -----------------------------------------
     # 🔁 CICLO ÚNICO (CORE DO BOT)
 
     def run_once(self):
+
+        # 🛑 BLOQUEIO DE RISCO (COLOCA AQUI)
+        if not self.risk_manager.can_trade():
+            print("⛔ Bloqueado por risco")
+            return
 
         # -----------------------------------------
         # ⛔ RATE LIMIT / TEMPO ENTRE TRADES

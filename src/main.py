@@ -10,6 +10,8 @@ from src.strategies.StrategyRunner import StrategyRunner
 from src.exchange.BinanceTraderBot import BinanceTraderBot
 from src.scanner.market_scanner_pro import scan_market_pro
 
+from src.core.risk_manager import RiskManager
+
 # -----------------------------------------
 # 🔐 ENV
 
@@ -89,9 +91,9 @@ engine = TradingEngine(
     scanner=get_best_symbol,
     strategy_runner=strategy_runner,
     decision_engine=decision_engine,
-    config=config
+    config=config,
+    risk_manager=RiskManager  # 🔥 AQUI
 )
-
 
 # -----------------------------------------
 # ▶️ START SEGURO

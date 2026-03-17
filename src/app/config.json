@@ -19,7 +19,11 @@
         "MAX_TRADES_PER_DAY": 80,
         "SYMBOL_COOLDOWN": 900,
         "LOSS_COOLDOWN": 3600,
-        "MAX_POSITION_PERCENT": 0.05
+        "MAX_POSITION_PERCENT": 0.05,
+
+        "MAX_DAILY_LOSS": 100,
+        "DAILY_TARGET": 150,
+        "MAX_CONSECUTIVE_LOSSES": 3
     },
 
     "INTELLIGENCE": {
