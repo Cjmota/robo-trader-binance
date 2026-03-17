@@ -526,7 +526,7 @@
 
             async function updateStatus(){
 
-                let data = await api("/status")
+                let data = await api("/api/status")
                 if(!data) return
 
                 UI.status.innerHTML = data.running ? "🟢 Rodando" : "🔴 Parado"
@@ -1020,7 +1020,7 @@
             }
 
             function startBot() {
-                fetch("/api/start", { method: "POST" })
+                fetch("/start", { method: "POST" })
                     .then(res => res.json())
                     .then(data => {
                         if (data.status === "started" || data.status === "already_running") {
@@ -1030,7 +1030,7 @@
             }
 
             function stopBot() {
-                fetch("api/stop", { method: "POST" })
+                fetch("/stop", { method: "POST" })
                     .then(res => res.json())
                     .then(data => {
                         if (data.status === "stopped" || data.status === "already_stopped") {
