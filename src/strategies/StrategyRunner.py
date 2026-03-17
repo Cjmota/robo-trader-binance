@@ -24,8 +24,23 @@ class StrategyRunner:
     ):
 
         try:
+            
+            symbol = getattr(bot, "operation_code", None)
+            
+            default_decision = {
+                "signal": HOLD,
+                "score": 0,
+                "probability": 0,
+                "regime": "UNKNOWN",
+                "spread": 0,
+                "volume_spike": False,
+                "momentum": False,
+                "orderflow": "NEUTRAL"
+            }
 
-            symbol = bot.operation_code
+            if not symbol:
+                return default_decision.copy()
+                
             now = time.time()
 
             # -----------------------------------
@@ -60,7 +75,9 @@ class StrategyRunner:
             # -----------------------------------
             # 🔁 FALLBACK
 
-            if result == HOLD and fallback_strategy and bot.fallback_activated:
+            result_signal = result if isinstance(result, str) else result.get("signal", HOLD)
+
+            if result_signal == HOLD and fallback_strategy and bot.fallback_activated:
 
                 if verbose:
                     print("🔁 Fallback acionado")
@@ -77,26 +94,51 @@ class StrategyRunner:
                 except Exception as e:
                     print(f"❌ Erro fallback ({symbol}):", e)
                     result = HOLD
+                
+                # 🔥 recalcula depois do fallback
+                result_signal = result if isinstance(result, str) else result.get("signal", HOLD)
 
             # -----------------------------------
-            # 🧠 NORMALIZAÇÃO
+            # 🧠 NORMALIZAÇÃO PROFISSIONAL
 
-            if result not in [BUY, SELL, HOLD]:
-                result = HOLD
+            
+
+            if isinstance(result, dict):
+                decision = {**default_decision, **result}
+
+            elif result in [BUY, SELL, HOLD]:
+                decision = {**default_decision, "signal": result}
+
+            else:
+                decision = default_decision.copy()
 
             # -----------------------------------
             # 💾 CACHE
+            
+            if "signal" not in decision:
+                decision["signal"] = HOLD
 
-            self.cache[symbol] = (result, now)
+            self.cache[symbol] = (decision, now)
 
             # -----------------------------------
             # LOG
 
             if verbose:
-                print(f"🧠 {symbol} → {result}")
+               print(f"🧠 {symbol} → {decision['signal']} | score={decision['score']} | prob={decision['probability']}")
 
-            return result
+            return decision
 
         except Exception as e:
             print("❌ StrategyRunner erro geral:", e)
-            return HOLD
+
+            return {
+                "signal": HOLD,
+                "score": 0,
+                "probability": 0,
+                "regime": "UNKNOWN",
+                "spread": 0,
+                "volume_spike": False,
+                "momentum": False,
+                "orderflow": "NEUTRAL"
+            }
+    

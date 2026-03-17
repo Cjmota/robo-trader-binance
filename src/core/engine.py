@@ -1,3 +1,4 @@
+from src.strategies.vortex_strategy import vortex_rsi_volume_strategy
 import time
 
 class TradingEngine:
@@ -49,16 +50,32 @@ class TradingEngine:
         # -----------------------------------------
         # 🧠 ESTRATÉGIA
         
-        
-
         decision = self.strategy_runner.execute(
-            self.bot,
-            stock_data=df,
-            main_strategy=self.config["MAIN_STRATEGY"],
-            main_strategy_args=self.config["MAIN_STRATEGY_ARGS"],
-            fallback_strategy=self.config["FALLBACK_STRATEGY"],
-            fallback_strategy_args=self.config["FALLBACK_STRATEGY_ARGS"]
+            bot=self,
+            main_strategy=vortex_rsi_volume_strategy,
+            fallback_strategy=None,  # ou RSI simples depois
+            stock_data=df
         )
+
+        # 🛡️ NORMALIZAÇÃO CRÍTICA
+        if isinstance(decision, str):
+            decision = {
+                "signal": decision,
+                "score": 0,
+                "probability": 0,
+                "regime": "UNKNOWN",
+                "spread": 0,
+                "volume_spike": False,
+                "momentum": False,
+                "orderflow": "NEUTRAL"
+            }
+
+        if not isinstance(decision, dict):
+            print(f"❌ Decision inválida: {decision}")
+            return
+
+        if not decision:
+           return
 
         signal = decision.get("signal")
 
@@ -66,18 +83,15 @@ class TradingEngine:
             print("⚠️ Decision inválida")
             return
 
-        if not decision:
-            return
-
         # -----------------------------------------
         # 🎯 DECISÃO FINAL
 
         action = self.decision_engine.evaluate(
-            bot=self.bot,
-            signal=decision.get("signal"),
-            score=decision.get("score", 0),
-            probability=decision.get("probability", 0),
-            regime=decision.get("regime", "UNKNOWN"),
+            bot=self,
+            signal=decision["signal"],
+            score=decision["score"],
+            probability=decision["probability"],
+            regime=decision["regime"],
             spread=decision.get("spread", 0),
             volume_spike=decision.get("volume_spike", False),
             momentum=decision.get("momentum", False),
@@ -90,6 +104,8 @@ class TradingEngine:
         # 💰 EXECUÇÃO
 
         self.execute_trade(action)
+
+        print(f"🧠 decision raw: {decision} | tipo: {type(decision)}")
 
     # -----------------------------------------
     # 💰 EXECUÇÃO DE ORDENS

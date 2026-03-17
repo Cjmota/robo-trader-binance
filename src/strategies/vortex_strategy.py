@@ -3,77 +3,90 @@ from src.indicators import Indicators
 
 BUY = "BUY"
 SELL = "SELL"
-HOLD = None
+HOLD = "HOLD"
 
 
-def getVortexTradeStrategy(
-    bot=None,
-    stock_data: pd.DataFrame = None,
-    window: int = 14,
-    verbose: bool = True
-):
+def vortex_rsi_volume_strategy(bot=None, stock_data=None, verbose=True):
 
-    if stock_data is None or len(stock_data) < window + 5:
-        return HOLD
+    if stock_data is None or len(stock_data) < 50:
+        return {"signal": HOLD}
 
     df = stock_data.copy()
 
     # -------------------------
-    # calcular vortex
+    # INDICADORES
 
-    df["VI+"] = Indicators.getVortex(df, window=window, positive=True)
-    df["VI-"] = Indicators.getVortex(df, window=window, positive=False)
+    df["VI+"] = Indicators.getVortex(df, window=14, positive=True)
+    df["VI-"] = Indicators.getVortex(df, window=14, positive=False)
+    df["RSI"] = Indicators.getRSI(df, window=14)
+
+    df["VOL_MEAN"] = df["volume"].rolling(20).mean()
 
     df.dropna(inplace=True)
 
     if len(df) < 3:
-        return HOLD
+        return {"signal": HOLD}
 
     latest = df.iloc[-1]
     prev = df.iloc[-2]
 
-    last_vi_plus = latest["VI+"]
-    last_vi_minus = latest["VI-"]
+    # -------------------------
+    # 📊 VALORES
 
-    prev_vi_plus = prev["VI+"]
-    prev_vi_minus = prev["VI-"]
-
-    decision = HOLD
-
-    # força mínima da tendência
-    TREND_DIFF = 0.05
+    vi_diff = latest["VI+"] - latest["VI-"]
+    rsi = latest["RSI"]
+    volume_ok = latest["volume"] > latest["VOL_MEAN"]
 
     # -------------------------
-    # BUY: cruzamento VI+
+    # 🧠 SCORE
 
-    if (
-        prev_vi_plus <= prev_vi_minus
-        and last_vi_plus > last_vi_minus
-        and (last_vi_plus - last_vi_minus) > TREND_DIFF
-    ):
-        decision = BUY
+    score = 0
+
+    # tendência (peso forte)
+    if vi_diff > 0:
+        score += 1
+    else:
+        score -= 1
+
+    # RSI (timing)
+    if rsi < 35:
+        score += 0.5
+    elif rsi > 65:
+        score -= 0.5
+
+    # volume (confirmação)
+    if volume_ok:
+        score += 0.3 if score > 0 else -0.3
 
     # -------------------------
-    # SELL: cruzamento VI-
+    # NORMALIZAÇÃO
 
-    elif (
-        prev_vi_minus <= prev_vi_plus
-        and last_vi_minus > last_vi_plus
-        and (last_vi_minus - last_vi_plus) > TREND_DIFF
-    ):
-        decision = SELL
+    max_score = 1.8
+    final_score = score / max_score
+    probability = abs(final_score)
+
+    # -------------------------
+    # DECISÃO
+
+    if final_score > 0.25:
+        signal = BUY
+    elif final_score < -0.25:
+        signal = SELL
+    else:
+        signal = HOLD
 
     # -------------------------
     # LOG
 
     if verbose:
+        print("📊 Vortex+RSI+Volume")
+        print(f"Score: {final_score:.3f} | Prob: {probability:.3f} | RSI: {rsi:.1f}")
 
-        print("-------")
-        print("📊 Estratégia: Vortex")
-        print(f" | VI+: {last_vi_plus:.3f}")
-        print(f" | VI-: {last_vi_minus:.3f}")
-        print(f" | Diferença: {abs(last_vi_plus - last_vi_minus):.3f}")
-        print(f" | Decisão: {decision}")
-        print("-------")
-
-    return decision
+    return {
+        "signal": signal,
+        "score": round(final_score, 4),
+        "probability": round(probability, 4),
+        "regime": "TREND",
+        "volume_spike": volume_ok,
+        "momentum": abs(final_score) > 0.5,
+    }
