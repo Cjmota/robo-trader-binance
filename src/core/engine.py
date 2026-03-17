@@ -36,6 +36,8 @@ class TradingEngine:
         print("🚀 Engine iniciada")
 
         while main.BOT_RUNNING:
+            
+            print(f"🔁 Rodando ciclo | BOT_RUNNING={main.BOT_RUNNING}")
 
             try:
                 self.run_cycle()  # ou o nome do seu método principal
