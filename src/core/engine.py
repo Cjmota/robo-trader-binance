@@ -48,6 +48,12 @@ class TradingEngine:
 
         # -----------------------------------------
         # 🧠 ESTRATÉGIA
+        
+        signal = decision.get("signal")
+
+        if not signal:
+            print("⚠️ Decision inválida")
+            return
 
         decision = self.strategy_runner.execute(
             self.bot,
