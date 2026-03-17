@@ -49,11 +49,7 @@ class TradingEngine:
         # -----------------------------------------
         # 🧠 ESTRATÉGIA
         
-        signal = decision.get("signal")
-
-        if not signal:
-            print("⚠️ Decision inválida")
-            return
+        
 
         decision = self.strategy_runner.execute(
             self.bot,
@@ -63,6 +59,12 @@ class TradingEngine:
             fallback_strategy=self.config["FALLBACK_STRATEGY"],
             fallback_strategy_args=self.config["FALLBACK_STRATEGY_ARGS"]
         )
+
+        signal = decision.get("signal")
+
+        if not signal:
+            print("⚠️ Decision inválida")
+            return
 
         if not decision:
             return
