@@ -694,7 +694,17 @@
             async function updateTradeStats() {
 
                 let res = await api("/api/trades")
-                let trades = res.trades || res
+
+                let trades = []
+
+                if (Array.isArray(res)) {
+                    trades = res
+                } else if (res && Array.isArray(res.trades)) {
+                    trades = res.trades
+                } else {
+                    console.log("Formato inválido trades:", res)
+                    return
+                }
 
                 let total = trades ? trades.length : 0;
 
@@ -1010,7 +1020,7 @@
             }
 
             function startBot() {
-                fetch("api/start", { method: "POST" })
+                fetch("/api/start", { method: "POST" })
                     .then(res => res.json())
                     .then(data => {
                         if (data.status === "started" || data.status === "already_running") {

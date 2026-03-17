@@ -215,7 +215,7 @@ def api_heatmap():
         {"symbol": "BTC", "change": 2.1},
         {"symbol": "ETH", "change": -1.3}
     ])
-    
+        
 @app.route("/api/performance")
 def api_performance():
     return jsonify({
