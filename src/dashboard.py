@@ -30,6 +30,28 @@ bot_thread = None
 # ----------------------------------------
 
 def load_config():
+    if not os.path.exists(CONFIG_PATH):
+        print("⚠️ config.json não encontrado, criando padrão...")
+
+        default_config = {
+            "RISK": {
+                "MAX_TRADES_PER_DAY": 10,
+                "SYMBOL_COOLDOWN": 60,
+                "LOSS_COOLDOWN": 120,
+                "MAX_POSITION_PERCENT": 0.05
+            },
+            "STOP_LOSS_PERCENTAGE": 1.0,
+            "TP_AT_PERCENTAGE": [1.0, 2.0],
+            "TEMPO_ENTRE_TRADES": 10
+        }
+
+        os.makedirs(os.path.dirname(CONFIG_PATH), exist_ok=True)
+
+        with open(CONFIG_PATH, "w") as f:
+            json.dump(default_config, f, indent=4)
+
+        return default_config
+
     with open(CONFIG_PATH, "r") as f:
         return json.load(f)
 
