@@ -23,7 +23,8 @@ API_SECRET = os.getenv("BINANCE_SECRET_KEY")
 # -----------------------------------------
 # ⚙️ CONFIG
 
-CONFIG_PATH = "src/app/config.json"
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, "app", "config.json")
 
 def load_config():
     with open(CONFIG_PATH, "r") as f:
