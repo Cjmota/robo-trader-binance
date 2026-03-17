@@ -483,67 +483,111 @@
         </div>
 
         <script>
+            async function updateStatus() {
+                let res = await fetch("/status");
+                let data = await res.json();
+
+                let statusEl = document.getElementById("status");
+                let profitEl = document.getElementById("profit");
+                let profitCard = document.getElementById("profitCard");
+
+                statusEl.innerHTML = data.running
+                    ? "🟢 Rodando"
+                    : "🔴 Parado";
+
+                if (data.running) {
+                    statusEl.classList.add("blink");
+                } else {
+                    statusEl.classList.remove("blink");
+                }
+
+                document.getElementById("asset").innerHTML = data.asset;
+                document.getElementById("position").innerHTML = data.position;
+
+                profitEl.innerHTML = data.daily_profit + " USDT";
+
+                profitCard.classList.remove("glow-green", "glow-red");
+
+                if (data.daily_profit > 0) {
+                    profitEl.style.color = "#22c55e";
+                    profitCard.classList.add("glow-green");
+                } else if (data.daily_profit < 0) {
+                    profitEl.style.color = "#ef4444";
+                    profitCard.classList.add("glow-red");
+                } else {
+                    profitEl.style.color = "white";
+                }
+            }
+
+            function toggleSidebar() {
+                let sidebar = document.getElementById("sidebar");
+                let main = document.getElementById("mainContent");
+
+                sidebar.classList.toggle("collapsed");
+                main.classList.toggle("expanded");
+            }
 
             let profitChart = null;
+            let equityHistory = [];
+            let btcHistory = [];
+            let buyHoldHistory = []
+            let baseEquity = null;
+            let baseBTC = null;
             let tradeEquityChart = null;
             let drawdownChart = null;
             let profitTradeChart = null;
             let profitHistogramChart = null;
             let profitHourChart = null;
 
-            let equityHistory = [];
-            let btcHistory = [];
-            let buyHoldHistory = [];
+            function initChart() {
+                if (profitChart !== null) return;
 
-            let baseEquity = null;
-            let baseBTC = null;
+                let ctx = document.getElementById('profitChart').getContext('2d');
 
-            const UI = {
-                status: document.getElementById("status"),
-                asset: document.getElementById("asset"),
-                position: document.getElementById("position"),
-                profit: document.getElementById("profit"),
-                profitCard: document.getElementById("profitCard"),
+                profitChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: 'Equity (%)',
+                                data: [],
+                                borderColor: '#22c55e',
+                                backgroundColor: 'rgba(34,197,94,0.15)',
+                                tension: 0.3,
+                                fill: true
+                            },
+                            {
+                                label: 'BTC (%)',
+                                data: [],
+                                borderColor: '#facc15',
+                                tension: 0.3
+                            },
+                            {
+                                label: 'Buy & Hold (%)',
+                                data: [],
+                                borderColor: '#f97316',
+                                tension: 0.3
+                            }
+                        ]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: {
+                            legend: { labels: { color: "white" } }
+                        },
+                        scales: {
+                            x: { ticks: { color: "white" } },
+                            y: {
+                                ticks: { color: "white" },
+                                beginAtZero: false
+                            }
+                        }
+                    }
 
-                botStrategy: document.getElementById("botStrategy"),
-                botPnl: document.getElementById("botPnl"),
-                botCooldowns: document.getElementById("botCooldowns"),
-                botMemory: document.getElementById("botMemory")
-            }
+                });
 
-            async function api(url){
-
-                try{
-                    let res = await fetch(url)
-                    return await res.json()
-                }catch(e){
-                    console.log("API error:", url, e)
-                    return null
-                }
-
-            }    
-
-
-            async function updateStatus(){
-
-                let data = await api("/status")
-                if(!data) return
-
-                UI.status.innerHTML = data.running ? "🟢 Rodando" : "🔴 Parado"
-
-                UI.asset.innerHTML = data.asset
-                UI.position.innerHTML = data.position
-                UI.profit.innerHTML = data.daily_profit + " USDT"
-
-                UI.profitCard.classList.remove("glow-green","glow-red")
-
-                if(data.daily_profit > 0){
-                    UI.profit.style.color = "#22c55e"
-                    UI.profitCard.classList.add("glow-green")
-                }else if(data.daily_profit < 0){
-                    UI.profit.style.color = "#ef4444"
-                    UI.profitCard.classList.add("glow-red")
-                }
             }
 
             function initTradeChart() {
@@ -693,8 +737,8 @@
 
             async function updateTradeStats() {
 
-                let trades = await api("/trades")
-                if(!trades) return
+                let res = await fetch("/trades");
+                let trades = await res.json();
 
                 let total = trades ? trades.length : 0;
 
@@ -885,8 +929,8 @@
 
                 if (!profitChart) return;
 
-                let data = await api("/equity")
-                if(!data) return
+                let res = await fetch("/equity");
+                let data = await res.json();
 
                 let now = new Date().toLocaleTimeString();
 
@@ -967,31 +1011,42 @@
 
             async function updateBotInfo(){
 
-                let data = await api("/botinfo")
-                if(!data) return
+                try{
 
-                if(!data.active){
-                    UI.botStrategy.innerHTML = "-"
-                    UI.botPnl.innerHTML = "-"
-                    UI.botCooldowns.innerHTML = "-"
-                    UI.botMemory.innerHTML = "-"
-                    return
+                    let res = await fetch("/botinfo")
+                    let data = await res.json()
+
+                    if(!data.active){
+                        document.getElementById("botStrategy").innerHTML = "-"
+                        document.getElementById("botPnl").innerHTML = "-"
+                        document.getElementById("botCooldowns").innerHTML = "-"
+                        document.getElementById("botMemory").innerHTML = "-"
+                        return
+                    }
+
+                    document.getElementById("botStrategy").innerHTML = data.strategy
+
+                    let pnl = data.pnl_pct.toFixed(2) + "%"
+
+                    let pnlEl = document.getElementById("botPnl")
+
+                    pnlEl.innerHTML = pnl
+
+                    if(data.pnl_pct > 0)
+                        pnlEl.style.color = "#22c55e"
+                    else if(data.pnl_pct < 0)
+                        pnlEl.style.color = "#ef4444"
+                    else
+                        pnlEl.style.color = "white"
+
+                    document.getElementById("botCooldowns").innerHTML = data.cooldowns
+                    document.getElementById("botMemory").innerHTML = data.memory_assets
+
+                }catch(e){
+
+                    console.log("Erro botinfo", e)
+
                 }
-
-                UI.botStrategy.innerHTML = data.strategy
-
-                let pnl = data.pnl_pct.toFixed(2) + "%"
-                UI.botPnl.innerHTML = pnl
-
-                if(data.pnl_pct > 0)
-                    UI.botPnl.style.color = "#22c55e"
-                else if(data.pnl_pct < 0)
-                    UI.botPnl.style.color = "#ef4444"
-                else
-                    UI.botPnl.style.color = "white"
-
-                UI.botCooldowns.innerHTML = data.cooldowns
-                UI.botMemory.innerHTML = data.memory_assets
             }
 
             setInterval(() => {
@@ -1029,6 +1084,17 @@
                     });
             }
 
+            /* 🔥 Atualiza automaticamente ao carregar a página */
+            function checkStatus() {
+                fetch("/status")
+                    .then(res => res.json())
+                    .then(data => {
+                        updateButtons(data.running);
+                    });
+            }
+
+            setInterval(checkStatus, 3000);
+            window.onload = checkStatus;
         </script>
 
         <script>
@@ -1037,8 +1103,8 @@
 
                 try {
 
-                    let data = await api("/scanner")
-                    if(!data) return
+                    let res = await fetch("/api/scanner")
+                    let data = await res.json()
 
                     let table = document.getElementById("scannerTable")
                     let smart = document.getElementById("smartMoneyList")
@@ -1097,12 +1163,14 @@
 
             }
 
+            setInterval(updateScanner, 3000)
+
             updateScanner()
 
             async function loadConfig() {
 
-            let data = await api("/api/config")
-            if(!data) return
+            let res = await fetch("/api/config")
+            let data = await res.json()
 
             document.getElementById("cfg_stoploss").value = data.STOP_LOSS_PERCENTAGE
             document.getElementById("cfg_tp1").value = data.TP_AT_PERCENTAGE[0]
@@ -1168,8 +1236,8 @@
 
             async function updateHeatmap() {
 
-                let data = await api("/api/heatmap")
-                if(!data) return
+                let res = await fetch("/api/heatmap")
+                let data = await res.json()
 
                 let grid = document.getElementById("heatmapGrid")
                 grid.innerHTML = ""
@@ -1194,8 +1262,8 @@ ${c.symbol}<br>${c.change}%
 
                 try {
 
-                    let trades = await api("/trades")
-                    if(!trades) return
+                    let res = await fetch("/trades")
+                    let trades = await res.json()
 
                     let table = document.getElementById("tradesTable")
 
@@ -1234,8 +1302,8 @@ ${c.symbol}<br>${c.change}%
 
             async function updatePerformance(){
 
-                let data = await api("/api/performance")
-                if(!data) return
+                let res = await fetch("/api/performance")
+                let data = await res.json()
 
                 document.getElementById("statTrades").innerText =
                     data.total_trades
@@ -1253,34 +1321,19 @@ ${c.symbol}<br>${c.change}%
                     data.sharpe.toFixed(2)
             }
 
-            async function updateAll(){
+            setInterval(updateTradesTable, 4000)    
 
-                if(document.hidden) return // 🔥 pausa quando aba não ativa
+            setInterval(updateHeatmap, 5000)
 
-                try{
+            setInterval(updateStatus, 2000);
+            updateStatus();
 
-                    await Promise.all([
-                        updateStatus(),
-                        updateScanner(),
-                        updateBotInfo(),
-                        updateTradesTable(),
-                        updateHeatmap(),
-                        updatePerformance()
-                    ])
+            setInterval(updatePerformance,5000)
+            updatePerformance()
 
-                }catch(e){
-                    console.log("Erro update geral", e)
-                }
-            }
-
-            document.addEventListener("visibilitychange", () => {
-                if(!document.hidden){
-                    updateAll()
-                }
-            })
-
-            setInterval(updateAll, 3000)
-            updateAll()
+            // 🤖 Atualiza informações do robô
+            setInterval(updateBotInfo, 3000)
+            updateBotInfo()
 
         </script>
     

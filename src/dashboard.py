@@ -102,32 +102,20 @@ def botinfo():
 
 
 @app.route("/start", methods=["POST"])
-def start():
-
-    if main.BOT_RUNNING:
-        return jsonify({"status": "already_running"})
-
-    print("🔥 START CHAMADO")
-
-    main.BOT_RUNNING = True
-
-    # 🚀 roda direto (sem thread)
-    try:
-        main.safe_trader_master_loop()
-    except Exception as e:
-        print("❌ ERRO:", e)
-
-    return jsonify({"status": "started"})
-
+def start_bot():
+    global bot_thread
+    if not main.BOT_RUNNING:
+        main.BOT_RUNNING = True
+        bot_thread = threading.Thread(target=main.safe_trader_master_loop)
+        bot_thread.daemon = True
+        bot_thread.start()
+        return jsonify({"status":"started"})
+    return jsonify({"status":"already_running"})
 
 @app.route("/stop", methods=["POST"])
-def stop():
-    if not main.BOT_RUNNING:
-        return jsonify({"status": "already_stopped"})
-
+def stop_bot():
     main.BOT_RUNNING = False
-
-    return jsonify({"status": "stopped"})
+    return jsonify({"status":"stopped"})
 
 @app.route("/trades")
 def trades():
