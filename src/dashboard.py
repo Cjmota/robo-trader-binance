@@ -103,25 +103,19 @@ def botinfo():
 
 @app.route("/start", methods=["POST"])
 def start():
-    global bot_thread
-
-    print("🔥 START CHAMADO (RAILWAY LOG)")
 
     if main.BOT_RUNNING:
         return jsonify({"status": "already_running"})
 
+    print("🔥 START CHAMADO")
+
     main.BOT_RUNNING = True
 
-    def run():
-        print("🚀 THREAD INICIADA")
-
-        try:
-            main.safe_trader_master_loop()
-        except Exception as e:
-            print("❌ ERRO:", e)
-
-    bot_thread = threading.Thread(target=run, daemon=True)
-    bot_thread.start()
+    # 🚀 roda direto (sem thread)
+    try:
+        main.safe_trader_master_loop()
+    except Exception as e:
+        print("❌ ERRO:", e)
 
     return jsonify({"status": "started"})
 
