@@ -1010,17 +1010,32 @@
             }
 
             function startBot() {
-                fetch("/start", { method: "POST" })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === "started" || data.status === "already_running") {
-                            updateButtons(true);
-                        }
-                    });
+                fetch("https://robo-trader-binance-production.up.railway.app/start", {
+                    method: "POST"
+                })
+                .then(res => {
+                    if (!res.ok) throw new Error("Erro HTTP: " + res.status);
+                    return res.json();
+                })
+                .then(data => {
+                    console.log("START:", data);
+
+                    if (data.status === "started" || data.status === "already_running") {
+                        updateButtons(true);
+                    } else {
+                        alert("Erro: " + JSON.stringify(data));
+                    }
+                })
+                .catch(err => {
+                    console.error("Erro start:", err);
+                    alert("Falha ao iniciar bot");
+                });
             }
 
             function stopBot() {
-                fetch("/stop", { method: "POST" })
+                fetch("https://robo-trader-binance-production.up.railway.app/stop", {
+                    method: "POST"
+                })
                     .then(res => res.json())
                     .then(data => {
                         if (data.status === "stopped" || data.status === "already_stopped") {
