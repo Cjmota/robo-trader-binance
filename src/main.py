@@ -82,6 +82,11 @@ def get_best_symbol():
 
     return cached_symbols[0] if cached_symbols else None
 
+# -----------------------------------------
+# 🧠 COMPONENTES
+strategy_runner = StrategyRunner()
+decision_engine = DecisionEngine(config)
+risk_manager = RiskManager(config)  # 🔥 AQUI
 
 # -----------------------------------------
 # ⚙️ ENGINE
@@ -92,7 +97,7 @@ engine = TradingEngine(
     strategy_runner=strategy_runner,
     decision_engine=decision_engine,
     config=config,
-    risk_manager=RiskManager  # 🔥 AQUI
+    risk_manager=risk_manager  # 🔥 AQUI
 )
 
 # -----------------------------------------
