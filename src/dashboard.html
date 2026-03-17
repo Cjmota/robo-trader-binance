@@ -1194,12 +1194,17 @@ ${c.symbol}<br>${c.change}%
 
                 try {
 
-                    let trades = await api("api/trades")
-                    if(!Array.isArray(trades)) return
+                    let trades = await api("/api/trades")
+
+                    // 🔒 proteção
+                    if (!Array.isArray(trades)) {
+                        console.log("Formato inválido:", trades)
+                        return
+                    }
 
                     let table = document.getElementById("tradesTable")
 
-                    if (!trades || trades.length === 0) {
+                    if (trades.length === 0) {
                         table.innerHTML = "<tr><td colspan='6'>Sem trades ainda</td></tr>"
                         return
                     }
@@ -1229,7 +1234,6 @@ ${c.symbol}<br>${c.change}%
                     console.log("Erro ao carregar trades:", e)
 
                 }
-
             }
 
             async function updatePerformance(){
