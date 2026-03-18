@@ -38,6 +38,8 @@ def load_config():
 
 config = load_config()
 
+print("API_KEY:", API_KEY[:5] if API_KEY else None)
+print("API_SECRET:", API_SECRET[:5] if API_SECRET else None)
 
 # -----------------------------------------
 # 🚀 INIT CLIENT
