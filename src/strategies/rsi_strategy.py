@@ -1,5 +1,5 @@
 import pandas as pd
-from src.indicators import Indicators
+from src.indicators.Indicators import Indicators
 
 BUY = "BUY"
 SELL = "SELL"
@@ -22,8 +22,14 @@ def getRsiTradeStrategy(
     # -------------------------
     # RSI
 
+    stock_data = stock_data.copy()
+
+    # 🔧 padroniza nome
+    stock_data = stock_data.rename(columns={"close_price": "close"})
+
+    # RSI
     stock_data["RSI"] = Indicators.getRSI(
-        stock_data["close_price"],
+        stock_data,
         last_only=False
     )
 
