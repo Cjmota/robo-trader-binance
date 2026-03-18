@@ -55,7 +55,7 @@ class DecisionEngine:
 
         # -----------------------------------------
         # 4️⃣ qualidade
-        if not self.quality_filter(score, probability):
+        if not self.quality_filter(score, probability, signal):
             return HOLD
 
         # -----------------------------------------
@@ -111,23 +111,32 @@ class DecisionEngine:
 
         return True
 
-    def quality_filter(self, score, probability):
+    def quality_filter(self, score, probability, signal):
+
+        # 🔥 corrige prob para SELL
+        if signal == SELL:
+            probability = 1 - probability
 
         print(f"📊 Score: {score} | Prob: {probability:.2f}")
 
-        # 🚫 bloqueio forte por score
-        if score < -0.3:
-            print("⛔ Score muito negativo")
+        # 🚫 incoerência total
+        if score < 0 and signal == BUY:
+            print("⛔ Direção incoerente")
             return False
 
-        # 🚫 bloqueio por probabilidade
+        if score > 0 and signal == SELL:
+            print("⛔ Direção incoerente")
+            return False
+
+        # 🚫 score muito ruim
+        if abs(score) < 0.15:
+            print("⚠️ Score muito fraco")
+            return False
+
+        # 🚫 prob baixa
         if probability < 0.55:
             print("⛔ Probabilidade baixa")
             return False
-
-        # ⚠️ zona neutra
-        if score < -0.1:
-            print("⚠️ Score fraco")
 
         return True
 
@@ -146,21 +155,19 @@ class DecisionEngine:
             if not volume_spike:
                 print("⚠️ Volume fraco")
 
-        if signal == SELL:
+        elif signal == SELL:
 
             if not momentum:
                 print("⚠️ Venda sem momentum")
                 return False
 
-            if orderflow != "BUY":
+            if orderflow == "BUY":
                 print("⚠️ Fluxo contrário")
                 return False
 
             if not volume_spike:
                 print("⚠️ Venda sem volume")
-
-        return True
-
+    
     def decide(self, decision):
 
         if not isinstance(decision, dict):
