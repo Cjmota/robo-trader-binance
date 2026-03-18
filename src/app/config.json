@@ -30,7 +30,8 @@
     "INTELLIGENCE": {
         "MOMENTUM_MULTIPLIER": 50,
         "TREND_STRENGTH_MULTIPLIER": 100,
-        "WHALE_IMBALANCE": 1.4
+        "WHALE_IMBALANCE": 1.4,
+        "FLOW_STRONG_THRESHOLD": 0.5
     },
 
     "TRAILING": {

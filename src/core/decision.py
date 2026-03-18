@@ -60,7 +60,7 @@ class DecisionEngine:
 
         # -----------------------------------------
         # 5️⃣ fluxo
-        if not self.flow_filter(signal, momentum, orderflow, volume_spike):
+        if not self.flow_filter(signal, momentum, orderflow, volume_spike, score):
             return HOLD
 
         # -----------------------------------------
@@ -140,33 +140,46 @@ class DecisionEngine:
 
         return True
 
-    def flow_filter(self, signal, momentum, orderflow, volume_spike):
+    def flow_filter(self, signal, momentum, orderflow, volume_spike, score):
 
-        if signal == BUY:
+        strength = abs(score)
 
-            if not momentum:
-                print("⚠️ Sem momentum")
+        strong_threshold = self.config.get("INTELLIGENCE", {}).get("FLOW_STRONG_THRESHOLD", 0.5)
+
+        # -----------------------------------------
+        # 🚫 sem momentum = nunca entra
+        if not momentum:
+            print("⚠️ Sem momentum")
+            return False
+
+        # -----------------------------------------
+        # 🧠 lógica adaptativa
+
+        if strength < strong_threshold:
+
+            if signal == BUY and orderflow != "BUY":
+                print("⚠️ Precisa confirmação de fluxo (BUY fraco)")
                 return False
 
-            if orderflow == "SELL":
-                print("⚠️ Fluxo contrário")
+            if signal == SELL and orderflow != "SELL":
+                print("⚠️ Precisa confirmação de fluxo (SELL fraco)")
                 return False
 
-            if not volume_spike:
-                print("⚠️ Volume fraco")
+        else:
 
-        elif signal == SELL:
-
-            if not momentum:
-                print("⚠️ Venda sem momentum")
+            if signal == BUY and orderflow == "SELL":
+                print("⚠️ Fluxo contrário forte")
                 return False
 
-            if orderflow == "BUY":
-                print("⚠️ Fluxo contrário")
+            if signal == SELL and orderflow == "BUY":
+                print("⚠️ Fluxo contrário forte")
                 return False
 
-            if not volume_spike:
-                print("⚠️ Venda sem volume")
+        # -----------------------------------------
+        if not volume_spike:
+            print("⚠️ Volume fraco")
+
+        return True
     
     def decide(self, decision):
 
