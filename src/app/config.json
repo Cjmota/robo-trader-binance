@@ -10,16 +10,16 @@
         "MIN_TRADES": 1500,
         "MIN_VOLATILITY": 0.006,
         "MAX_VOLATILITY": 0.05,
-        "SPREAD_LIMIT": 0.001,
+        "SPREAD_LIMIT": 0.002,
         "PUMP_PROTECTION": 0.06,
         "SCAN_LIMIT": 100,
-        "MIN_PROBABILITY": 0.3
+        "MIN_PROBABILITY": 0.55
     },
 
     "RISK": {
-        "MAX_TRADES_PER_DAY": 80,
+        "MAX_TRADES_PER_DAY": 30,
         "SYMBOL_COOLDOWN": 900,
-        "LOSS_COOLDOWN": 3600,
+        "LOSS_COOLDOWN": 7200,
         "MAX_POSITION_PERCENT": 0.05,
 
         "MAX_DAILY_LOSS": 100,
@@ -42,8 +42,8 @@
     "ACTIVATION": 1.0
     },
 
-    "ACCEPTABLE_LOSS_PERCENTAGE": 0,
-    "STOP_LOSS_PERCENTAGE": 3.5,
+    "ACCEPTABLE_LOSS_PERCENTAGE": 0.5,
+    "STOP_LOSS_PERCENTAGE": 1.5,
 
     "TP_AT_PERCENTAGE": [1.5, 3],
     "TP_AMOUNT_PERCENTAGE": [60, 40],

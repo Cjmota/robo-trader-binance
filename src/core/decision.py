@@ -8,9 +8,6 @@ class DecisionEngine:
     def __init__(self, config=None):
         self.config = config or {}
 
-    # -----------------------------------------
-    # 🧠 FUNÇÃO PRINCIPAL
-    # -----------------------------------------
     def evaluate(
         self,
         bot,
@@ -26,6 +23,15 @@ class DecisionEngine:
 
         print("\n🧠 DECISION ENGINE")
 
+        # 🔹 pacote de dados do mercado
+        market_data = {
+            "spread": spread,
+            "volume_spike": bool(volume_spike),
+            "momentum": momentum,
+            "orderflow": orderflow,
+            "regime": regime
+        }
+
         # -----------------------------------------
         # 1️⃣ validação básica
         if signal not in [BUY, SELL]:
@@ -34,7 +40,7 @@ class DecisionEngine:
 
         # -----------------------------------------
         # 2️⃣ filtro de risco global
-        if not self.market_filter(bot):
+        if not self.market_filter(bot, market_data):
             return HOLD
 
         # -----------------------------------------
@@ -49,7 +55,7 @@ class DecisionEngine:
 
         # -----------------------------------------
         # 5️⃣ confirmação de fluxo
-        if not self.flow_filter(signal, momentum, orderflow):
+        if not self.flow_filter(signal, momentum, orderflow, volume_spike):
             return HOLD
 
         # -----------------------------------------
@@ -59,18 +65,20 @@ class DecisionEngine:
             return HOLD
 
         # -----------------------------------------
-        # 7️⃣ validação final
         print(f"✅ TRADE APROVADO → {signal}")
-
         return signal
 
     # -----------------------------------------
     # 🔒 FILTROS
     # -----------------------------------------
 
-    def market_filter(self, bot):
+    def market_filter(self, bot, data):
 
-        if not bot.marketRiskFilter():
+        if not hasattr(bot, "marketRiskFilter"):
+            print("⚠️ marketRiskFilter não existe no bot")
+            return True  # evita crash
+
+        if not bot.marketRiskFilter(data):
             print("🌍 Mercado global ruim")
             return False
 
@@ -92,17 +100,18 @@ class DecisionEngine:
 
         print(f"📊 Score: {score} | Prob: {probability:.2f}")
 
-        if score < 5:
-            print("⛔ Score baixo")
+        # 🔥 ajuste para seu modelo atual
+        if score < -0.2:
+            print("⛔ Score fraco")
             return False
 
-        if probability < 0.45:
+        if probability < 0.55:
             print("⛔ Probabilidade baixa")
             return False
 
         return True
 
-    def flow_filter(self, signal, momentum, orderflow):
+    def flow_filter(self, signal, momentum, orderflow, volume_spike):
 
         if signal == BUY:
 
@@ -114,14 +123,21 @@ class DecisionEngine:
                 print("⚠️ Orderflow não confirma")
                 return False
 
+            if not volume_spike:
+                print("⚠️ Sem volume (pode falhar)")
+
         if signal == SELL:
+
+            if not momentum:
+                print("⚠️ Venda sem momentum")
+                return False
 
             if orderflow != "SELL":
                 print("⚠️ Venda sem pressão")
                 return False
 
         return True
-    
+
     def decide(self, decision):
 
         return self.evaluate(
