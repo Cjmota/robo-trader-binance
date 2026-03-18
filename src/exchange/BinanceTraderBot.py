@@ -170,3 +170,25 @@ class BinanceTraderBot:
         self.quantity = 0
         self.trailing_price = 0
         self.highest_price = 0
+    
+    def marketRiskFilter(self, data):
+
+        spread = data.get("spread", 0)
+        volume_spike = data.get("volume_spike", False)
+        momentum = data.get("momentum", False)
+
+        # 🚫 Spread alto = ruim
+        if spread > 0.2:
+            print("🚫 Spread alto")
+            return False
+
+        # 🚫 Sem momentum
+        if not momentum:
+            print("🚫 Sem momentum")
+            return False
+
+        # ⚠️ Sem volume pode ser armadilha
+        if not volume_spike:
+            print("⚠️ Volume fraco")
+
+        return True
