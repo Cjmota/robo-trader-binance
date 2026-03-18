@@ -206,17 +206,16 @@ class BinanceTraderBot:
         momentum = data.get("momentum", False)
         volume_spike = data.get("volume_spike", False)
 
-        # 🚫 spread ruim
+        # 🚫 spread ruim (isso sim bloqueia)
         if spread > 0.003:
             print("🚫 Spread ruim")
             return False
 
-        # 🚫 sem momentum
+        # ⚠️ momentum fraco (não bloqueia mais)
         if not momentum:
-            print("🚫 Sem momentum global")
-            return False
+            print("⚠️ Sem momentum global")
 
-        # ⚠️ volume fraco
+        # ⚠️ volume fraco (não bloqueia)
         if not volume_spike:
             print("⚠️ Volume fraco")
 
