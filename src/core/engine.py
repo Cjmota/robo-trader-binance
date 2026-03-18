@@ -73,8 +73,8 @@ class TradingEngine:
         if market_condition == "TREND":
             strategy = vortex_rsi_volume_strategy
 
-        elif market_condition == "SIDEWAYS":
-            strategy = rsi_strategy_wrapper
+        elif market_condition in ["SIDEWAYS", "NORMAL"]:
+            strategy = getRsiTradeStrategy
 
         elif market_condition == "VOLATILE":
             strategy = vortex_rsi_volume_strategy  # depois você pode trocar por breakout
