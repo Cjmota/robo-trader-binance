@@ -160,12 +160,12 @@ class StrategyRunner:
             }
 
 
-def rsi_strategy_wrapper(bot, stock_data):
+def rsi_strategy_wrapper(bot, stock_data, verbose=True, **kwargs):
 
     signal = getRsiTradeStrategy(
         bot=bot,
         stock_data=stock_data,
-        verbose=True
+        verbose=verbose
     )
 
     if signal is None:
