@@ -5,10 +5,7 @@ BUY = "BUY"
 SELL = "SELL"
 HOLD = "HOLD"
 
-
-class StrategyRunner:
-    
-    def extract_signal(result, HOLD="HOLD"):
+def extract_signal(result, HOLD="HOLD"):
         if result is None:
             return HOLD
         if isinstance(result, str):
@@ -16,6 +13,8 @@ class StrategyRunner:
         if isinstance(result, dict):
             return result.get("signal", HOLD)
         return HOLD
+
+class StrategyRunner:
 
     def __init__(self):
         self.cache = {}  # 🔥 cache por símbolo
@@ -118,6 +117,9 @@ class StrategyRunner:
 
             else:
                 decision = default_decision.copy()
+                
+            if not decision.get("signal"):
+                decision["signal"] = HOLD
 
             # 🔒 garantia final
             if "signal" not in decision:
@@ -169,7 +171,14 @@ def rsi_strategy_wrapper(bot, stock_data):
         from src.indicators import Indicators
         df["RSI"] = Indicators.getRSI(df, last_only=False)
 
-        last_rsi = df["RSI"].iloc[-1]
+        last_rsi = df["RSI"].dropna().iloc[-1]
+        
+        if df["RSI"].dropna().empty:
+            return {
+                "signal": HOLD,
+                "score": 0,
+                "probability": 0
+            }
 
     except Exception as e:
         print("❌ Erro RSI:", e)
