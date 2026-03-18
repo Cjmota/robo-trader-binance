@@ -1,4 +1,7 @@
+from src.intelligence.market_condition import MarketConditionDetector
 from src.strategies.vortex_strategy import vortex_rsi_volume_strategy
+from src.strategies.rsi_strategy import getRsiTradeStrategy
+from src.strategies.StrategyRunner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
 import time
 
 
@@ -13,6 +16,7 @@ class TradingEngine:
         self.config = config
         self.risk_manager = risk_manager
         self.trade_count_today = 0
+        self.market_detector = MarketConditionDetector()
 
     # -----------------------------------------
     # 🔁 CICLO ÚNICO
@@ -30,7 +34,7 @@ class TradingEngine:
         if not self.bot.can_trade():
             return
 
-        # 🛑 limite diário de trades
+        # 🛑 limite diário
         max_trades = self.config["RISK"].get("MAX_TRADES_PER_DAY", 999)
 
         if self.trade_count_today >= max_trades:
@@ -58,16 +62,40 @@ class TradingEngine:
             return
 
         # -----------------------------------------
-        # 🧠 ESTRATÉGIA
+        # 🧠 DETECTAR MERCADO
+
+        market_condition = self.market_detector.detect(df)
+        print(f"🧠 Market: {market_condition}")
+
+        # -----------------------------------------
+        # 🧠 ESCOLHER ESTRATÉGIA
+
+        if market_condition == "TREND":
+            strategy = vortex_rsi_volume_strategy
+
+        elif market_condition == "SIDEWAYS":
+            strategy = rsi_strategy_wrapper
+
+        elif market_condition == "VOLATILE":
+            strategy = vortex_rsi_volume_strategy  # depois você pode trocar por breakout
+
+        else:
+            print("⏸️ Mercado ruim, pulando")
+            return
+
+        # -----------------------------------------
+        # 🧠 EXECUTAR ESTRATÉGIA
 
         decision = self.strategy_runner.execute(
             bot=self.bot,
-            main_strategy=vortex_rsi_volume_strategy,
+            main_strategy=strategy,
             fallback_strategy=None,
             stock_data=df
         )
 
-        # 🛡️ normalização
+        # -----------------------------------------
+        # 🛡️ NORMALIZAÇÃO
+
         if isinstance(decision, str):
             decision = {"signal": decision}
 
@@ -78,7 +106,6 @@ class TradingEngine:
         if not decision:
             return
 
-        # 🔐 garante chaves
         decision = {
             "signal": decision.get("signal"),
             "score": decision.get("score", 0),
@@ -116,7 +143,6 @@ class TradingEngine:
 
         print(f"📊 {symbol} → {action}")
 
-        # 🚫 ignora HOLD
         if action == "HOLD":
             return
 
@@ -138,17 +164,14 @@ class TradingEngine:
             print("⚠️ Preço inválido")
             return
 
-        # 🔻 SELL
         if action == "SELL" and self.bot.position_open:
             self.bot.sell()
             self.trade_count_today += 1
             return
 
-        # 🚀 BUY
         if action == "BUY" and not self.bot.position_open:
 
             base_capital = self.get_position_size()
-
             capital = self.risk_manager.adjust_position(base_capital)
 
             if capital <= 0:
@@ -156,7 +179,6 @@ class TradingEngine:
                 return
 
             qty = capital / price
-
             self.bot.buy(qty)
 
             self.trade_count_today += 1
@@ -173,7 +195,6 @@ class TradingEngine:
             return 0
 
         max_pct = self.config["RISK"].get("MAX_POSITION_PERCENT", 0.05)
-
         capital = balance * max_pct
 
         print(f"💰 Capital calculado: {capital:.2f}")

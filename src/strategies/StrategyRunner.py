@@ -1,4 +1,5 @@
 import time
+from src.strategies.rsi_strategy import getRsiTradeStrategy
 
 BUY = "BUY"
 SELL = "SELL"
@@ -142,3 +143,49 @@ class StrategyRunner:
                 "orderflow": "NEUTRAL"
             }
     
+    from src.strategies.rsi_strategy import getRsiTradeStrategy
+
+def rsi_strategy_wrapper(bot, stock_data):
+
+    signal = getRsiTradeStrategy(
+        bot=bot,
+        stock_data=stock_data,
+        verbose=True
+    )
+
+    if signal is None:
+        return {
+            "signal": "HOLD",
+            "score": 0,
+            "probability": 0
+        }
+
+    # -------------------------
+    # 📊 calcular RSI atual
+
+    last_rsi = stock_data["close_price"].copy()
+
+    from src.indicators import Indicators
+    rsi_series = Indicators.getRSI(last_rsi, last_only=False)
+
+    last_rsi = rsi_series.iloc[-1]
+
+    # -------------------------
+    # 🔥 PROB DINÂMICA
+
+    probability = 0.65 if abs(last_rsi - 50) > 20 else 0.55
+
+    # -------------------------
+    # 🔥 SCORE
+
+    score = 0.4 if signal == "BUY" else -0.4
+
+    return {
+        "signal": signal,
+        "score": score,
+        "probability": probability,
+        "regime": "SIDEWAYS",
+        "momentum": True,
+        "volume_spike": True,
+        "orderflow": "NEUTRAL"
+    }
