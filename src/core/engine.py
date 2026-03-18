@@ -1,6 +1,7 @@
 from src.strategies.vortex_strategy import vortex_rsi_volume_strategy
 import time
 
+
 class TradingEngine:
 
     def __init__(self, bot, scanner, strategy_runner, decision_engine, config, risk_manager):
@@ -14,25 +15,26 @@ class TradingEngine:
         self.trade_count_today = 0
 
     # -----------------------------------------
-    # 🔁 CICLO ÚNICO (CORE DO BOT)
+    # 🔁 CICLO ÚNICO
 
     def run_once(self):
 
-        # 🛑 BLOQUEIO DE RISCO (COLOCA AQUI)
+        print("\n🚀 Novo ciclo")
+
+        # 🛑 risco global
         if not self.risk_manager.can_trade():
             print("⛔ Bloqueado por risco")
             return
-        
-         # ⏱️ tempo / cooldown
+
+        # ⏱️ cooldown bot
         if not self.bot.can_trade():
             return
 
-        # -----------------------------------------
-        # ⛔ RATE LIMIT / TEMPO ENTRE TRADES
+        # 🛑 limite diário de trades
+        max_trades = self.config["RISK"].get("MAX_TRADES_PER_DAY", 999)
 
-        now = time.time()
-
-        if not self.bot.can_trade():
+        if self.trade_count_today >= max_trades:
+            print("🛑 Limite diário de trades atingido")
             return
 
         # -----------------------------------------
@@ -57,44 +59,43 @@ class TradingEngine:
 
         # -----------------------------------------
         # 🧠 ESTRATÉGIA
-        
+
         decision = self.strategy_runner.execute(
             bot=self.bot,
             main_strategy=vortex_rsi_volume_strategy,
-            fallback_strategy=None,  # ou RSI simples depois
+            fallback_strategy=None,
             stock_data=df
         )
 
-        # 🛡️ NORMALIZAÇÃO CRÍTICA
+        # 🛡️ normalização
         if isinstance(decision, str):
-            decision = {
-                "signal": decision,
-                "score": 0,
-                "probability": 0,
-                "regime": "UNKNOWN",
-                "spread": 0,
-                "volume_spike": False,
-                "momentum": False,
-                "orderflow": "NEUTRAL"
-            }
-        
+            decision = {"signal": decision}
 
         if not isinstance(decision, dict):
             print(f"❌ Decision inválida: {decision}")
             return
 
         if not decision:
-           return
-
-        signal = decision.get("signal")       
-        
-
-        if not signal:
-            print("⚠️ Decision inválida")
             return
 
-        # 🚫 FILTRO DE QUALIDADE (AQUI 🔥)
-        if decision.get("probability", 0) < 0.3:
+        # 🔐 garante chaves
+        decision = {
+            "signal": decision.get("signal"),
+            "score": decision.get("score", 0),
+            "probability": decision.get("probability", 0),
+            "regime": decision.get("regime", "UNKNOWN"),
+            "spread": decision.get("spread", 0),
+            "volume_spike": decision.get("volume_spike", False),
+            "momentum": decision.get("momentum", False),
+            "orderflow": decision.get("orderflow", "NEUTRAL")
+        }
+
+        if not decision["signal"]:
+            print("⚠️ Decision sem sinal")
+            return
+
+        # 🚫 filtro rápido
+        if decision["probability"] < 0.3:
             print("🚫 Probabilidade baixa")
             return
 
@@ -107,66 +108,74 @@ class TradingEngine:
             score=decision["score"],
             probability=decision["probability"],
             regime=decision["regime"],
-            spread=decision.get("spread", 0),
-            volume_spike=decision.get("volume_spike", False),
-            momentum=decision.get("momentum", False),
-            orderflow=decision.get("orderflow", "NEUTRAL")
+            spread=decision["spread"],
+            volume_spike=decision["volume_spike"],
+            momentum=decision["momentum"],
+            orderflow=decision["orderflow"]
         )
 
         print(f"📊 {symbol} → {action}")
+
+        # 🚫 ignora HOLD
+        if action == "HOLD":
+            return
 
         # -----------------------------------------
         # 💰 EXECUÇÃO
 
         self.execute_trade(action)
 
-        print(f"🧠 decision raw: {decision} | tipo: {type(decision)}")
+        print(f"🧠 decision raw: {decision}")
 
     # -----------------------------------------
-    # 💰 EXECUÇÃO DE ORDENS
+    # 💰 EXECUÇÃO
 
     def execute_trade(self, action):
 
         price = self.bot.get_price()
 
-        # -----------------------------------------
-        # 🔻 SELL
+        if not price:
+            print("⚠️ Preço inválido")
+            return
 
+        # 🔻 SELL
         if action == "SELL" and self.bot.position_open:
             self.bot.sell()
-            #self.last_trade_time = time.time()
             self.trade_count_today += 1
             return
 
-        # -----------------------------------------
         # 🚀 BUY
-
         if action == "BUY" and not self.bot.position_open:
 
-            base_capital = self.get_position_size(price)
+            base_capital = self.get_position_size()
+
             capital = self.risk_manager.adjust_position(base_capital)
 
             if capital <= 0:
+                print("⚠️ Capital inválido")
                 return
 
-            self.bot.quantity = capital / price
-            self.bot.buy(self.bot.quantity)
+            qty = capital / price
 
-            #self.last_trade_time = time.time()
+            self.bot.buy(qty)
+
             self.trade_count_today += 1
 
     # -----------------------------------------
-    # 🛡️ POSITION SIZING
+    # 🛡️ POSITION SIZE
 
-    def get_position_size(self, price):
+    def get_position_size(self):
 
         try:
             balance = float(self.bot.client.get_asset_balance(asset="USDT")["free"])
-        except:
+        except Exception as e:
+            print(f"❌ Erro ao obter saldo: {e}")
             return 0
 
-        max_pct = self.config["RISK"]["MAX_POSITION_PERCENT"]
+        max_pct = self.config["RISK"].get("MAX_POSITION_PERCENT", 0.05)
 
         capital = balance * max_pct
+
+        print(f"💰 Capital calculado: {capital:.2f}")
 
         return capital
