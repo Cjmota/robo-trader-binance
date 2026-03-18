@@ -3,7 +3,7 @@ from src.indicators.Indicators import Indicators
 
 BUY = "BUY"
 SELL = "SELL"
-HOLD = None
+HOLD = "HOLD"
 
 
 def getRsiTradeStrategy(
@@ -85,4 +85,8 @@ def getRsiTradeStrategy(
         print(f" | Decisão: {decision}")
         print("-------")
 
-    return decision
+    if stock_data is None or len(stock_data) < 20:
+        return {
+            "action": "HOLD",
+            "confidence": 0
+        }

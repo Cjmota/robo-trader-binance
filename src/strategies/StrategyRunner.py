@@ -7,6 +7,15 @@ HOLD = "HOLD"
 
 
 class StrategyRunner:
+    
+    def extract_signal(result, HOLD="HOLD"):
+        if result is None:
+            return HOLD
+        if isinstance(result, str):
+            return result
+        if isinstance(result, dict):
+            return result.get("signal", HOLD)
+        return HOLD
 
     def __init__(self):
         self.cache = {}  # 🔥 cache por símbolo
@@ -14,20 +23,19 @@ class StrategyRunner:
         self.cache_seconds = 10
 
     def execute(
-        self,
-        bot,
-        main_strategy,
-        fallback_strategy,
-        stock_data,
-        main_strategy_args=None,
-        fallback_strategy_args=None,
-        verbose=True
+    self,
+    bot,
+    main_strategy,
+    fallback_strategy,
+    stock_data,
+    main_strategy_args=None,
+    fallback_strategy_args=None,
+    verbose=True
     ):
 
         try:
-            
             symbol = getattr(bot, "operation_code", None)
-            
+
             default_decision = {
                 "signal": HOLD,
                 "score": 0,
@@ -41,25 +49,21 @@ class StrategyRunner:
 
             if not symbol:
                 return default_decision.copy()
-                
+
             now = time.time()
 
-            # -----------------------------------
-            # 🔒 CACHE POR ATIVO
+            # -------------------------------
+            # 🔒 CACHE
             if symbol in self.cache:
-
                 decision, timestamp = self.cache[symbol]
 
                 if now - timestamp < self.cache_seconds:
-
                     if verbose:
                         print(f"⚡ Cache {symbol}: {decision}")
-
                     return decision
 
-            # -----------------------------------
+            # -------------------------------
             # 🧠 MAIN STRATEGY
-
             args_main = {
                 "bot": bot,
                 "stock_data": stock_data,
@@ -73,11 +77,14 @@ class StrategyRunner:
                 print(f"❌ Erro main ({symbol}):", e)
                 result = HOLD
 
-            # -----------------------------------
+            # 🔒 blindagem
+            if result is None:
+                result = HOLD
+
+            result_signal = extract_signal(result, HOLD)
+
+            # -------------------------------
             # 🔁 FALLBACK
-
-            result_signal = result if isinstance(result, str) else result.get("signal", HOLD)
-
             if result_signal == HOLD and fallback_strategy and bot.fallback_activated:
 
                 if verbose:
@@ -95,37 +102,35 @@ class StrategyRunner:
                 except Exception as e:
                     print(f"❌ Erro fallback ({symbol}):", e)
                     result = HOLD
-                
-                # 🔥 recalcula depois do fallback
-                result_signal = result if isinstance(result, str) else result.get("signal", HOLD)
 
-            # -----------------------------------
-            # 🧠 NORMALIZAÇÃO PROFISSIONAL
+                if result is None:
+                    result = HOLD
 
-            
+                result_signal = extract_signal(result, HOLD)
 
+            # -------------------------------
+            # 🧠 NORMALIZAÇÃO
             if isinstance(result, dict):
                 decision = {**default_decision, **result}
 
-            elif result in [BUY, SELL, HOLD]:
+            elif isinstance(result, str):
                 decision = {**default_decision, "signal": result}
 
             else:
                 decision = default_decision.copy()
 
-            # -----------------------------------
-            # 💾 CACHE
-            
+            # 🔒 garantia final
             if "signal" not in decision:
                 decision["signal"] = HOLD
 
+            # -------------------------------
+            # 💾 CACHE
             self.cache[symbol] = (decision, now)
 
-            # -----------------------------------
+            # -------------------------------
             # LOG
-
             if verbose:
-               print(f"🧠 {symbol} → {decision['signal']} | score={decision['score']} | prob={decision['probability']}")
+                print(f"🧠 {symbol} → {decision['signal']} | score={decision['score']} | prob={decision['probability']}")
 
             return decision
 
@@ -142,8 +147,7 @@ class StrategyRunner:
                 "momentum": False,
                 "orderflow": "NEUTRAL"
             }
-    
-    from src.strategies.rsi_strategy import getRsiTradeStrategy
+
 
 def rsi_strategy_wrapper(bot, stock_data):
 
@@ -154,38 +158,55 @@ def rsi_strategy_wrapper(bot, stock_data):
     )
 
     if signal is None:
+        signal = HOLD
+
+    # -------------------------
+    # 📊 RSI seguro
+
+    try:
+        df = stock_data.rename(columns={"close_price": "close"}).copy()
+
+        from src.indicators import Indicators
+        df["RSI"] = Indicators.getRSI(df, last_only=False)
+
+        last_rsi = df["RSI"].iloc[-1]
+
+    except Exception as e:
+        print("❌ Erro RSI:", e)
         return {
-            "signal": "HOLD",
+            "signal": HOLD,
             "score": 0,
             "probability": 0
         }
 
     # -------------------------
-    # 📊 calcular RSI atual
-
-    last_rsi = stock_data["close_price"].copy()
-
-    from src.indicators import Indicators
-    rsi_series = Indicators.getRSI(last_rsi, last_only=False)
-
-    last_rsi = rsi_series.iloc[-1]
-
-    # -------------------------
     # 🔥 PROB DINÂMICA
 
-    probability = 0.65 if abs(last_rsi - 50) > 20 else 0.55
+    distance = abs(last_rsi - 50)
+
+    if distance > 25:
+        probability = 0.7
+    elif distance > 15:
+        probability = 0.6
+    else:
+        probability = 0.5
 
     # -------------------------
-    # 🔥 SCORE
+    # 🔥 SCORE CORRETO
 
-    score = 0.4 if signal == "BUY" else -0.4
+    if signal == BUY:
+        score = 0.4
+    elif signal == SELL:
+        score = -0.4
+    else:
+        score = 0
 
     return {
         "signal": signal,
         "score": score,
         "probability": probability,
         "regime": "SIDEWAYS",
-        "momentum": True,
-        "volume_spike": True,
+        "momentum": distance > 10,
+        "volume_spike": distance > 15,
         "orderflow": "NEUTRAL"
     }
