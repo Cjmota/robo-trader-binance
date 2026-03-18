@@ -18,7 +18,7 @@ from src.core.risk_manager import RiskManager
 load_dotenv()
 
 API_KEY = os.getenv("BINANCE_API_KEY")
-API_SECRET = os.getenv("BINANCE_SECRET_KEY")
+API_SECRET = os.getenv("BINANCE_API_SECRET")
 
 BOT_RUNNING = False
 CURRENT_TRADER = None
