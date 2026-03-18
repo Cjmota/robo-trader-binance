@@ -1,5 +1,5 @@
 import pandas as pd
-from src.indicators import Indicators
+from src.indicators.extras import Indicators
 
 BUY = "BUY"
 SELL = "SELL"
