@@ -105,7 +105,7 @@ class DecisionEngine:
             return False
 
         # 🔥 mais inteligente
-        if regime == "TREND" and signal == SELL and momentum:
+        if regime == "TREND" and signal == SELL and momentum and orderflow == "BUY":
             print("⚠️ Contra tendência forte")
             return False
 
@@ -115,13 +115,19 @@ class DecisionEngine:
 
         print(f"📊 Score: {score} | Prob: {probability:.2f}")
 
-        if score < -0.2:
-            print("⛔ Score fraco")
+        # 🚫 bloqueio forte por score
+        if score < -0.3:
+            print("⛔ Score muito negativo")
             return False
 
+        # 🚫 bloqueio por probabilidade
         if probability < 0.55:
             print("⛔ Probabilidade baixa")
             return False
+
+        # ⚠️ zona neutra
+        if score < -0.1:
+            print("⚠️ Score fraco")
 
         return True
 
@@ -138,16 +144,16 @@ class DecisionEngine:
                 return False
 
             if not volume_spike:
-                print("⚠️ Sem volume (cuidado)")
+                print("⚠️ Volume fraco")
 
-        elif signal == SELL:
+        if signal == SELL:
 
             if not momentum:
                 print("⚠️ Venda sem momentum")
                 return False
 
-            if orderflow != "SELL":
-                print("⚠️ Venda sem pressão")
+            if orderflow != "BUY":
+                print("⚠️ Fluxo contrário")
                 return False
 
             if not volume_spike:
