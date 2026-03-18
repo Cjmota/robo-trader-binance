@@ -1,7 +1,7 @@
 from src.intelligence.market_condition import MarketConditionDetector
 from src.strategies.vortex_strategy import vortex_rsi_volume_strategy
 from src.strategies.rsi_strategy import getRsiTradeStrategy
-from src.strategies.StrategyRunner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
+from strategies.strategy_runner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
 import time
 
 
@@ -74,7 +74,7 @@ class TradingEngine:
             strategy = vortex_rsi_volume_strategy
 
         elif market_condition in ["SIDEWAYS", "NORMAL"]:
-            strategy = getRsiTradeStrategy
+            strategy = rsi_strategy_wrapper
 
         elif market_condition == "VOLATILE":
             strategy = vortex_rsi_volume_strategy  # depois você pode trocar por breakout
@@ -122,7 +122,7 @@ class TradingEngine:
             return
 
         # 🚫 filtro rápido
-        if decision["probability"] < 0.3:
+        if decision["probability"] < 0.55:
             print("🚫 Probabilidade baixa")
             return
 

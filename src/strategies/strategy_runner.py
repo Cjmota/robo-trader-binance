@@ -53,8 +53,8 @@ class StrategyRunner:
 
             # -------------------------------
             # 🔒 CACHE
-            if symbol in self.cache:
-                decision, timestamp = self.cache[symbol]
+            if decision["signal"] != HOLD:
+                self.cache[symbol] = (decision, now)
 
                 if now - timestamp < self.cache_seconds:
                     if verbose:
