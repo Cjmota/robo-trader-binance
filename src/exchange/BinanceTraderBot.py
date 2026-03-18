@@ -91,6 +91,11 @@ class BinanceTraderBot:
             )
 
             price = self.get_price()
+            
+            profit = (price - self.entry_price) * self.quantity
+
+            if self.risk_manager:
+                self.risk_manager.register_trade(profit)
 
             print(f"🔻 SELL {self.symbol} @ {price}")
 
@@ -143,7 +148,11 @@ class BinanceTraderBot:
 
         cooldown = self.config.get("TRADE_COOLDOWN", 10)
 
-        return time.time() - self.last_trade_time > cooldown
+        if time.time() - self.last_trade_time < cooldown:
+            print("⏱️ Aguardando cooldown")
+            return False
+
+        return True
     
     def set_symbol(self, symbol):
 

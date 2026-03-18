@@ -10,7 +10,8 @@ class TradingEngine:
         self.strategy_runner = strategy_runner
         self.decision_engine = decision_engine
         self.config = config
-        self.risk_manager = risk_manager  # 🔥 AQUI
+        self.risk_manager = risk_manager
+        self.trade_count_today = 0
 
     # -----------------------------------------
     # 🔁 CICLO ÚNICO (CORE DO BOT)
@@ -21,13 +22,17 @@ class TradingEngine:
         if not self.risk_manager.can_trade():
             print("⛔ Bloqueado por risco")
             return
+        
+         # ⏱️ tempo / cooldown
+        if not self.bot.can_trade():
+            return
 
         # -----------------------------------------
         # ⛔ RATE LIMIT / TEMPO ENTRE TRADES
 
         now = time.time()
 
-        if now - self.last_trade_time < self.config["TEMPO_ENTRE_TRADES"]:
+        if not self.bot.can_trade():
             return
 
         # -----------------------------------------
@@ -72,6 +77,7 @@ class TradingEngine:
                 "momentum": False,
                 "orderflow": "NEUTRAL"
             }
+        
 
         if not isinstance(decision, dict):
             print(f"❌ Decision inválida: {decision}")
@@ -80,17 +86,23 @@ class TradingEngine:
         if not decision:
            return
 
-        signal = decision.get("signal")
+        signal = decision.get("signal")       
+        
 
         if not signal:
             print("⚠️ Decision inválida")
+            return
+
+        # 🚫 FILTRO DE QUALIDADE (AQUI 🔥)
+        if decision.get("probability", 0) < 0.3:
+            print("🚫 Probabilidade baixa")
             return
 
         # -----------------------------------------
         # 🎯 DECISÃO FINAL
 
         action = self.decision_engine.evaluate(
-            bot=self,
+            bot=self.bot,
             signal=decision["signal"],
             score=decision["score"],
             probability=decision["probability"],
@@ -122,7 +134,7 @@ class TradingEngine:
 
         if action == "SELL" and self.bot.position_open:
             self.bot.sell()
-            self.last_trade_time = time.time()
+            #self.last_trade_time = time.time()
             self.trade_count_today += 1
             return
 
@@ -131,7 +143,8 @@ class TradingEngine:
 
         if action == "BUY" and not self.bot.position_open:
 
-            capital = self.get_position_size(price)
+            base_capital = self.get_position_size(price)
+            capital = self.risk_manager.adjust_position(base_capital)
 
             if capital <= 0:
                 return
@@ -139,7 +152,7 @@ class TradingEngine:
             self.bot.quantity = capital / price
             self.bot.buy(self.bot.quantity)
 
-            self.last_trade_time = time.time()
+            #self.last_trade_time = time.time()
             self.trade_count_today += 1
 
     # -----------------------------------------

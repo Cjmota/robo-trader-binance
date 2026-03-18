@@ -12,7 +12,8 @@
         "MAX_VOLATILITY": 0.05,
         "SPREAD_LIMIT": 0.001,
         "PUMP_PROTECTION": 0.06,
-        "SCAN_LIMIT": 100
+        "SCAN_LIMIT": 100,
+        "MIN_PROBABILITY": 0.3
     },
 
     "RISK": {
