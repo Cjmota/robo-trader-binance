@@ -17,7 +17,7 @@
     },
 
     "RISK": {
-        "MAX_TRADES_PER_DAY": 30,
+        "MAX_TRADES_PER_DAY": 80,
         "SYMBOL_COOLDOWN": 900,
         "LOSS_COOLDOWN": 7200,
         "MAX_POSITION_PERCENT": 0.05,
