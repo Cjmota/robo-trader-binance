@@ -50,7 +50,7 @@ class DecisionEngine:
 
         # -----------------------------------------
         # 3️⃣ regime
-        if not self.regime_filter(signal, regime, momentum):
+        if not self.regime_filter(signal, regime, momentum, orderflow):
             return HOLD
 
         # -----------------------------------------
@@ -98,14 +98,14 @@ class DecisionEngine:
 
         return True
 
-    def regime_filter(self, signal, regime, momentum):
+    def regime_filter(self, signal, regime, momentum, orderflow):
 
         if regime == "SIDEWAYS":
             print("⏸️ Mercado lateral")
             return False
 
         # 🔥 mais inteligente
-        if regime == "TREND" and signal == SELL and momentum and orderflow == "BUY":
+        if regime == "TREND" and signal == SELL and orderflow == "BUY":
             print("⚠️ Contra tendência forte")
             return False
 
@@ -139,8 +139,8 @@ class DecisionEngine:
                 print("⚠️ Sem momentum")
                 return False
 
-            if orderflow != "BUY":
-                print("⚠️ Orderflow não confirma")
+            if orderflow == "SELL":
+                print("⚠️ Fluxo contrário")
                 return False
 
             if not volume_spike:
