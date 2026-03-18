@@ -51,15 +51,22 @@ class StrategyRunner:
 
             now = time.time()
 
-            # -------------------------------
-            # 🔒 CACHE
-            if decision["signal"] != HOLD:
-                self.cache[symbol] = (decision, now)
+           # -------------------------------
+            # 🔒 CACHE (LEITURA)
+            if symbol in self.cache:
+                cached = self.cache[symbol]
 
-                if now - timestamp < self.cache_seconds:
-                    if verbose:
-                        print(f"⚡ Cache {symbol}: {decision}")
-                    return decision
+                if isinstance(cached, tuple) and len(cached) == 2:
+                    decision, timestamp = cached
+
+                    if now - timestamp < self.cache_seconds:
+                        if verbose:
+                            print(f"⚡ Cache {symbol}: {decision}")
+                        return decision
+                else:
+                    # limpa cache corrompido
+                    print(f"⚠️ Cache inválido para {symbol}, limpando...")
+                    del self.cache[symbol]
 
             # -------------------------------
             # 🧠 MAIN STRATEGY
@@ -127,7 +134,9 @@ class StrategyRunner:
 
             # -------------------------------
             # 💾 CACHE
-            self.cache[symbol] = (decision, now)
+            # só cacheia se for útil
+            if decision["signal"] != HOLD and decision["probability"] > 0.5:
+                self.cache[symbol] = (decision, now)
 
             # -------------------------------
             # LOG
