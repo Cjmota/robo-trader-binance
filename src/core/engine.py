@@ -1,7 +1,7 @@
 from src.intelligence.market_condition import MarketConditionDetector
 from src.strategies.vortex_strategy import vortex_rsi_volume_strategy
 from src.strategies.rsi_strategy import getRsiTradeStrategy
-from strategies.strategy_runner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
+from src.strategies.strategy_runner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
 import time
 
 
