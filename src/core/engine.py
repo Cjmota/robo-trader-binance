@@ -92,6 +92,14 @@ class TradingEngine:
             print("⏸️ Mercado ruim, pulando")
             return
 
+        # 🔥 FILTRO GLOBAL SIMPLES
+        if df["close_price"].iloc[-1] > df["close_price"].rolling(50).mean().iloc[-1]:
+            trend = "UP"
+        else:
+            trend = "DOWN"
+
+        print(f"📈 Tendência: {trend}")
+
         # -----------------------------------------
         # 🧠 EXECUTAR ESTRATÉGIA
 
@@ -140,6 +148,18 @@ class TradingEngine:
             print("🚫 Probabilidade baixa")
             return
 
+        if decision["signal"] == "HOLD":
+            return
+
+        # 🔥 FILTRO DE QUALIDADE PROFISSIONAL
+        if abs(decision["score"]) < 0.2:
+            print("⚠️ Score fraco")
+            return
+
+        if not decision["momentum"]:
+            print("⚠️ Sem momentum")
+            return
+
         # -----------------------------------------
         # 🎯 DECISÃO FINAL
 
@@ -186,19 +206,17 @@ class TradingEngine:
 
             self.trade_count_today += 1
             return
-
-            # 🔥 NÃO DUPLICAR (já é feito no bot.sell)
-            print(f"📉 Perdas consecutivas: {self.risk_manager.consecutive_losses}")
-            
-            self.trade_count_today += 1
+        
+        if qty * price < 5:
+            print("⚠️ Ordem muito pequena")
             return
-
+        
         if action == "BUY" and not self.bot.position_open:
 
             # 🔥 RISCO POR TRADE (1%)
             balance = float(self.bot.client.get_asset_balance(asset="USDT")["free"])
 
-            risk_per_trade = 0.01  # 1%
+            risk_per_trade = 0.005  # 1%
             risk_value = balance * risk_per_trade
 
             stop_loss_pct = self.config["STOP_LOSS_PERCENTAGE"] / 100
