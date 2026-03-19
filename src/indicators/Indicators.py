@@ -11,8 +11,8 @@ PROJECT_ROOT = os.path.abspath(os.path.join(os.path.dirname(__file__), "../.."))
 SRC_DIR = os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
 
 # Adicionar diretórios ao sys.path
-sys.path.insert(0, PROJECT_ROOT)
-sys.path.insert(0, SRC_DIR)
+#sys.path.insert(0, PROJECT_ROOT)
+#sys.path.insert(0, SRC_DIR)
 
 class Indicators:
     """
