@@ -216,9 +216,6 @@ class TradingEngine:
             
             self.bot.buy(qty)
 
-            # 🔥 SALVA PREÇO DE ENTRADA
-            self.bot.entry_price = price
-
             self.trade_count_today += 1
 
     # -----------------------------------------
