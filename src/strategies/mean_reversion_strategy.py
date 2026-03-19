@@ -49,10 +49,10 @@ def mean_reversion_strategy(
 
     trend = "UP" if price > ema50 else "DOWN"
 
-    if trend == "UP" and decision == SELL:
+    if trend == "UP" and decision == SELL and rsi < 75:
         decision = HOLD
 
-    if trend == "DOWN" and decision == BUY:
+    if trend == "DOWN" and decision == BUY and rsi > 25:
         decision = HOLD
 
     # -----------------------------------------
