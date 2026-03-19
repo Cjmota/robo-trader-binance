@@ -2,6 +2,7 @@ from src.intelligence.market_condition import MarketConditionDetector
 from src.strategies.vortex_strategy import vortex_rsi_volume_strategy
 from src.strategies.rsi_strategy import getRsiTradeStrategy
 from src.strategies.strategy_runner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
+from src.strategies.mean_reversion_strategy import mean_reversion_strategy
 import time
 
 
@@ -82,8 +83,8 @@ class TradingEngine:
             strategy = rsi_strategy_wrapper
 
         elif market_condition == "SIDEWAYS":
-            print("⏸️ Mercado lateral - evitando trade")
-            return
+            print("🔄 Mercado lateral → usando Mean Reversion")
+            strategy = mean_reversion_strategy
 
         elif market_condition == "VOLATILE":
             strategy = vortex_rsi_volume_strategy  # depois você pode trocar por breakout
@@ -116,14 +117,14 @@ class TradingEngine:
             return
 
         decision = {
-            "signal": decision.get("signal"),
+            "signal": decision.get("action"),  # 🔥 CORRETO
             "score": decision.get("score", 0),
-            "probability": decision.get("probability", 0),
+            "probability": decision.get("confidence", 0),  # 🔥 CORRETO
             "regime": decision.get("regime", "UNKNOWN"),
             "spread": decision.get("spread", 0),
-            "volume_spike": decision.get("volume_spike", False),
-            "momentum": decision.get("momentum", False),
-            "orderflow": decision.get("orderflow", "NEUTRAL")
+            "volume_spike": decision.get("volume_spike", True),  # 🔥 libera
+            "momentum": decision.get("momentum", True),          # 🔥 libera
+            "orderflow": decision.get("orderflow", "BUY")        # 🔥 evita bloqueio
         }
 
         if not decision["signal"]:
@@ -131,7 +132,7 @@ class TradingEngine:
             return
 
         # 🚫 filtro rápido
-        if decision["probability"] < 0.55:
+        if decision["probability"] < 0.3:
             print("🚫 Probabilidade baixa")
             return
 
