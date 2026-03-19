@@ -45,7 +45,10 @@ class Indicators:
         rs = gain / loss.replace(0, np.finfo(float).eps)
         rsi_values = 100 - (100 / (1 + rs))
         
-        return rsi_values.iloc[-1] if last_only else rsi_values
+        if last_only:
+            valid = rsi_values.dropna()
+            return valid.iloc[-1] if not valid.empty else np.nan
+        return rsi_values
 
     @staticmethod
     def getMACD(data, fast_period=12, slow_period=26, signal_period=9):
@@ -2043,7 +2046,9 @@ class Indicators:
         # Calcular T3 usando a fórmula de Tillson
         t3 = c1 * e6 + 3 * volume_factor * c1 * e5 + 3 * volume_factor * volume_factor * c1 * e4 + volume_factor * volume_factor * volume_factor * e3
         
-        return t3@staticmethod
+        return t3
+
+    @staticmethod    
     def getTEMA(data, period=14, use_close=True):
         """
         Calcula o indicador TEMA (Triple Exponential Moving Average)
