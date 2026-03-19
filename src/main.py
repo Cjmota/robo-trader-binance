@@ -6,7 +6,7 @@ from binance.client import Client
 
 from src.core.engine import TradingEngine
 from src.core.decision import DecisionEngine
-from strategies.strategy_runner import StrategyRunner
+from src.strategies.strategy_runner import StrategyRunner
 from src.exchange.BinanceTraderBot import BinanceTraderBot
 from src.scanner.market_scanner_pro import scan_market_pro
 
