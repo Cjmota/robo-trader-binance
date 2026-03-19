@@ -24,6 +24,11 @@ class TradingEngine:
     def run_once(self):
 
         print("\n🚀 Novo ciclo")
+        
+        # 🔴 BLOQUEIO POR SEQUÊNCIA DE PERDAS
+        if self.risk_manager.consecutive_losses >= self.config["RISK"].get("MAX_CONSECUTIVE_LOSSES", 3):
+            print("🛑 Muitas perdas seguidas - pausando bot")
+            return
 
         # 🛑 risco global
         if not self.risk_manager.can_trade():
@@ -169,21 +174,53 @@ class TradingEngine:
             return
 
         if action == "SELL" and self.bot.position_open:
+
+            entry_price = getattr(self.bot, "entry_price", None)
+            exit_price = price
+
+            if entry_price:
+                profit = (exit_price - entry_price) / entry_price
+            else:
+                profit = 0
+
             self.bot.sell()
+
+            # 🔥 ATUALIZA PERDAS
+            if profit < 0:
+                self.risk_manager.consecutive_losses += 1
+                print(f"❌ Loss consecutivo: {self.risk_manager.consecutive_losses}")
+            else:
+                self.risk_manager.consecutive_losses = 0
+                print("✅ Reset perdas consecutivas")
+
             self.trade_count_today += 1
             return
 
         if action == "BUY" and not self.bot.position_open:
 
-            base_capital = self.get_position_size()
-            capital = self.risk_manager.adjust_position(base_capital)
+            # 🔥 RISCO POR TRADE (1%)
+            balance = float(self.bot.client.get_asset_balance(asset="USDT")["free"])
+
+            risk_per_trade = 0.01  # 1%
+            risk_value = balance * risk_per_trade
+
+            stop_loss_pct = self.config["STOP_LOSS_PERCENTAGE"] / 100
+
+            position_size = risk_value / stop_loss_pct
+
+             # trava max
+            capital = min(position_size, balance * 0.05) 
 
             if capital <= 0:
                 print("⚠️ Capital inválido")
                 return
 
             qty = capital / price
+            
             self.bot.buy(qty)
+
+            # 🔥 SALVA PREÇO DE ENTRADA
+            self.bot.entry_price = price
 
             self.trade_count_today += 1
 
@@ -204,3 +241,21 @@ class TradingEngine:
         print(f"💰 Capital calculado: {capital:.2f}")
 
         return capital
+    
+    def check_break_even(self, entry_price, current_price):
+
+        profit_pct = ((current_price - entry_price) / entry_price) * 100
+
+        if profit_pct >= self.config["BREAK_EVEN"]["ACTIVATION"]:
+            print("🔒 Break-even ativado")
+            return entry_price
+
+        return None
+    
+    def check_trailing(self, current_price, highest_price):
+
+        trailing_pct = self.config["TRAILING"]["DISTANCE"]
+
+        trailing_price = highest_price * (1 - trailing_pct / 100)
+
+        return trailing_price

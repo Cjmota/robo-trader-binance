@@ -77,11 +77,11 @@ class BinanceTraderBot:
             print(f"🚀 BUY {self.symbol} @ {price}")
 
             return order
-
+        
         except Exception as e:
             print("❌ Erro no BUY:", e)
             return None
-
+        
     # -----------------------------------------
     # 🔻 SELL
 

@@ -65,19 +65,27 @@ def getRsiTradeStrategy(
     rsi_diff = last_rsi - prev_rsi
 
     # -------------------------
-    # BUY → mercado ganhando força
+    
+    # 🔥 FILTRO DE TENDÊNCIA (EMA)
+    ema_fast = stock_data["close"].ewm(span=9).mean().iloc[-1]
+    ema_slow = stock_data["close"].ewm(span=21).mean().iloc[-1]
 
-    if last_rsi > 50 and rsi_diff > 2:
+    trend_up = ema_fast > ema_slow
+    trend_down = ema_fast < ema_slow
+
+    # 🔴 FILTRO DE QUALIDADE
+    if abs(rsi_diff) < 2:
+        return {"action": HOLD, "confidence": 0}
+
+    # BUY → mercado ganhando força
+    if last_rsi > 52 and rsi_diff > 2 and trend_up:
         decision = BUY
 
     # -------------------------
     # SELL → mercado perdendo força
 
-    elif last_rsi < 50 and rsi_diff < -1:
+    elif last_rsi < 48 and rsi_diff < -2 and trend_down:
         decision = SELL
-
-    # -------------------------
-    # nada claro
 
     else:
         decision = HOLD
