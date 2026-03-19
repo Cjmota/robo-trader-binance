@@ -36,7 +36,7 @@ def mean_reversion_strategy(
     lower = df["lower"].iloc[-1]
 
     # evita erro de divisão por zero
-    if df["std"].iloc[-1] == 0:
+    if df["std"].iloc[-1] == 0 or pd.isna(df["std"].iloc[-1]):
         return {"action": HOLD, "confidence": 0}
 
     zscore = (price - df["ma"].iloc[-1]) / df["std"].iloc[-1]

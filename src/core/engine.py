@@ -198,45 +198,77 @@ class TradingEngine:
             print("⚠️ Preço inválido")
             return
 
+        # -----------------------------------------
+        # 🔥 GERENCIAMENTO DE POSIÇÃO
+
+        if self.bot.position_open:
+
+            entry = self.bot.entry_price
+            profit_pct = (price - entry) / entry * 100
+
+            # STOP LOSS
+            if profit_pct <= -self.config["STOP_LOSS_PERCENTAGE"]:
+                print("🛑 Stop Loss")
+                self.bot.sell()
+                self.trade_count_today += 1
+                return
+
+            # BREAK EVEN
+            if profit_pct >= self.config["BREAK_EVEN"]["ACTIVATION"]:
+                if price < entry:
+                    print("🔒 Break-even")
+                    self.bot.sell()
+                    self.trade_count_today += 1
+                    return
+
+            # TRAILING
+            if price > self.bot.highest_price:
+                self.bot.highest_price = price
+
+            trailing_price = self.bot.highest_price * (1 - self.config["TRAILING"]["DISTANCE"] / 100)
+
+            if price < trailing_price:
+                print("📉 Trailing Stop")
+                self.bot.sell()
+                self.trade_count_today += 1
+                return
+
+        # -----------------------------------------
+        # 🔻 SELL
+
         if action == "SELL" and self.bot.position_open:
 
             self.bot.sell()
+            self.trade_count_today += 1
 
             print(f"📉 Perdas consecutivas: {self.risk_manager.consecutive_losses}")
+            return
 
-            self.trade_count_today += 1
-            return
-        
-        if qty * price < 5:
-            print("⚠️ Ordem muito pequena")
-            return
-        
+        # -----------------------------------------
+        # 🔺 BUY
+
         if action == "BUY" and not self.bot.position_open:
 
-            # 🔥 RISCO POR TRADE (1%)
             balance = float(self.bot.client.get_asset_balance(asset="USDT")["free"])
 
-            risk_per_trade = 0.005  # 1%
+            risk_per_trade = 0.005
             risk_value = balance * risk_per_trade
 
             stop_loss_pct = self.config["STOP_LOSS_PERCENTAGE"] / 100
 
             position_size = risk_value / stop_loss_pct
-
-             # trava max
-            capital = min(position_size, balance * 0.05) 
+            capital = min(position_size, balance * 0.05)
 
             if capital <= 0:
                 print("⚠️ Capital inválido")
                 return
 
             qty = capital / price
-            
+
             self.bot.buy(qty)
 
-
             self.trade_count_today += 1
-
+            
     # -----------------------------------------
     # 🛡️ POSITION SIZE
 
