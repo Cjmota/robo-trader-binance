@@ -9,7 +9,7 @@ HOLD = "HOLD"
 def getRsiTradeStrategy(
     bot=None,
     stock_data: pd.DataFrame = None,
-    low: int = 40,
+    low: int = 30,
     high: int = 60,
     verbose: bool = True
 ):
@@ -57,12 +57,13 @@ def getRsiTradeStrategy(
         print("DEBUG RSI CROSS:", prev_rsi, "→", last_rsi)
 
     # -------------------------
-    # LÓGICA SIMPLIFICADA
+    # -------------------------
+    # LÓGICA MELHORADA (ENTRADA ANTECIPADA)
 
-    if prev_rsi < low and last_rsi > low:
+    if prev_rsi < low and last_rsi > prev_rsi:
         decision = BUY
 
-    elif prev_rsi > high and last_rsi < high:
+    elif prev_rsi > high and last_rsi < prev_rsi:
         decision = SELL
 
     else:
