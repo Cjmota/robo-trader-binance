@@ -105,8 +105,18 @@ class BinanceTraderBot:
 
             profit = (price - self.entry_price) * quantity
 
+            # 🔥 ATUALIZA RISK MANAGER
             if self.risk_manager:
+
                 self.risk_manager.register_trade(profit)
+
+                # 🔴 CONTROLE DE PERDAS CONSECUTIVAS
+                if profit < 0:
+                    self.risk_manager.consecutive_losses += 1
+                    print(f"❌ Loss consecutivo: {self.risk_manager.consecutive_losses}")
+                else:
+                    self.risk_manager.consecutive_losses = 0
+                    print("✅ Reset perdas consecutivas")
 
             print(f"🔻 SELL {self.symbol} @ {price} | PnL: {profit:.2f}")
 

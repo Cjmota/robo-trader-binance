@@ -1,7 +1,5 @@
 class RiskManager:
 
-
-
     def __init__(self, config):
 
         self.config = config
@@ -12,8 +10,6 @@ class RiskManager:
 
         self.trading_blocked = False
         self.current_day = None
-        
-        self.consecutive_losses = 0 # 🔥 CONTROLE DE PERDAS
 
     # -----------------------------------------
     # 📊 RESET DIÁRIO
@@ -79,7 +75,11 @@ class RiskManager:
 
     def can_trade(self):
 
-        if self.daily_loss <= -self.config["RISK"]["MAX_DAILY_LOSS"]:
+        if self.trading_blocked:
+            print("⛔ Trading bloqueado")
+            return False
+
+        if self.daily_loss >= self.config["RISK"]["MAX_DAILY_LOSS"]:
             print("🛑 Stop diário atingido")
             return False
 

@@ -187,7 +187,7 @@ class TradingEngine:
 
             # 🔥 ATUALIZA PERDAS
             if profit < 0:
-                self.risk_manager.consecutive_losses += 1
+                self.risk_manager.register_trade(profit)
                 print(f"❌ Loss consecutivo: {self.risk_manager.consecutive_losses}")
             else:
                 self.risk_manager.consecutive_losses = 0
