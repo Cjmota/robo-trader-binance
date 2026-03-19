@@ -139,6 +139,11 @@ class TradingEngine:
         print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")
 
+        # 🚫 FILTRO DE VOLUME (MELHORIA 3)
+        if not decision["volume_spike"] and decision["probability"] < 0.7:
+            print("🚫 Volume fraco + baixa confiança")
+            return
+
         if not decision["signal"]:
             print("⚠️ Decision sem sinal")
             return
@@ -158,6 +163,11 @@ class TradingEngine:
 
         if not decision["momentum"]:
             print("⚠️ Sem momentum")
+            return
+        
+        # 🚫 NÃO VENDE SEM POSIÇÃO (SPOT)
+        if decision["signal"] == "SELL" and not self.bot.position_open:
+            print("🚫 Ignorando SELL sem posição")
             return
 
         # -----------------------------------------
@@ -268,6 +278,10 @@ class TradingEngine:
             self.bot.buy(qty)
 
             self.trade_count_today += 1
+            
+            if self.bot.position_open:
+                print("📌 Já em posição, aguardando saída")
+                return
             
     # -----------------------------------------
     # 🛡️ POSITION SIZE

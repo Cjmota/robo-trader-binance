@@ -176,9 +176,10 @@ class DecisionEngine:
                 print("⚠️ Fluxo contrário forte")
                 return False
 
-        # -----------------------------------------
+        # 🚫 BLOQUEIO REAL DE VOLUME
         if not volume_spike:
-            print("⚠️ Volume fraco")
+            print("🚫 Volume fraco — trade ignorado")
+            return False
 
         return True
     

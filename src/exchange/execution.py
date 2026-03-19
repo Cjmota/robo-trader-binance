@@ -47,92 +47,116 @@ def create_order(
     ordemExecute = 0
     order_buy = None
 
-    try:
-        print(
-            f"[create_order] {_symbol} | {_side} | {_type} | qty={_quantity}"
-        )
+    print(
+        f"[create_order] {_symbol} | {_side} | {_type} | qty={_quantity}"
+    )
 
-        # 🔧 PEGAR PREÇO UMA VEZ (OTIMIZAÇÃO)
-        ticker = client_binance.get_symbol_ticker(symbol=_symbol)
-        market_price = float(ticker['price'])
+    # 🔧 PEGAR PREÇO UMA VEZ (OTIMIZAÇÃO)
+    ticker = client_binance.get_symbol_ticker(symbol=_symbol)
+    market_price = float(ticker['price'])
 
-        # 🔧 AJUSTE DE QUANTIDADE
-        _quantity = adjust_quantity(client_binance, _symbol, _quantity)
+    # 🔧 AJUSTE DE QUANTIDADE
+    _quantity = adjust_quantity(client_binance, _symbol, _quantity)
 
-        if _quantity == 0:
-            print("❌ Quantidade inválida")
+    if _quantity == 0:
+        print("❌ Quantidade inválida")
+        return None
+
+    # 🔧 VALIDAR NOTIONAL
+    notional = _quantity * market_price
+
+    if notional < 5:
+        print(f"❌ Ordem muito pequena: {notional:.2f} USDT")
+        return None
+
+    # 🔧 AJUSTAR PREÇOS (SE NECESSÁRIO)
+    if _limit_price is not None:
+        _limit_price = adjust_price(client_binance, _symbol, _limit_price)
+
+        # 🔧 SLIPPAGE CONTROL
+        diff = abs(_limit_price - market_price) / market_price
+
+        volatility = abs(_limit_price - market_price) / market_price
+        max_slippage = 0.002 + (volatility * 2)
+
+        if diff > max_slippage:
+            print(f"⚠️ Slippage alto: {diff:.4f}")
             return None
 
-        # 🔧 VALIDAR NOTIONAL
-        notional = _quantity * market_price
+    if _stop_price is not None:
+        _stop_price = adjust_price(client_binance, _symbol, _stop_price)
+        
+    # 🔒 evita ordem duplicada muito rápida
+    import time
 
-        if notional < 5:
-            print(f"❌ Ordem muito pequena: {notional:.2f} USDT")
+    if hasattr(client_binance, "_last_order_time"):
+        if time.time() - client_binance._last_order_time < 2:
+            print("⚠️ Ordem muito rápida, ignorando")
             return None
 
-        # 🔧 AJUSTAR PREÇOS (SE NECESSÁRIO)
-        if _limit_price is not None:
-            _limit_price = adjust_price(client_binance, _symbol, _limit_price)
+    client_binance._last_order_time = time.time()    
+    
 
-            # 🔧 SLIPPAGE CONTROL
-            diff = abs(_limit_price - market_price) / market_price
+    # -----------------------------------------
+    # 🚀 EXECUÇÃO COM RETRY
 
-            if diff > 0.002:
-                print(f"⚠️ Slippage alto: {diff:.4f}")
+    for i in range(3):
+        try:
+
+            ticker = client_binance.get_symbol_ticker(symbol=_symbol)
+            market_price = float(ticker['price'])
+
+            if _limit_price is None and _stop_price is None:
+                order_buy = client_binance.create_order(
+                    symbol=_symbol,
+                    side=_side,
+                    type=_type,
+                    quantity=_quantity,
+                )
+
+            elif _limit_price is not None and _stop_price is None:
+                order_buy = client_binance.create_order(
+                    symbol=_symbol,
+                    side=_side,
+                    type=_type,
+                    timeInForce=_timeInForce,
+                    quantity=_quantity,
+                    price=_limit_price,
+                )
+
+            elif _limit_price is not None and _stop_price is not None:
+                order_buy = client_binance.create_order(
+                    symbol=_symbol,
+                    side=_side,
+                    type=_type,
+                    timeInForce=_timeInForce,
+                    quantity=_quantity,
+                    price=_limit_price,
+                    stopPrice=_stop_price,
+                )
+
+            if order_buy and order_buy.get("status") not in ["FILLED", "PARTIALLY_FILLED"]:
+                print(f"⚠️ Ordem não executada: {order_buy.get('status')}")
                 return None
 
-        if _stop_price is not None:
-            _stop_price = adjust_price(client_binance, _symbol, _stop_price)
+            executed_qty = order_buy.get("executedQty", _quantity)
 
-        # -----------------------------------------
-        # 🚀 EXECUÇÃO COM RETRY
+            print(f"✅ Ordem executada (tentativa {i+1})")
+            print(f"📊 EXECUTADO: {_side} {_symbol} | qty={executed_qty}")
 
-        for i in range(3):
-            try:
-                # MARKET
-                if _limit_price is None and _stop_price is None:
-                    ordemExecute = 1
-                    order_buy = client_binance.create_order(
-                        symbol=_symbol,
-                        side=_side,
-                        type=_type,
-                        quantity=_quantity,
-                    )
+            break
 
-                # LIMIT
-                elif _limit_price is not None and _stop_price is None:
-                    ordemExecute = 2
-                    order_buy = client_binance.create_order(
-                        symbol=_symbol,
-                        side=_side,
-                        type=_type,
-                        timeInForce=_timeInForce,
-                        quantity=_quantity,
-                        price=_limit_price,
-                    )
+        except Exception as e:
+            print(f"⚠️ Tentativa {i+1} falhou: {e}")
 
-                # STOP
-                elif _limit_price is not None and _stop_price is not None:
-                    ordemExecute = 3
-                    order_buy = client_binance.create_order(
-                        symbol=_symbol,
-                        side=_side,
-                        type=_type,
-                        timeInForce=_timeInForce,
-                        quantity=_quantity,
-                        price=_limit_price,
-                        stopPrice=_stop_price,
-                    )
+            if "insufficient" in str(e).lower():
+                print("💸 Saldo insuficiente")
+                return None
 
-                print(f"✅ Ordem executada (tentativa {i+1})")
-                break
+            order_buy = None
 
-            except Exception as e:
-                print(f"⚠️ Tentativa {i+1} falhou: {e}")
-                order_buy = None
-
-    except Exception as e:
-        print(f"[ERROR] Ordem falhou: {e}")
-        logging.error(f"[ERROR] Ordem falhou: {e}")
+    # -----------------------------------------
+    if order_buy is None:
+        print("❌ Falha total na execução")
 
     return order_buy
