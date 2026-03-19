@@ -58,20 +58,38 @@ def getRsiTradeStrategy(
 
     # -------------------------
     # -------------------------
-    # LÓGICA MELHORADA (ENTRADA ANTECIPADA)
+    # -------------------------
+    # 🔥 LÓGICA PROFISSIONAL (TREND + MOMENTUM)
 
-    if prev_rsi < low and last_rsi > prev_rsi:
+    # força do movimento
+    rsi_diff = last_rsi - prev_rsi
+
+    # -------------------------
+    # BUY → mercado ganhando força
+
+    if last_rsi > 50 and rsi_diff > 1:
         decision = BUY
 
-    elif prev_rsi > high and last_rsi < prev_rsi:
+    # -------------------------
+    # SELL → mercado perdendo força
+
+    elif last_rsi < 50 and rsi_diff < -1:
         decision = SELL
+
+    # -------------------------
+    # nada claro
 
     else:
         decision = HOLD
     # -------------------------
     # Log
 
+    rsi_diff = last_rsi - prev_rsi
+
     if verbose:
+        
+        print("DEBUG RSI CROSS:", prev_rsi, "→", last_rsi)
+        print(f" | Força RSI: {rsi_diff:.2f}")
 
         print("-------")
         print("📊 Estratégia: RSI")
@@ -80,7 +98,7 @@ def getRsiTradeStrategy(
         print(f" | Último vale: {last_valley}")
         print(f" | Último pico: {last_peak}")
         print(f" | Decisão: {decision}")
-        print("-------")
+        print("-------")        
     
     return decision
     
