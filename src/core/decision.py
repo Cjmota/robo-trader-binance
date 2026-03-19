@@ -101,8 +101,8 @@ class DecisionEngine:
     def regime_filter(self, signal, regime, momentum, orderflow):
 
         if regime == "SIDEWAYS":
-            print("⏸️ Mercado lateral")
-            return False
+            print("⚠️ Mercado lateral (permitido)")
+            return True
 
         # 🔥 mais inteligente
         if regime == "TREND" and signal == SELL and orderflow == "BUY":
@@ -129,12 +129,12 @@ class DecisionEngine:
             return False
 
         # 🚫 score muito ruim
-        if abs(score) < 0.15:
+        if abs(score) < 0.05:
             print("⚠️ Score muito fraco")
             return False
 
         # 🚫 prob baixa
-        if probability < 0.55:
+        if probability < 0.3:
             print("⛔ Probabilidade baixa")
             return False
 
@@ -149,8 +149,7 @@ class DecisionEngine:
         # -----------------------------------------
         # 🚫 sem momentum = nunca entra
         if not momentum:
-            print("⚠️ Sem momentum")
-            return False
+            print("⚠️ Sem momentum (permitido)")
 
         # -----------------------------------------
         # 🧠 lógica adaptativa
