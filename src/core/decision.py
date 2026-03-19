@@ -159,12 +159,12 @@ class DecisionEngine:
         if strength < strong_threshold:
 
             if signal == BUY and orderflow != "BUY":
-                print("⚠️ Precisa confirmação de fluxo (BUY fraco)")
-                return False
+                print("⚠️ BUY sem fluxo (permitido em lateral)")
+                # NÃO BLOQUEIA
 
             if signal == SELL and orderflow != "SELL":
-                print("⚠️ Precisa confirmação de fluxo (SELL fraco)")
-                return False
+                print("⚠️ SELL sem fluxo (permitido em lateral)")
+                # NÃO BLOQUEIA
 
         else:
 
