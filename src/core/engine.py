@@ -5,7 +5,6 @@ from src.strategies.strategy_runner import rsi_strategy_wrapper  # 🔥 IMPORT C
 from src.strategies.mean_reversion_strategy import mean_reversion_strategy
 import time
 
-
 class TradingEngine:
 
     def __init__(self, bot, scanner, strategy_runner, decision_engine, config, risk_manager):
@@ -102,12 +101,14 @@ class TradingEngine:
             fallback_strategy=None,
             stock_data=df
         )
+        
+        print(f"🧠 RAW DECISION: {decision}")
 
         # -----------------------------------------
         # 🛡️ NORMALIZAÇÃO
 
         if isinstance(decision, str):
-            decision = {"signal": decision}
+            decision = {"action": decision, "confidence": 1}
 
         if not isinstance(decision, dict):
             print(f"❌ Decision inválida: {decision}")
@@ -119,13 +120,16 @@ class TradingEngine:
         decision = {
             "signal": decision.get("action"),  # 🔥 CORRETO
             "score": decision.get("score", 0),
-            "probability": decision.get("confidence", 0),  # 🔥 CORRETO
+            "probability": float(decision.get("confidence", 0)),  # 🔥 CORRETO
             "regime": decision.get("regime", "UNKNOWN"),
             "spread": decision.get("spread", 0),
             "volume_spike": decision.get("volume_spike", True),  # 🔥 libera
             "momentum": decision.get("momentum", True),          # 🔥 libera
             "orderflow": decision.get("orderflow", "BUY")        # 🔥 evita bloqueio
         }
+
+        print(f"🧠 NORMALIZED: {decision}")        
+        print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")
 
         if not decision["signal"]:
             print("⚠️ Decision sem sinal")
@@ -176,24 +180,16 @@ class TradingEngine:
 
         if action == "SELL" and self.bot.position_open:
 
-            entry_price = getattr(self.bot, "entry_price", None)
-            exit_price = price
-
-            if entry_price:
-                profit = (exit_price - entry_price) / entry_price
-            else:
-                profit = 0
-
             self.bot.sell()
 
-            # 🔥 ATUALIZA PERDAS
-            if profit < 0:
-                self.risk_manager.register_trade(profit)
-                print(f"❌ Loss consecutivo: {self.risk_manager.consecutive_losses}")
-            else:
-                self.risk_manager.consecutive_losses = 0
-                print("✅ Reset perdas consecutivas")
+            print(f"📉 Perdas consecutivas: {self.risk_manager.consecutive_losses}")
 
+            self.trade_count_today += 1
+            return
+
+            # 🔥 NÃO DUPLICAR (já é feito no bot.sell)
+            print(f"📉 Perdas consecutivas: {self.risk_manager.consecutive_losses}")
+            
             self.trade_count_today += 1
             return
 
