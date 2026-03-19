@@ -80,9 +80,7 @@ def getRsiTradeStrategy(
         print(f" | Último pico: {last_peak}")
         print(f" | Decisão: {decision}")
         print("-------")
-
-    if stock_data is None or len(stock_data) < 20:
-        return {
-            "action": "HOLD",
-            "confidence": 0
-        }
+    
+    return decision
+    
+    

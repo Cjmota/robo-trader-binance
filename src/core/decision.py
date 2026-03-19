@@ -20,6 +20,8 @@ class DecisionEngine:
         momentum,
         orderflow
     ):
+        #modo debug
+        #return signal 
 
         print("\n🧠 DECISION ENGINE")
 
@@ -186,7 +188,7 @@ class DecisionEngine:
             print("❌ Decision inválida")
             return HOLD
 
-        return self.evaluate(
+        return self.evaluate(            
             bot=decision.get("bot"),
             signal=decision.get("signal"),
             score=decision.get("score"),
