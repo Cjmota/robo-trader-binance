@@ -177,17 +177,19 @@ def rsi_strategy_wrapper(bot, stock_data, verbose=True, **kwargs):
     try:
         df = stock_data.rename(columns={"close_price": "close"}).copy()
 
-        from src.indicators import Indicators
+        from src.indicators.indicators import Indicators
         df["RSI"] = Indicators.getRSI(df, last_only=False)
 
-        last_rsi = df["RSI"].dropna().iloc[-1]
-        
-        if df["RSI"].dropna().empty:
+        rsi_clean = df["RSI"].dropna()
+
+        if rsi_clean.empty:
             return {
                 "signal": HOLD,
                 "score": 0,
                 "probability": 0
             }
+
+        last_rsi = rsi_clean.iloc[-1]
 
     except Exception as e:
         print("❌ Erro RSI:", e)
