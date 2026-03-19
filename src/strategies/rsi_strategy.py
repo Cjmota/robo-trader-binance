@@ -67,7 +67,7 @@ def getRsiTradeStrategy(
     # -------------------------
     # BUY → mercado ganhando força
 
-    if last_rsi > 50 and rsi_diff > 1:
+    if last_rsi > 50 and rsi_diff > 2:
         decision = BUY
 
     # -------------------------
@@ -98,8 +98,14 @@ def getRsiTradeStrategy(
         print(f" | Último vale: {last_valley}")
         print(f" | Último pico: {last_peak}")
         print(f" | Decisão: {decision}")
-        print("-------")        
+        print("-------")  
+                
+        # 🔥 converter força em probabilidade
+        confidence = min(abs(rsi_diff) / 10, 1.0)          
     
-    return decision
+    return {
+    "action": decision,
+    "confidence": confidence
+    }
     
     

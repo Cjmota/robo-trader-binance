@@ -17,10 +17,10 @@
     },
 
     "RISK": {
-        "MAX_TRADES_PER_DAY": 80,
+        "MAX_TRADES_PER_DAY": 8,
         "SYMBOL_COOLDOWN": 900,
         "LOSS_COOLDOWN": 7200,
-        "MAX_POSITION_PERCENT": 0.05,
+        "MAX_POSITION_PERCENT": 0.02,
 
         "MAX_DAILY_LOSS": 100,
         "DAILY_TARGET": 150,
@@ -35,7 +35,7 @@
     },
 
     "TRAILING": {
-    "ACTIVATION": 0.7,
+    "ACTIVATION": 0.4,
     "DISTANCE": 0.5
     },
 
@@ -44,7 +44,7 @@
     },
 
     "ACCEPTABLE_LOSS_PERCENTAGE": 0.5,
-    "STOP_LOSS_PERCENTAGE": 1.5,
+    "STOP_LOSS_PERCENTAGE": 0.8,
 
     "TP_AT_PERCENTAGE": [1.5, 3],
     "TP_AMOUNT_PERCENTAGE": [60, 40],

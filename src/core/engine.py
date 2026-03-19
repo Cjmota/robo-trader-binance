@@ -73,8 +73,12 @@ class TradingEngine:
         if market_condition == "TREND":
             strategy = vortex_rsi_volume_strategy
 
-        elif market_condition in ["SIDEWAYS", "NORMAL"]:
+        elif market_condition == "NORMAL":
             strategy = rsi_strategy_wrapper
+
+        elif market_condition == "SIDEWAYS":
+            print("⏸️ Mercado lateral - evitando trade")
+            return
 
         elif market_condition == "VOLATILE":
             strategy = vortex_rsi_volume_strategy  # depois você pode trocar por breakout
