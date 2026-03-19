@@ -6,7 +6,12 @@ SELL = "SELL"
 HOLD = "HOLD"
 
 
-def mean_reversion_strategy(bot=None, stock_data: pd.DataFrame = None):
+def mean_reversion_strategy(
+    bot=None,
+    stock_data=None,
+    verbose=True,
+    **kwargs   # 🔥 ESSENCIAL
+):
 
     if stock_data is None or len(stock_data) < 20:
         return {"action": HOLD, "confidence": 0}

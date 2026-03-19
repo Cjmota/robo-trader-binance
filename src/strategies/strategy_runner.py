@@ -11,7 +11,7 @@ def extract_signal(result, HOLD="HOLD"):
         if isinstance(result, str):
             return result
         if isinstance(result, dict):
-            return result.get("signal", HOLD)
+            return result.get("signal") or result.get("action") or HOLD
         return HOLD
 
 class StrategyRunner:

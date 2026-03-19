@@ -118,14 +118,14 @@ class TradingEngine:
             return
 
         decision = {
-            "signal": decision.get("action"),  # 🔥 CORRETO
+            "signal": decision.get("action") or decision.get("signal"),
             "score": decision.get("score", 0),
-            "probability": float(decision.get("confidence", 0)),  # 🔥 CORRETO
+            "probability": float(decision.get("confidence", 0)),
             "regime": decision.get("regime", "UNKNOWN"),
             "spread": decision.get("spread", 0),
-            "volume_spike": decision.get("volume_spike", True),  # 🔥 libera
-            "momentum": decision.get("momentum", True),          # 🔥 libera
-            "orderflow": decision.get("orderflow", "BUY")        # 🔥 evita bloqueio
+            "volume_spike": decision.get("volume_spike", True),
+            "momentum": decision.get("momentum", True),
+            "orderflow": decision.get("orderflow", "BUY")
         }
 
         print(f"🧠 NORMALIZED: {decision}")        
@@ -215,6 +215,7 @@ class TradingEngine:
             qty = capital / price
             
             self.bot.buy(qty)
+
 
             self.trade_count_today += 1
 
