@@ -118,29 +118,23 @@ def safe_trader_master_loop():
         
 def start_bot():
 
-    global BOT_RUNNING, CURRENT_TRADER, engine
-
-    if BOT_RUNNING:
-        print("⚠️ Já está rodando")
-        return
-
     print("🚀 Iniciando bot...")
 
+    print("👉 criando bot...")
     bot = create_bot()
+
+    print("✅ bot criado")
 
     CURRENT_TRADER = bot
 
-    engine = TradingEngine(
-        bot=bot,
-        scanner=get_best_symbol,
-        strategy_runner=strategy_runner,
-        decision_engine=decision_engine,
-        config=config,
-        risk_manager=risk_manager
-    )
+    print("👉 criando engine...")
+    engine = TradingEngine(...)
+
+    print("✅ engine criado")
 
     BOT_RUNNING = True
-
+    print("🔥 BOT_RUNNING TRUE")
+    
 def stop_bot():
 
     global BOT_RUNNING, CURRENT_TRADER
