@@ -18,6 +18,7 @@ logging.basicConfig(filename="dashboard.log", level=logging.INFO)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
+
 bot_loop_started = False
 
 def start_background_loop():
@@ -278,9 +279,9 @@ def api_performance():
         "sharpe": 1.5
     })
 
-if __name__ == "__main__":
+start_background_loop()  # 🔥 inicia o bot
 
-    start_background_loop()  # 🔥 inicia o bot
+if __name__ == "__main__":    
 
     port = int(os.environ.get("PORT", 5000))
 
@@ -289,3 +290,5 @@ if __name__ == "__main__":
         port=port,
         use_reloader=False  # 🔥 AQUI
     )
+    
+    
