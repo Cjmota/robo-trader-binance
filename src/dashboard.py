@@ -168,8 +168,8 @@ def api_botinfo():
 
 @app.route("/start", methods=["POST"])
 def start():
-    main.start_bot()  # 🔥 DIRETO (SEM THREAD)
-    return jsonify({"status": "started"})
+    threading.Thread(target=main.start_bot, daemon=True).start()
+    return ok({"status": "started"})
 
 @app.route("/stop", methods=["POST"])
 def stop():
@@ -254,15 +254,15 @@ def api_set_config():
 
 @app.route("/health")
 def health():
-    return {
+    return ok({
         "status": "ok",
         "running": main.BOT_RUNNING,
         "time": datetime.now().isoformat()
-    }
+    })
 
 @app.route("/api/heatmap")
 def api_heatmap():
-    return jsonify([
+    return ok([
         {"symbol": "BTC", "change": 2.1},
         {"symbol": "ETH", "change": -1.3}
     ])
