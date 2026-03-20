@@ -983,12 +983,14 @@
 
             async function updateBotInfo(){
 
-                let data = await api("/api/botinfo")
-                if(!data) return
+                let res = await api("/api/botinfo")
+                if(!res || !res.success) return
 
-                if(!data.active){
+                let data = res.data
+
+                if(!data.position_open){
                     UI.botStrategy.innerHTML = "-"
-                    UI.botPnl.innerHTML = "-"
+                    UI.botPnl.innerHTML = "Sem posição"
                     UI.botCooldowns.innerHTML = "-"
                     UI.botMemory.innerHTML = "-"
                     return
@@ -996,6 +998,7 @@
 
                 UI.botStrategy.innerHTML = data.strategy
 
+                // 🔥 PnL
                 let pnl = data.pnl_pct.toFixed(2) + "%"
                 UI.botPnl.innerHTML = pnl
 
@@ -1006,10 +1009,18 @@
                 else
                     UI.botPnl.style.color = "white"
 
-                UI.botCooldowns.innerHTML = data.cooldowns
-                UI.botMemory.innerHTML = data.memory_assets
-            }
+                // 🔥 mostra detalhes (top)
+                UI.botCooldowns.innerHTML = `
+                    Entry: ${data.entry_price.toFixed(4)}<br>
+                    Atual: ${data.current_price.toFixed(4)}
+                `
 
+                UI.botMemory.innerHTML = `
+                    Qty: ${data.quantity.toFixed(2)}<br>
+                    PnL: ${data.pnl_usdt.toFixed(2)} USDT
+                `
+            }
+            
             setInterval(() => {
                 if (profitChart) {
                     updateEquity();

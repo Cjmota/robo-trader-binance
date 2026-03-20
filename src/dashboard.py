@@ -122,19 +122,31 @@ def api_botinfo():
         if not t:
             return ok({"active": False})
 
-        pnl_usdt, pnl_pct = t.getCurrentOperationProfit()
+        if not t.position_open:
+            return ok({
+                "active": False,
+                "position_open": False
+            })
 
-        strategy = getattr(t.main_strategy, "__name__", "N/A")
+        price = float(t.get_price())
+        entry = float(t.entry_price)
+        qty = float(t.quantity)
+
+        pnl_usdt = float((price - entry) * qty)
+        pnl_pct = float((price - entry) / entry * 100)
 
         return ok({
             "active": True,
-            "asset": t.operation_code,
-            "pnl_usdt": float(pnl_usdt),
-            "pnl_pct": float(pnl_pct),
-            "strategy": strategy,
-            "cooldowns": "-",
-            "memory_assets": "-"
+            "position_open": True,
+            "symbol": t.symbol,
+            "entry_price": entry,
+            "current_price": price,
+            "quantity": qty,
+            "pnl_usdt": pnl_usdt,
+            "pnl_pct": pnl_pct,
+            "strategy": getattr(t.main_strategy, "__name__", "N/A")
         })
+
     except Exception as e:
         return fail(str(e))
 
