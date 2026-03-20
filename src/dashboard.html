@@ -498,6 +498,11 @@
             let baseEquity = null;
             let baseBTC = null;
 
+            let APP_STATE = {
+                running: false,
+                loading: false
+            }
+
             const UI = {
                 status: document.getElementById("status"),
                 asset: document.getElementById("asset"),
@@ -537,33 +542,46 @@
                 }
             }    
 
-
-            async function updateStatus(){
+            async function updateStatus() {
 
                 let res = await api("/api/status")
                 if(!res || !res.success) return
 
                 let data = res.data || {}
 
-                console.log("STATUS API:", data)
+                APP_STATE.running = data.running
 
-                // 🔥 aceita qualquer nome possível
-                let running =
-                    data.running ??
-                    data.is_running ??
-                    data.bot_running ??
-                    false
+                // STATUS
+                UI.status.innerHTML = APP_STATE.running
+                    ? "🟢 Rodando"
+                    : "🔴 Parado"
 
-                UI.status.innerHTML = running ? "🟢 Rodando" : "🔴 Parado"
+                // BOTÕES (AGORA CENTRALIZADO)
+                document.getElementById("btnStart").disabled = APP_STATE.running || APP_STATE.loading
+                document.getElementById("btnStop").disabled = !APP_STATE.running || APP_STATE.loading
 
+                // OUTROS
                 UI.asset.innerHTML = data.asset ?? "-"
                 UI.position.innerHTML = data.position ?? "-"
-                UI.profit.innerHTML = (data.daily_profit ?? 0).toFixed(2) + " USDT"
 
                 let profit = parseFloat(data.daily_profit) || 0
                 UI.profit.innerHTML = profit.toFixed(2) + " USDT"
 
                 UI.profitCard.classList.remove("glow-green","glow-red")
+
+                UI.status.classList.remove("glow-green","glow-red","blink")
+
+                if(APP_STATE.running){
+                    UI.status.classList.add("glow-green","blink")
+                }else{
+                    UI.status.classList.add("glow-red")
+                }
+
+                if(APP_STATE.running){
+                    UI.status.classList.add("glow-green")
+                }else{
+                    UI.status.classList.add("glow-red")
+                }
 
                 if(profit > 0){
                     UI.profit.style.color = "#22c55e"
@@ -571,8 +589,11 @@
                 }else if(profit < 0){
                     UI.profit.style.color = "#ef4444"
                     UI.profitCard.classList.add("glow-red")
+                }else{
+                    UI.profit.style.color = "white"
                 }
             }
+
 
             function initTradeChart() {
 
@@ -950,7 +971,7 @@
 
                 if (page === "performance") {
                     setTimeout(() => {
-                        initChart();
+                        //initChart();
                         initTradeChart();
                         initDrawdownChart();
                         initProfitTradeChart();
@@ -973,6 +994,11 @@
                     updateTradesTable()
                 }
 
+            }
+
+            function toggleSidebar() {
+                document.getElementById("sidebar").classList.toggle("collapsed")
+                document.getElementById("mainContent").classList.toggle("expanded")
             }
 
             async function updateBotInfo(){
@@ -1033,40 +1059,59 @@
         </script>
 
         <script>
-            function updateButtons(running) {
-                document.getElementById("btnStart").disabled = running;
-                document.getElementById("btnStop").disabled = !running;
+            
+            async function startBot() {
+
+                if(APP_STATE.loading) return
+
+                APP_STATE.loading = true
+
+                const btn = document.getElementById("btnStart")
+                btn.innerHTML = "⏳ Iniciando..."
+
+                updateStatus()
+
+                try {
+                    await fetch("/start", { method: "POST" })
+                } catch(e){
+                    console.log(e)
+                }
+
+                setTimeout(async () => {
+                    APP_STATE.loading = false
+
+                    btn.innerHTML = '<i class="bi bi-play-fill"></i> Iniciar'
+
+                    await updateStatus()
+                }, 800)
             }
 
-            function startBot() {
-                fetch("/start", { method: "POST" })
-                    .then(res => res.json())
-                    .then(data => {
+            
 
-                        updateButtons(true)
+            async function stopBot() {
 
-                        let tries = 0
+                if(APP_STATE.loading) return
 
-                        let interval = setInterval(() => {
-                            updateStatus()
-                            tries++
+                APP_STATE.loading = true
 
-                            if (tries > 6) clearInterval(interval)
-                        }, 500)
-                    })
-            }
+                const btn = document.getElementById("btnStop")
+                btn.innerHTML = "⏳ Parando..."
 
-            function stopBot() {
-                fetch("/stop", { method: "POST" })
-                    .then(res => res.json())
-                    .then(data => {
-                        if (data.status === "stopped" || data.status === "already_stopped") {
-                            updateButtons(false)
+                updateStatus()
 
-                            // 🔥 força atualização imediata
-                            setTimeout(updateStatus, 300)
-                        }
-                    });
+                try {
+                    await fetch("/stop", { method: "POST" })
+                } catch(e){
+                    console.log(e)
+                }
+
+                setTimeout(async () => {
+                    APP_STATE.loading = false
+
+                    btn.innerHTML = '<i class="bi bi-stop-fill"></i> Parar'
+
+                    await updateStatus()
+                }, 800)
             }
 
         </script>
@@ -1196,8 +1241,10 @@
 
             async function updateHeatmap() {
 
-                let data = await api("/api/heatmap")
-                if(!data) return
+                let res = await api("/api/heatmap")
+                if(!res || !res.success) return
+
+                let data = res.data || []
 
                 let grid = document.getElementById("heatmapGrid")
                 grid.innerHTML = ""
@@ -1207,15 +1254,12 @@
                     let color = c.change > 0 ? "#22c55e" : "#ef4444"
 
                     grid.innerHTML += `
-<div class="col-md-2">
-<div class="card p-3 text-center" style="background:${color}; font-weight:bold;">
-${c.symbol}<br>${c.change}%
-</div>
-</div>
-`
-
+                    <div class="col-md-2">
+                        <div class="card p-3 text-center" style="background:${color}; font-weight:bold;">
+                            ${c.symbol}<br>${c.change}%
+                        </div>
+                    </div>`
                 })
-
             }
 
             async function updateTradesTable() {
@@ -1264,8 +1308,10 @@ ${c.symbol}<br>${c.change}%
              
             async function updatePerformance(){
 
-                let data = await api("/api/performance")
-                if(!data) return
+                let res = await api("/api/performance")
+                if(!res || !res.success) return
+
+                let data = res.data || {}
 
                 document.getElementById("statTrades").innerText =
                     data.total_trades
@@ -1302,18 +1348,6 @@ ${c.symbol}<br>${c.change}%
                     console.log("Erro update geral", e)
                 }
             }
-
-            async function syncButtons(){
-
-                let res = await api("/api/status")
-                if(!res || !res.success) return
-
-                let running = res.data?.running ?? false
-
-                updateButtons(running)
-            }
-
-            syncButtons()
 
             document.addEventListener("visibilitychange", () => {
                 if(!document.hidden){
