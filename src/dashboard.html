@@ -516,7 +516,10 @@
                 botMemory: document.getElementById("botMemory")
             }
 
-            const API_BASE = "https://impartial-spirit-production-cd2a.up.railway.app";
+            const API_BASE =
+                window.location.origin.includes("railway.com")
+                    ? "https://impartial-spirit-production-cd2a.up.railway.app"
+                    : window.location.origin;
 
             async function api(url){
                 try{
@@ -1071,7 +1074,7 @@
                 updateStatus()
 
                 try {
-                    await fetch("/start", { method: "POST" })
+                    await fetch(API_BASE + "/start", { method: "POST" })
                 } catch(e){
                     console.log(e)
                 }
@@ -1099,7 +1102,7 @@
                 updateStatus()
 
                 try {
-                    await fetch("/stop", { method: "POST" })
+                    await fetch(API_BASE + "/stop", { method: "POST" })
                 } catch(e){
                     console.log(e)
                 }
