@@ -3,6 +3,7 @@ from src.strategies.vortex_strategy import vortex_rsi_volume_strategy
 from src.strategies.rsi_strategy import getRsiTradeStrategy
 from src.strategies.strategy_runner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
 from src.strategies.mean_reversion_strategy import mean_reversion_strategy
+from utils.helpers import to_native
 import time
 
 class TradingEngine:
@@ -93,10 +94,10 @@ class TradingEngine:
             return
 
         # 🔥 FILTRO GLOBAL SIMPLES
-        if df["close_price"].iloc[-1] > df["close_price"].rolling(50).mean().iloc[-1]:
-            trend = "UP"
-        else:
-            trend = "DOWN"
+        ma50 = float(df["close_price"].rolling(50).mean().iloc[-1])
+        price = float(df["close_price"].iloc[-1])
+
+        trend = "UP" if price > ma50 else "DOWN"
 
         print(f"📈 Tendência: {trend}")
 
@@ -109,6 +110,10 @@ class TradingEngine:
             fallback_strategy=None,
             stock_data=df
         )
+        
+        # 🔥 limpa numpy na raiz
+        from utils.helpers import to_native
+        decision = {k: to_native(v) for k, v in decision.items()}
         
         print(f"🧠 RAW DECISION: {decision}")
 
@@ -127,13 +132,13 @@ class TradingEngine:
 
         decision = {
             "signal": decision.get("action") or decision.get("signal"),
-            "score": decision.get("score", 0),
+            "score": float(decision.get("score", 0)),
             "probability": float(decision.get("confidence", 0)),
-            "regime": decision.get("regime", "UNKNOWN"),
-            "spread": decision.get("spread", 0),
-            "volume_spike": decision.get("volume_spike", True),
-            "momentum": decision.get("momentum", True),
-            "orderflow": decision.get("orderflow", "BUY")
+            "regime": str(decision.get("regime", "UNKNOWN")),
+            "spread": float(decision.get("spread", 0)),
+            "volume_spike": bool(decision.get("volume_spike", True)),
+            "momentum": bool(decision.get("momentum", True)),
+            "orderflow": str(decision.get("orderflow", "BUY"))
         }
 
         print(f"🧠 NORMALIZED: {decision}")        
@@ -202,7 +207,7 @@ class TradingEngine:
 
     def execute_trade(self, action):
 
-        price = self.bot.get_price()
+        price = float(self.bot.get_price())
 
         if not price:
             print("⚠️ Preço inválido")
@@ -213,8 +218,10 @@ class TradingEngine:
 
         if self.bot.position_open:
 
-            entry = self.bot.entry_price
-            profit_pct = (price - entry) / entry * 100
+            entry = float(self.bot.entry_price)
+            price = float(price)
+
+            profit_pct = float((price - entry) / entry * 100)
 
             # STOP LOSS
             if profit_pct <= -self.config["STOP_LOSS_PERCENTAGE"]:
@@ -273,7 +280,7 @@ class TradingEngine:
                 print("⚠️ Capital inválido")
                 return
 
-            qty = capital / price
+            qty = float(capital / price)
 
             self.bot.buy(qty)
 
@@ -295,7 +302,7 @@ class TradingEngine:
             return 0
 
         max_pct = self.config["RISK"].get("MAX_POSITION_PERCENT", 0.05)
-        capital = balance * max_pct
+        capital = float(balance * max_pct)
 
         print(f"💰 Capital calculado: {capital:.2f}")
 
@@ -303,7 +310,7 @@ class TradingEngine:
     
     def check_break_even(self, entry_price, current_price):
 
-        profit_pct = ((current_price - entry_price) / entry_price) * 100
+        profit_pct = float((current_price - entry_price) / entry_price * 100)
 
         if profit_pct >= self.config["BREAK_EVEN"]["ACTIVATION"]:
             print("🔒 Break-even ativado")
