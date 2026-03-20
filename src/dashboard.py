@@ -168,7 +168,7 @@ def api_botinfo():
 
 @app.route("/start", methods=["POST"])
 def start():
-    main.start_bot()  # 🔥 DIRETO (SEM THREAD)
+    threading.Thread(target=main.start_bot, daemon=True).start()
     return jsonify({"status": "started"})
 
 @app.route("/stop", methods=["POST"])

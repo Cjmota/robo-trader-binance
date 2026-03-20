@@ -543,7 +543,7 @@
                 let res = await api("/api/status")
                 if(!res || !res.success) return
 
-                let data = res.data
+                let data = res.data || {}
 
                 console.log("STATUS API:", data)
 
@@ -556,8 +556,9 @@
 
                 UI.status.innerHTML = running ? "🟢 Rodando" : "🔴 Parado"
 
-                UI.asset.innerHTML = data.asset || "-"
-                UI.position.innerHTML = data.position || "-"
+                UI.asset.innerHTML = data.asset ?? "-"
+                UI.position.innerHTML = data.position ?? "-"
+                UI.profit.innerHTML = (data.daily_profit ?? 0).toFixed(2) + " USDT"
 
                 let profit = parseFloat(data.daily_profit) || 0
                 UI.profit.innerHTML = profit.toFixed(2) + " USDT"
@@ -895,7 +896,7 @@
                 let res = await api("/api/equity")
                 if(!res || !res.success) return
 
-                let data = res.data
+                let data = res.data || {}
 
                 let now = new Date().toLocaleTimeString();
 
@@ -979,7 +980,7 @@
                 let res = await api("/api/botinfo")
                 if(!res || !res.success) return
 
-                let data = res.data
+                let data = res.data || {}
 
                 if(!data || !data.position_open){
                     UI.botStrategy.innerHTML = "-"
@@ -1041,14 +1042,18 @@
                 fetch("/start", { method: "POST" })
                     .then(res => res.json())
                     .then(data => {
-                        console.log("START RESPONSE:", data)
 
-                        if (data.status === "started") {
-                            updateButtons(true)
-                            setTimeout(updateStatus, 300)
-                        }
+                        updateButtons(true)
+
+                        let tries = 0
+
+                        let interval = setInterval(() => {
+                            updateStatus()
+                            tries++
+
+                            if (tries > 6) clearInterval(interval)
+                        }, 500)
                     })
-                    .catch(err => console.error("Erro start:", err))
             }
 
             function stopBot() {
@@ -1075,7 +1080,7 @@
                     let res = await api("/api/scanner")
                     if(!res || !res.success) return
 
-                    let data = res.data
+                    let data = res.data || {}
 
                     let table = document.getElementById("scannerTable")
                     let smart = document.getElementById("smartMoneyList")
@@ -1125,7 +1130,7 @@
             let res = await api("/api/config")
             if(!res || !res.success) return
 
-            let data = res.data
+            let data = res.data || {}
 
             document.getElementById("cfg_stoploss").value = data.STOP_LOSS_PERCENTAGE
             document.getElementById("cfg_tp1").value = data.TP_AT_PERCENTAGE[0]
@@ -1297,6 +1302,18 @@ ${c.symbol}<br>${c.change}%
                     console.log("Erro update geral", e)
                 }
             }
+
+            async function syncButtons(){
+
+                let res = await api("/api/status")
+                if(!res || !res.success) return
+
+                let running = res.data?.running ?? false
+
+                updateButtons(running)
+            }
+
+            syncButtons()
 
             document.addEventListener("visibilitychange", () => {
                 if(!document.hidden){
