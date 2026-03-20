@@ -1,5 +1,8 @@
 import pandas as pd
+import datetime
 import time
+
+from src import main
 
 class BinanceTraderBot:
 
@@ -130,7 +133,7 @@ class BinanceTraderBot:
                 print("⚠️ Ordem não executada")
                 return None
 
-            price = self.get_price()
+            price = float(self.get_price())
             
             if price is None or price <= 0:
                 print("⚠️ Preço inválido no SELL")
@@ -140,13 +143,31 @@ class BinanceTraderBot:
                 print("⚠️ Quantidade inválida no SELL")
                 return None
 
-            profit = (price - self.entry_price) * self.quantity
+            entry = float(self.entry_price)
+
+            profit = float((price - entry) * quantity)
+
+            # 🔥 SALVAR TRADE AQUI
+            trade = {
+                "time": str(datetime.datetime.now()),
+                "symbol": self.symbol,
+                "side": "SELL",
+                "entry": entry,
+                "exit": price,
+                "profit": profit
+            }
+
+            main.TRADE_HISTORY.append(trade)
+
+            print(f"✅ TRADE SALVO: {trade}")
 
             # 🔥 ATUALIZA RISK MANAGER
             if self.risk_manager:
                 self.risk_manager.register_trade(profit)
 
-            print(f"🔻 SELL {self.symbol} @ {price} | qty={self.quantity} | PnL: {profit:.2f}")
+            print(f"🔻 SELL {self.symbol} @ {price} | qty={quantity} | PnL: {profit:.2f}")
+
+            # reset posição
             self.position_open = False
             self.entry_price = 0
             self.quantity = 0
@@ -159,7 +180,6 @@ class BinanceTraderBot:
         except Exception as e:
             print("❌ Erro no SELL:", e)
             return None
-
     # -----------------------------------------
     # 📈 PRICE
 

@@ -4,7 +4,9 @@ from src.strategies.rsi_strategy import getRsiTradeStrategy
 from src.strategies.strategy_runner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
 from src.strategies.mean_reversion_strategy import mean_reversion_strategy
 from src.utils.helpers import to_native
+from src import main
 import time
+import datetime
 
 class TradingEngine:
 
@@ -112,7 +114,6 @@ class TradingEngine:
         )
         
         # 🔥 limpa numpy na raiz
-        from utils.helpers import to_native
         decision = {k: to_native(v) for k, v in decision.items()}
         
         print(f"🧠 RAW DECISION: {decision}")
