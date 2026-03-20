@@ -23,7 +23,8 @@ app = Flask(__name__, template_folder="templates", static_folder="static")
 def not_found(e):
     return jsonify({"error": "not found"}), 404
 
-CONFIG_PATH = os.path.join(os.path.dirname(__file__), "app", "config.json")
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+CONFIG_PATH = os.path.join(BASE_DIR, "config.json")
 
 EQUITY_HISTORY = []
 BTC_HISTORY = []
@@ -68,6 +69,28 @@ def save_config(cfg):
 def get_trader():
     return getattr(main, "CURRENT_TRADER", None)
 
+def ok(data=None):
+    return jsonify({
+        "success": True,
+        "data": clean(data)
+    })
+
+def fail(msg="error"):
+    return jsonify({
+        "success": False,
+        "error": msg
+    })
+
+def clean(obj):
+    if isinstance(obj, dict):
+        return {k: clean(v) for k, v in obj.items()}
+    elif isinstance(obj, list):
+        return [clean(x) for x in obj]
+    elif isinstance(obj, (np.integer, np.floating)):
+        return float(obj)
+    elif isinstance(obj, (np.bool_)):
+        return bool(obj)
+    return obj
 
 # ----------------------------------------
 # ROUTES
@@ -82,14 +105,14 @@ def api_status():
     try:
         t = getattr(main, "CURRENT_TRADER", None)
 
-        return jsonify({
+        return ok({
             "running": getattr(main, "BOT_RUNNING", False),
             "asset": getattr(t, "operation_code", "Nenhum") if t else "Nenhum",
             "position": "Comprado" if t and getattr(t, "actual_trade_position", False) else "Sem posição",
-            "daily_profit": round(getattr(t, "daily_profit", 0), 4) if t else 0
+            "daily_profit": float(getattr(t, "daily_profit", 0)) if t else 0
         })
     except Exception as e:
-        return jsonify({"error": str(e)})
+        return fail(str(e))
 
 @app.route("/api/botinfo")
 def api_botinfo():
@@ -97,28 +120,30 @@ def api_botinfo():
         t = getattr(main, "CURRENT_TRADER", None)
 
         if not t:
-            return jsonify({"active": False})
+            return ok({"active": False})
 
         pnl_usdt, pnl_pct = t.getCurrentOperationProfit()
 
-        return jsonify({
+        strategy = getattr(t.main_strategy, "__name__", "N/A")
+
+        return ok({
             "active": True,
             "asset": t.operation_code,
-            "pnl_usdt": pnl_usdt,
-            "pnl_pct": pnl_pct,
-            "strategy": t.main_strategy.__name__,
+            "pnl_usdt": float(pnl_usdt),
+            "pnl_pct": float(pnl_pct),
+            "strategy": strategy,
             "cooldowns": "-",
             "memory_assets": "-"
         })
-    except:
-        return jsonify({"active": False})
+    except Exception as e:
+        return fail(str(e))
 
 @app.route("/start", methods=["POST"])
 def start_bot():
     global bot_thread
     if not main.BOT_RUNNING:
         main.BOT_RUNNING = True
-        bot_thread = threading.Thread(target=main.safe_trader_master_loop)
+        bot_thread = threading.Thread(target=safe_trader_master_loop)
         bot_thread.daemon = True
         bot_thread.start()
         return jsonify({"status":"started"})
@@ -131,7 +156,11 @@ def stop_bot():
 
 @app.route("/api/trades")
 def api_trades():
-    return jsonify(getattr(main, "TRADE_HISTORY", []))
+    try:
+        trades = getattr(main, "TRADE_HISTORY", [])
+        return ok({"trades": trades})
+    except Exception as e:
+        return fail(str(e))
 
 # ----------------------------------------
 # EQUITY (simplificado)
@@ -153,21 +182,23 @@ def api_equity():
 
 @app.route("/api/scanner")
 def api_scanner():
-    data = getattr(main, "SCANNER_RANKING", [])
+    try:
+        data = getattr(main, "SCANNER_RANKING", [])
 
-    return jsonify({
-        "ranking": [
-            {
-                "symbol": s[0],
-                "score": float(s[1]),
-                "momentum": float(s[2]),
-                "volume": 1000000
-            }
-            for s in data
-        ],
-        "smart_money": ["BUY BTC", "SELL ETH"]
-    })
-
+        return ok({
+            "ranking": [
+                {
+                    "symbol": s[0],
+                    "score": float(s[1]),
+                    "momentum": float(s[2]),
+                    "volume": 1000000
+                }
+                for s in data
+            ],
+            "smart_money": ["BUY BTC", "SELL ETH"]
+        })
+    except Exception as e:
+        return fail(str(e))
 
 # ----------------------------------------
 # CONFIG
