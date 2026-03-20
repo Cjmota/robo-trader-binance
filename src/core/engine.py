@@ -3,7 +3,7 @@ from src.strategies.vortex_strategy import vortex_rsi_volume_strategy
 from src.strategies.rsi_strategy import getRsiTradeStrategy
 from src.strategies.strategy_runner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
 from src.strategies.mean_reversion_strategy import mean_reversion_strategy
-from utils.helpers import to_native
+from src.utils.helpers import to_native
 import time
 
 class TradingEngine:
