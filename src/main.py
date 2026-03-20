@@ -120,26 +120,40 @@ def start_bot():
 
     global BOT_RUNNING, CURRENT_TRADER, engine
 
+    if BOT_RUNNING:
+        print("⚠️ Já está rodando")
+        return
+
+    BOT_RUNNING = True  # 🔥 sobe antes (evita clique duplo)
+
     print("🚀 Iniciando bot...")
 
-    print("👉 criando bot...")
-    bot = create_bot()
-    print("✅ bot criado")
+    try:
+        bot = create_bot()
+        CURRENT_TRADER = bot
 
-    CURRENT_TRADER = bot
+        engine = TradingEngine(
+            bot=bot,
+            scanner=get_best_symbol,
+            strategy_runner=strategy_runner,
+            decision_engine=decision_engine,
+            config=config,
+            risk_manager=risk_manager
+        )
 
-    print("👉 criando engine...")
-    engine = TradingEngine(...)
-    print("✅ engine criado")
+        print("✅ engine criado")
 
-    BOT_RUNNING = True
-    print("🔥 BOT_RUNNING TRUE")
-    
+    except Exception as e:
+        print("❌ ERRO:", e)
+        BOT_RUNNING = False
+            
 def stop_bot():
 
     global BOT_RUNNING, CURRENT_TRADER
 
     print("🛑 Parando bot...")
+    
+    BOT_RUNNING = False
 
     if CURRENT_TRADER:
         CURRENT_TRADER.is_running = False
