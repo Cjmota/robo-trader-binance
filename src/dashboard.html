@@ -521,7 +521,15 @@
                         return null
                     }
 
-                    return await res.json()
+                    let json = await res.json()
+
+                    // 🔥 PADRÃO NOVO
+                    if(json.success !== undefined){
+                        return json
+                    }
+
+                    // fallback antigo
+                    return { success: true, data: json }
 
                 }catch(e){
                     console.log("API error:", url, e)
@@ -532,21 +540,25 @@
 
             async function updateStatus(){
 
-                let data = await api("/api/status")
-                if(!data) return
+                let res = await api("/api/status")
+                if(!res || !res.success) return
+
+                let data = res.data
 
                 UI.status.innerHTML = data.running ? "🟢 Rodando" : "🔴 Parado"
 
-                UI.asset.innerHTML = data.asset
-                UI.position.innerHTML = data.position
-                UI.profit.innerHTML = data.daily_profit + " USDT"
+                UI.asset.innerHTML = data.asset || "-"
+                UI.position.innerHTML = data.position || "-"
+
+                let profit = parseFloat(data.daily_profit) || 0
+                UI.profit.innerHTML = profit.toFixed(2) + " USDT"
 
                 UI.profitCard.classList.remove("glow-green","glow-red")
 
-                if(data.daily_profit > 0){
+                if(profit > 0){
                     UI.profit.style.color = "#22c55e"
                     UI.profitCard.classList.add("glow-green")
-                }else if(data.daily_profit < 0){
+                }else if(profit < 0){
                     UI.profit.style.color = "#ef4444"
                     UI.profitCard.classList.add("glow-red")
                 }
@@ -988,7 +1000,7 @@
 
                 let data = res.data
 
-                if(!data.position_open){
+                if(!data || !data.position_open){
                     UI.botStrategy.innerHTML = "-"
                     UI.botPnl.innerHTML = "Sem posição"
                     UI.botCooldowns.innerHTML = "-"
@@ -996,31 +1008,39 @@
                     return
                 }
 
-                UI.botStrategy.innerHTML = data.strategy
+                UI.botStrategy.innerHTML = data.strategy || "-"
 
-                // 🔥 PnL
-                let pnl = data.pnl_pct.toFixed(2) + "%"
-                UI.botPnl.innerHTML = pnl
+                let pnl_pct = parseFloat(data.pnl_pct) || 0
+                let pnl_usdt = parseFloat(data.pnl_usdt) || 0
+                let entry = parseFloat(data.entry_price) || 0
+                let current = parseFloat(data.current_price) || 0
+                let qty = parseFloat(data.quantity) || 0
 
-                if(data.pnl_pct > 0)
+                UI.botPnl.innerHTML = pnl_pct.toFixed(2) + "%"
+
+                UI.botPnl.classList.remove("glow-green","glow-red","blink")
+
+                if(pnl_pct > 0){
                     UI.botPnl.style.color = "#22c55e"
-                else if(data.pnl_pct < 0)
+                    UI.botPnl.classList.add("glow-green","blink")
+                }else if(pnl_pct < 0){
                     UI.botPnl.style.color = "#ef4444"
-                else
+                    UI.botPnl.classList.add("glow-red","blink")
+                }else{
                     UI.botPnl.style.color = "white"
+                }
 
-                // 🔥 mostra detalhes (top)
                 UI.botCooldowns.innerHTML = `
-                    Entry: ${data.entry_price.toFixed(4)}<br>
-                    Atual: ${data.current_price.toFixed(4)}
+                    Entry: ${entry.toFixed(4)}<br>
+                    Atual: ${current.toFixed(4)}
                 `
 
                 UI.botMemory.innerHTML = `
-                    Qty: ${data.quantity.toFixed(2)}<br>
-                    PnL: ${data.pnl_usdt.toFixed(2)} USDT
+                    Qty: ${qty.toFixed(2)}<br>
+                    PnL: ${pnl_usdt.toFixed(2)} USDT
                 `
             }
-            
+
             setInterval(() => {
                 if (profitChart) {
                     updateEquity();
@@ -1061,6 +1081,11 @@
         <script>
 
             async function updateScanner() {
+
+                let res = await api("/api/scanner")
+                if(!res || !res.success) return
+
+                let data = res.data   
 
                 try {
 
@@ -1221,15 +1246,10 @@ ${c.symbol}<br>${c.change}%
 
                 try {
 
-                    let trades = await api("/api/trades")
+                    let res = await api("/api/trades")
+                    if(!res || !res.success) return
 
-                    console.log("DEBUG trades:", trades, Array.isArray(trades))
-
-                    // 🔒 proteção máxima
-                    if (!Array.isArray(trades)) {
-                        console.log("Trades inválido:", trades)
-                        return
-                    }
+                    let trades = res.data.trades || []
 
                     let table = document.getElementById("tradesTable")
 
@@ -1243,8 +1263,9 @@ ${c.symbol}<br>${c.change}%
                     for (let i = trades.length - 1; i >= 0; i--) {
 
                         let t = trades[i]
+                        let profit = parseFloat(t.profit) || 0
 
-                        let color = t.profit > 0 ? "#22c55e" : "#ef4444"
+                        let color = profit > 0 ? "#22c55e" : "#ef4444"
 
                         html += `
                         <tr>
@@ -1253,11 +1274,17 @@ ${c.symbol}<br>${c.change}%
                             <td>${t.side || "-"}</td>
                             <td>${t.entry || "-"}</td>
                             <td>${t.exit || "-"}</td>
-                            <td style="color:${color}">${t.profit}</td>
+                            <td style="color:${color}">${profit.toFixed(2)}</td>
                         </tr>
                         `
                     }
 
+                    table.innerHTML = html
+
+                } catch(e) {
+                    console.log("Erro ao carregar trades:", e)
+                }
+            }
                     table.innerHTML = html
 
                 } catch(e) {
