@@ -121,12 +121,12 @@ def home():
 @app.route("/api/status")
 def status():
 
-    bot = main.CURRENT_TRADER
+    bot = getattr(main, "CURRENT_TRADER", None)
 
     return ok({
         "running": main.BOT_RUNNING,
-        "asset": getattr(bot, "symbol", None),
-        "position": "OPEN" if bot and bot.position_open else "NONE",
+        "asset": getattr(bot, "symbol", "-"),
+        "position": "OPEN" if bot and getattr(bot, "position_open", False) else "NONE",
         "daily_profit": getattr(bot, "daily_profit", 0)
     })
 
@@ -168,7 +168,7 @@ def api_botinfo():
 
 @app.route("/start", methods=["POST"])
 def start():
-    threading.Thread(target=main.start_bot, daemon=True).start()
+    main.start_bot()  # 🔥 DIRETO (SEM THREAD)
     return jsonify({"status": "started"})
 
 @app.route("/stop", methods=["POST"])
@@ -190,7 +190,7 @@ def api_trades():
 
 @app.route("/api/equity")
 def api_equity():
-    return jsonify({
+    return ok({
         "equity": 1000,
         "btc_price": 60000,
         "cumulative_pct": 2.5,
@@ -228,7 +228,7 @@ def api_scanner():
 
 @app.route("/api/config", methods=["GET"])
 def api_get_config():
-    return load_config()
+    return ok(load_config())
 
 
 @app.route("/api/config", methods=["POST"])
@@ -236,12 +236,10 @@ def api_set_config():
     cfg = load_config()
     data = request.json
 
-    # 🔧 ajustes simples
     cfg["STOP_LOSS_PERCENTAGE"] = data["STOP_LOSS_PERCENTAGE"]
     cfg["TP_AT_PERCENTAGE"] = data["TP_AT_PERCENTAGE"]
     cfg["TEMPO_ENTRE_TRADES"] = data["TEMPO_ENTRE_TRADES"]
 
-    # 🔧 RISK (aqui estava o erro principal)
     cfg["RISK"]["MAX_POSITION_PERCENT"] = data["MAX_POSITION_PERCENT"] / 100
     cfg["RISK"]["MAX_TRADES_PER_DAY"] = data["MAX_TRADES_PER_DAY"]
     cfg["RISK"]["SYMBOL_COOLDOWN"] = data["SYMBOL_COOLDOWN"]
@@ -249,7 +247,7 @@ def api_set_config():
 
     save_config(cfg)
 
-    return jsonify({"status": "ok"})
+    return ok({"saved": True})
 # ----------------------------------------
 # HEALTH
 # ----------------------------------------
@@ -271,7 +269,7 @@ def api_heatmap():
         
 @app.route("/api/performance")
 def api_performance():
-    return jsonify({
+    return ok({
         "total_trades": 10,
         "win_rate": 0.6,
         "profit_factor": 1.8,
@@ -281,7 +279,9 @@ def api_performance():
 
 start_background_loop()  # 🔥 inicia o bot
 
-if __name__ == "__main__":    
+if __name__ == "__main__":
+
+    
 
     port = int(os.environ.get("PORT", 5000))
 
