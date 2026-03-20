@@ -1,6 +1,7 @@
 import os
 import json
 import time
+import random
 from dotenv import load_dotenv
 from binance.client import Client
 
@@ -62,13 +63,6 @@ def get_client():
 
 risk_manager = RiskManager(config)
 
-
-# -----------------------------------------
-# 🧠 COMPONENTES
-
-strategy_runner = StrategyRunner()
-decision_engine = DecisionEngine(config)
-
 # -----------------------------------------
 # 🔍 SCANNER (cache simples)
 
@@ -93,6 +87,8 @@ def create_bot():
 def get_best_symbol():
     global last_scan, cached_symbols
 
+    client = get_client()  # 🔥 GARANTE CLIENTE
+
     if time.time() - last_scan > 120:
         try:
             cached_symbols = scan_market_pro(client)
@@ -102,7 +98,6 @@ def get_best_symbol():
             return None
 
     return cached_symbols[0] if cached_symbols else None
-
 # -----------------------------------------
 # 🧠 COMPONENTES
 strategy_runner = StrategyRunner()
@@ -125,16 +120,21 @@ def safe_trader_master_loop():
     while True:
 
         if not BOT_RUNNING or not engine:
-            time.sleep(1)
+            time.sleep(2 + random.uniform(0.5, 1.5))
             continue
 
         try:
             engine.run_once()
 
+            # 🔥🔥🔥 ESSA LINHA É O MAIS IMPORTANTE
+            time.sleep(2 + random.uniform(0.5, 1.5))
+
         except Exception as e:
+            import traceback
             print("❌ ERRO NO BOT:", e)
-            time.sleep(10)
-        
+            traceback.print_exc()
+            time.sleep(2 + random.uniform(0.5, 1.5))
+                    
 def start_bot():
 
     global BOT_RUNNING, CURRENT_TRADER, engine
@@ -176,4 +176,9 @@ def stop_bot():
 
     if CURRENT_TRADER:
         CURRENT_TRADER.is_running = False
+    
+
+if __name__ == "__main__":
+    start_bot()
+    safe_trader_master_loop()
 
