@@ -516,28 +516,27 @@
                 botMemory: document.getElementById("botMemory")
             }
 
-            async function api(url){
+            const API_BASE = "https://impartial-spirit-production-cd2a.up.railway.app";
 
+            async function api(url){
                 try{
-                    let res = await fetch(url)
+                    let res = await fetch(API_BASE + url)
 
                     if(!res.ok){
-                        console.log("HTTP error:", url, res.status)
+                        console.log("HTTP error:", API_BASE + url, res.status)
                         return null
                     }
 
                     let json = await res.json()
 
-                    // 🔥 PADRÃO NOVO
                     if(json.success !== undefined){
                         return json
                     }
 
-                    // fallback antigo
                     return { success: true, data: json }
 
                 }catch(e){
-                    console.log("API error:", url, e)
+                    console.log("API error:", API_BASE + url, e)
                     return null
                 }
             }    
