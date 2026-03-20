@@ -6,7 +6,6 @@ import json
 import os
 import logging
 import numpy as np
-import os
 
 from src import main
 from src.utils.performance import calculate_metrics
@@ -19,6 +18,24 @@ logging.basicConfig(filename="dashboard.log", level=logging.INFO)
 
 app = Flask(__name__, template_folder="templates", static_folder="static")
 
+bot_loop_started = False
+
+def start_background_loop():
+    global bot_loop_started
+
+    if bot_loop_started:
+        print("⚠️ Loop já iniciado")
+        return
+
+    thread = threading.Thread(
+        target=safe_trader_master_loop,
+        daemon=True
+    )
+    thread.start()
+
+    bot_loop_started = True
+    print("🧠 Loop do bot iniciado em background")
+    
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({"error": "not found"}), 404
@@ -101,18 +118,16 @@ def home():
     return render_template("dashboard.html", metrics=calculate_metrics())
 
 @app.route("/api/status")
-def api_status():
-    try:
-        t = getattr(main, "CURRENT_TRADER", None)
+def status():
 
-        return ok({
-            "running": getattr(main, "BOT_RUNNING", False),
-            "asset": getattr(t, "operation_code", "Nenhum") if t else "Nenhum",
-            "position": "Comprado" if t and getattr(t, "actual_trade_position", False) else "Sem posição",
-            "daily_profit": float(getattr(t, "daily_profit", 0)) if t else 0
-        })
-    except Exception as e:
-        return fail(str(e))
+    bot = main.CURRENT_TRADER
+
+    return ok({
+        "running": main.BOT_RUNNING,
+        "asset": getattr(bot, "symbol", None),
+        "position": "OPEN" if bot and bot.position_open else "NONE",
+        "daily_profit": getattr(bot, "daily_profit", 0)
+    })
 
 @app.route("/api/botinfo")
 def api_botinfo():
@@ -151,20 +166,14 @@ def api_botinfo():
         return fail(str(e))
 
 @app.route("/start", methods=["POST"])
-def start_bot():
-    global bot_thread
-    if not main.BOT_RUNNING:
-        main.BOT_RUNNING = True
-        bot_thread = threading.Thread(target=safe_trader_master_loop)
-        bot_thread.daemon = True
-        bot_thread.start()
-        return jsonify({"status":"started"})
-    return jsonify({"status":"already_running"})
+def start():
+    threading.Thread(target=main.start_bot, daemon=True).start()
+    return ok("Bot iniciado")
 
 @app.route("/stop", methods=["POST"])
-def stop_bot():
-    main.BOT_RUNNING = False
-    return jsonify({"status":"stopped"})
+def stop():
+    main.stop_bot()
+    return ok("Bot parado")
 
 @app.route("/api/trades")
 def api_trades():
@@ -270,5 +279,13 @@ def api_performance():
     })
 
 if __name__ == "__main__":
+
+    start_background_loop()  # 🔥 inicia o bot
+
     port = int(os.environ.get("PORT", 5000))
-    app.run(host="0.0.0.0", port=port)
+
+    app.run(
+        host="0.0.0.0",
+        port=port,
+        use_reloader=False  # 🔥 AQUI
+    )

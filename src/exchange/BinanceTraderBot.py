@@ -21,6 +21,10 @@ class BinanceTraderBot:
         self.operation_code = symbol
 
         self.risk_manager = risk_manager
+        
+        self.is_running = False
+        self.daily_profit = 0       
+        
 
     # -----------------------------------------
     # 📊 DATA
@@ -146,6 +150,9 @@ class BinanceTraderBot:
             entry = float(self.entry_price)
 
             profit = float((price - entry) * quantity)
+            
+            # 🔥 ATUALIZA LUCRO DIÁRIO
+            self.daily_profit += profit
 
             # 🔥 SALVAR TRADE AQUI
             trade = {

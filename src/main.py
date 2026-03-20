@@ -48,16 +48,6 @@ client = Client(API_KEY, API_SECRET)
 
 risk_manager = RiskManager(config)
 
-# -----------------------------------------
-# 🤖 BOT BASE
-
-bot = BinanceTraderBot(
-    symbol="BTCUSDT",  # inicial (scanner troca depois)
-    client=client,
-    config=config,
-    risk_manager=risk_manager
-)
-
 
 # -----------------------------------------
 # 🧠 COMPONENTES
@@ -71,6 +61,14 @@ decision_engine = DecisionEngine(config)
 last_scan = 0
 cached_symbols = []
 
+def create_bot():
+
+    return BinanceTraderBot(
+        symbol="BTCUSDT",
+        client=client,
+        config=config,
+        risk_manager=risk_manager
+    )
 
 def get_best_symbol():
     global last_scan, cached_symbols
@@ -93,14 +91,7 @@ decision_engine = DecisionEngine(config)
 # -----------------------------------------
 # ⚙️ ENGINE
 
-engine = TradingEngine(
-    bot=bot,
-    scanner=get_best_symbol,
-    strategy_runner=strategy_runner,
-    decision_engine=decision_engine,
-    config=config,
-    risk_manager=risk_manager  # 🔥 AQUI
-)
+engine = None
 
 # -----------------------------------------
 # ▶️ START SEGURO
@@ -110,15 +101,13 @@ CURRENT_TRADER = None
 
 def safe_trader_master_loop():
 
-    global BOT_RUNNING, CURRENT_TRADER
+    global BOT_RUNNING, CURRENT_TRADER, engine
 
-    print("🔥 BOT INICIADO")
-
-    CURRENT_TRADER = bot
+    print("🔥 LOOP ATIVO")
 
     while True:
 
-        if not BOT_RUNNING:
+        if not BOT_RUNNING or not engine:
             time.sleep(1)
             continue
 
@@ -129,6 +118,43 @@ def safe_trader_master_loop():
             print("❌ ERRO NO BOT:", e)
 
         time.sleep(2)
+        
+def start_bot():
+
+    global BOT_RUNNING, CURRENT_TRADER, engine
+
+    if BOT_RUNNING:
+        print("⚠️ Já está rodando")
+        return
+
+    print("🚀 Iniciando bot...")
+
+    bot = create_bot()
+
+    CURRENT_TRADER = bot
+
+    engine = TradingEngine(
+        bot=bot,
+        scanner=get_best_symbol,
+        strategy_runner=strategy_runner,
+        decision_engine=decision_engine,
+        config=config,
+        risk_manager=risk_manager
+    )
+
+    BOT_RUNNING = True
+
+def stop_bot():
+
+    global BOT_RUNNING, CURRENT_TRADER
+
+    print("🛑 Parando bot...")
+
+    BOT_RUNNING = False
+
+    if CURRENT_TRADER:
+        CURRENT_TRADER.is_running = False
+
 
 
 # -----------------------------------------
