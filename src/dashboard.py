@@ -167,13 +167,13 @@ def api_botinfo():
 
 @app.route("/start", methods=["POST"])
 def start():
-    threading.Thread(target=main.start_bot, daemon=True).start()
-    return ok("Bot iniciado")
+    main.start_bot()  # 🔥 DIRETO (SEM THREAD)
+    return jsonify({"status": "started"})
 
 @app.route("/stop", methods=["POST"])
 def stop():
     main.stop_bot()
-    return ok("Bot parado")
+    return jsonify({"status": "stopped"})
 
 @app.route("/api/trades")
 def api_trades():

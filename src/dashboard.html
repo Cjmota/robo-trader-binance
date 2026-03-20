@@ -1041,13 +1041,14 @@
                 fetch("/start", { method: "POST" })
                     .then(res => res.json())
                     .then(data => {
-                        if (data.status === "started" || data.status === "already_running") {
-                            updateButtons(true)
+                        console.log("START RESPONSE:", data)
 
-                            // 🔥 força atualização imediata
+                        if (data.status === "started") {
+                            updateButtons(true)
                             setTimeout(updateStatus, 300)
                         }
-                    });
+                    })
+                    .catch(err => console.error("Erro start:", err))
             }
 
             function stopBot() {
