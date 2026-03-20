@@ -545,7 +545,16 @@
 
                 let data = res.data
 
-                UI.status.innerHTML = data.running ? "🟢 Rodando" : "🔴 Parado"
+                console.log("STATUS API:", data)
+
+                // 🔥 aceita qualquer nome possível
+                let running =
+                    data.running ??
+                    data.is_running ??
+                    data.bot_running ??
+                    false
+
+                UI.status.innerHTML = running ? "🟢 Rodando" : "🔴 Parado"
 
                 UI.asset.innerHTML = data.asset || "-"
                 UI.position.innerHTML = data.position || "-"
@@ -712,209 +721,181 @@
             async function updateTradeStats() {
 
                 let res = await api("/api/trades")
+                if(!res || !res.success) return
 
-                let trades = []
+                let trades = res.data?.trades || []
 
-                if (Array.isArray(res)) {
-                    trades = res
-                } else if (res && Array.isArray(res.trades)) {
-                    trades = res.trades
-                } else {
-                    console.log("Formato inválido trades:", res)
+                if(!Array.isArray(trades)){
+                    console.log("Formato inválido trades:", trades)
                     return
                 }
 
-                let total = trades ? trades.length : 0;
+                let total = trades.length
 
                 let profits = trades
-                .map(t => parseFloat(t.profit))
-                .filter(p => !isNaN(p));
+                    .map(t => parseFloat(t.profit))
+                    .filter(p => !isNaN(p))
+
+                if(profits.length === 0){
+                    console.log("Sem trades ainda")
+                }
 
                 // 🔥 LUCRO POR HORA
-                let hourlyProfit = new Array(24).fill(0);
+                let hourlyProfit = new Array(24).fill(0)
 
                 trades.forEach(t => {
+                    if(!t.time) return
 
-                    if(!t.time) return;
-
-                    let hour = new Date(t.time).getHours();
-
-                    let profit = parseFloat(t.profit);
+                    let hour = new Date(t.time).getHours()
+                    let profit = parseFloat(t.profit)
 
                     if(!isNaN(profit)){
-                        hourlyProfit[hour] += profit;
+                        hourlyProfit[hour] += profit
                     }
-
-                });
+                })
 
                 if(profitHourChart){
 
-                    let labels = [];
+                    let labels = Array.from({length:24}, (_,i)=> i+"h")
 
-                    for(let i=0;i<24;i++){
-                        labels.push(i + "h");
-                    }
-
-                    profitHourChart.data.labels = labels;
-
-                    profitHourChart.data.datasets[0].data = hourlyProfit;
-
+                    profitHourChart.data.labels = labels
+                    profitHourChart.data.datasets[0].data = hourlyProfit
                     profitHourChart.data.datasets[0].backgroundColor =
-                        hourlyProfit.map(v => v > 0 ? "#22c55e" : "#ef4444");
+                        hourlyProfit.map(v => v > 0 ? "#22c55e" : "#ef4444")
 
-                    profitHourChart.update();
+                    profitHourChart.update()
                 }
 
-                // 🔥 HISTOGRAMA
-                let bins = 10;
-                let min = Math.min(...profits);
-                let max = Math.max(...profits);
+                // 🔥 HISTOGRAMA (seguro)
+                let histogram = []
+                let labels = []
 
-                let step = (max - min) / bins;
+                if(profits.length > 0){
 
-                if(step === 0){
-                    step = 1;
-                }
+                    let bins = 10
+                    let min = Math.min(...profits)
+                    let max = Math.max(...profits)
 
-                let histogram = new Array(bins).fill(0);
+                    let step = (max - min) / bins
+                    if(step === 0) step = 1
 
-                profits.forEach(p => {
+                    histogram = new Array(bins).fill(0)
 
-                    let index = Math.floor((p - min) / step);
+                    profits.forEach(p => {
+                        let index = Math.floor((p - min) / step)
+                        if(index >= bins) index = bins - 1
+                        histogram[index]++
+                    })
 
-                    if(index >= bins) index = bins - 1;
-
-                    histogram[index]++;
-
-                });
-
-                let labels = [];
-
-                for(let i=0;i<bins;i++){
-
-                    let start = (min + i*step).toFixed(2);
-                    let end = (min + (i+1)*step).toFixed(2);
-
-                    labels.push(start + " → " + end);
+                    for(let i=0;i<bins;i++){
+                        let start = (min + i*step).toFixed(2)
+                        let end = (min + (i+1)*step).toFixed(2)
+                        labels.push(start + " → " + end)
+                    }
                 }
 
                 if(profitHistogramChart){
-
-                    profitHistogramChart.data.labels = labels;
-
-                    profitHistogramChart.data.datasets[0].data = histogram;
-
-                    profitHistogramChart.update();
+                    profitHistogramChart.data.labels = labels
+                    profitHistogramChart.data.datasets[0].data = histogram
+                    profitHistogramChart.update()
                 }
 
-                // 🔥 Atualiza gráfico Profit por Trade
+                // 🔥 PROFIT POR TRADE
                 if(profitTradeChart){
-
                     profitTradeChart.data.labels = profits.map((_,i)=> i+1)
-
                     profitTradeChart.data.datasets[0].data = profits
-
                     profitTradeChart.data.datasets[0].backgroundColor =
                         profits.map(p => p>0 ? "#22c55e" : "#ef4444")
-
                     profitTradeChart.update()
                 }
 
-                let wins = profits.filter(p => p > 0);
-                let losses = profits.filter(p => p < 0);
+                let wins = profits.filter(p => p > 0)
+                let losses = profits.filter(p => p < 0)
 
-                let winrate = total > 0 ? (wins.length / total) * 100 : 0;
+                let winrate = total > 0 ? (wins.length / total) * 100 : 0
 
-                let grossProfit = wins.reduce((a, b) => a + b, 0);
-                let grossLoss = Math.abs(losses.reduce((a, b) => a + b, 0));
+                let grossProfit = wins.reduce((a,b)=>a+b,0)
+                let grossLoss = Math.abs(losses.reduce((a,b)=>a+b,0))
 
-                let profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit;
+                let profitFactor = grossLoss > 0 ? grossProfit / grossLoss : grossProfit
 
-                // 🔥 Expectância
-                let avgWin = wins.length ? grossProfit / wins.length : 0;
-                let avgLoss = losses.length ? grossLoss / losses.length : 0;
+                let avgWin = wins.length ? grossProfit / wins.length : 0
+                let avgLoss = losses.length ? grossLoss / losses.length : 0
 
-                let expectancy = (winrate / 100 * avgWin) - ((1 - winrate / 100) * avgLoss);
+                let expectancy = (winrate/100 * avgWin) - ((1 - winrate/100) * avgLoss)
 
-                // 🔥 Curva acumulada
-                let cumulative = [];
-                let running = 0;
+                // 🔥 EQUITY
+                let cumulative = []
+                let running = 0
 
-                profits.forEach(p => {
-                    running += p;
-                    cumulative.push(running);
-                });
+                profits.forEach(p=>{
+                    running += p
+                    cumulative.push(running)
+                })
 
-                // 🔥 cálculo do drawdown
-                let peak = -Infinity;
-                let drawdown = [];
+                // 🔥 DRAWDOWN
+                let peak = -Infinity
+                let drawdown = []
 
-                cumulative.forEach(value => {
-
-                    if(value > peak) peak = value;
-
-                    let dd = value - peak; // negativo
-
-                    drawdown.push(dd);
-                });
+                cumulative.forEach(value=>{
+                    if(value > peak) peak = value
+                    drawdown.push(value - peak)
+                })
 
                 if(drawdownChart){
-
-                    drawdownChart.data.labels = drawdown.map((_,i)=>i+1);
-
-                    drawdownChart.data.datasets[0].data = drawdown;
-
-                    drawdownChart.update();
+                    drawdownChart.data.labels = drawdown.map((_,i)=>i+1)
+                    drawdownChart.data.datasets[0].data = drawdown
+                    drawdownChart.update()
                 }
 
-                
-                if (tradeEquityChart && cumulative.length > 0) {
-                    tradeEquityChart.data.labels = cumulative.map((_, i) => i + 1);
-                    tradeEquityChart.data.datasets[0].data = cumulative;
-                    tradeEquityChart.update();
+                if(tradeEquityChart && cumulative.length > 0){
+                    tradeEquityChart.data.labels = cumulative.map((_,i)=>i+1)
+                    tradeEquityChart.data.datasets[0].data = cumulative
+                    tradeEquityChart.update()
                 }
-                
 
                 // 🔥 STREAK
-                let streak = 0;
-                let current = 0;
+                let streak = 0
+                let current = 0
 
-                for (let i = profits.length - 1; i >= 0; i--) {
-                    if (profits[i] > 0) {
-                        if (current >= 0) current++;
-                        else break;
-                    } else if (profits[i] < 0) {
-                        if (current <= 0) current--;
-                        else break;
+                for(let i = profits.length - 1; i >= 0; i--){
+                    if(profits[i] > 0){
+                        if(current >= 0) current++
+                        else break
+                    }else if(profits[i] < 0){
+                        if(current <= 0) current--
+                        else break
                     }
                 }
-                streak = current;
 
-                // 🔥 Atualização dos cards
-                document.getElementById("statTrades").innerText = total;
-                document.getElementById("statWinrate").innerText = winrate.toFixed(2) + "%";
-                document.getElementById("statProfitFactor").innerText = profitFactor.toFixed(2);
-                document.getElementById("statStreak").innerText = streak;
-                document.getElementById("statExpectancy").innerText = expectancy.toFixed(4);
+                streak = current
 
-                // 🔥 Cor automática
-                function colorize(id, value) {
-                    let el = document.getElementById(id);
-                    if (value > 0) el.style.color = "#22c55e";
-                    else if (value < 0) el.style.color = "#ef4444";
-                    else el.style.color = "white";
+                // 🔥 UI
+                document.getElementById("statTrades").innerText = total
+                document.getElementById("statWinrate").innerText = winrate.toFixed(2) + "%"
+                document.getElementById("statProfitFactor").innerText = profitFactor.toFixed(2)
+                document.getElementById("statStreak").innerText = streak
+                document.getElementById("statExpectancy").innerText = expectancy.toFixed(4)
+
+                function colorize(id, value){
+                    let el = document.getElementById(id)
+                    if(value > 0) el.style.color = "#22c55e"
+                    else if(value < 0) el.style.color = "#ef4444"
+                    else el.style.color = "white"
                 }
 
-                colorize("statStreak", streak);
-                colorize("statExpectancy", expectancy);
-            }    
-
+                colorize("statStreak", streak)
+                colorize("statExpectancy", expectancy)
+            }
+                
             async function updateEquity() {
 
                 if (!profitChart) return;
 
-                let data = await api("/api/equity")
-                if(!data) return
+                let res = await api("/api/equity")
+                if(!res || !res.success) return
+
+                let data = res.data
 
                 let now = new Date().toLocaleTimeString();
 
@@ -1061,7 +1042,10 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.status === "started" || data.status === "already_running") {
-                            updateButtons(true);
+                            updateButtons(true)
+
+                            // 🔥 força atualização imediata
+                            setTimeout(updateStatus, 300)
                         }
                     });
             }
@@ -1071,7 +1055,10 @@
                     .then(res => res.json())
                     .then(data => {
                         if (data.status === "stopped" || data.status === "already_stopped") {
-                            updateButtons(false);
+                            updateButtons(false)
+
+                            // 🔥 força atualização imediata
+                            setTimeout(updateStatus, 300)
                         }
                     });
             }
@@ -1082,15 +1069,12 @@
 
             async function updateScanner() {
 
-                let res = await api("/api/scanner")
-                if(!res || !res.success) return
-
-                let data = res.data   
-
                 try {
 
-                    let data = await api("/api/scanner")
-                    if(!data) return
+                    let res = await api("/api/scanner")
+                    if(!res || !res.success) return
+
+                    let data = res.data
 
                     let table = document.getElementById("scannerTable")
                     let smart = document.getElementById("smartMoneyList")
@@ -1104,18 +1088,12 @@
                     }
 
                     data.ranking.forEach((r, i) => {
-                        
                         let star = i === 0 ? "⭐ " : ""
                         let highlight = i === 0 ? "style='color:#22c55e;font-weight:bold'" : ""
 
-                        // 🔥 FORMATAÇÃO DO VOLUME
                         let vol = r.volume
-
-                        if(vol > 1e9){
-                            vol = (vol/1e9).toFixed(2) + "B"
-                        }else{
-                            vol = (vol/1e6).toFixed(2) + "M"
-                        }
+                        if(vol > 1e9) vol = (vol/1e9).toFixed(2) + "B"
+                        else vol = (vol/1e6).toFixed(2) + "M"
 
                         html += `
                         <tr ${highlight}>
@@ -1123,38 +1101,30 @@
                             <td>${r.score.toFixed(2)}</td>
                             <td>${r.momentum}</td>
                             <td>${vol}</td>
-                        </tr>
-                        `
+                        </tr>`
                     })
+
                     table.innerHTML = html
 
                     data.smart_money.forEach(s => {
-
                         let color = "#94a3b8"
-
                         if (s.includes("BUY")) color = "#22c55e"
                         else if (s.includes("SELL")) color = "#ef4444"
 
-                        smart.innerHTML += `
-        <li style="color:${color}; font-weight:500;">
-        ${s}
-        </li>
-        `
-
+                        smart.innerHTML += `<li style="color:${color}; font-weight:500;">${s}</li>`
                     })
 
                 } catch (e) {
                     console.log("Erro scanner", e)
                 }
-
             }
-
-            updateScanner()
-
+            
             async function loadConfig() {
 
-            let data = await api("/api/config")
-            if(!data) return
+            let res = await api("/api/config")
+            if(!res || !res.success) return
+
+            let data = res.data
 
             document.getElementById("cfg_stoploss").value = data.STOP_LOSS_PERCENTAGE
             document.getElementById("cfg_tp1").value = data.TP_AT_PERCENTAGE[0]
@@ -1285,15 +1255,7 @@ ${c.symbol}<br>${c.change}%
                     console.log("Erro ao carregar trades:", e)
                 }
             }
-                    table.innerHTML = html
-
-                } catch(e) {
-
-                    console.log("Erro ao carregar trades:", e)
-
-                }
-            }
-
+             
             async function updatePerformance(){
 
                 let data = await api("/api/performance")
