@@ -1,7 +1,6 @@
 import pandas as pd
 import time
 
-
 class BinanceTraderBot:
 
     def __init__(self, symbol, client, config, risk_manager=None):
@@ -55,9 +54,26 @@ class BinanceTraderBot:
         if self.position_open:
             print("⚠️ Já existe posição aberta")
             return None
+        
+        try:
+            balance = float(self.client.get_asset_balance(asset="USDT")["free"])
+            if balance < 5:
+                print("💸 Saldo insuficiente")
+                return None
+        except Exception as e:
+            print("❌ Erro ao verificar saldo:", e)
+            return None
 
+        if time.time() - self.last_trade_time < 2:
+            print("⚠️ Ordem muito rápida")
+            return None
+        
         quantity = self._adjust_quantity(quantity)
-
+        
+        if quantity <= 0:
+            print("⚠️ Quantidade inválida")
+            return None
+        
         try:
             order = self.client.create_order(
                 symbol=self.symbol,
@@ -65,17 +81,26 @@ class BinanceTraderBot:
                 type="MARKET",
                 quantity=quantity
             )
+            
+            if order and order.get("status") not in ["FILLED", "PARTIALLY_FILLED"]:
+                print("⚠️ Ordem não executada")
+                return None
 
             price = self.get_price()
 
+            if price is None or price <= 0:
+                print("⚠️ Preço inválido no BUY")
+                return None
+
+            executed_qty = float(order.get("executedQty", quantity))
+
             self.position_open = True
             self.entry_price = price
-            self.quantity = quantity
+            self.quantity = executed_qty
             self.highest_price = price
             self.last_trade_time = time.time()
-
-            print(f"🚀 BUY {self.symbol} @ {price}")
-
+            
+            print(f"🚀 BUY {self.symbol} @ {price} | qty={executed_qty} | balance_used≈{executed_qty * price:.2f}")
             return order
         
         except Exception as e:
@@ -100,26 +125,28 @@ class BinanceTraderBot:
                 type="MARKET",
                 quantity=quantity
             )
+            
+            if order and order.get("status") not in ["FILLED", "PARTIALLY_FILLED"]:
+                print("⚠️ Ordem não executada")
+                return None
 
             price = self.get_price()
+            
+            if price is None or price <= 0:
+                print("⚠️ Preço inválido no SELL")
+                return None
 
-            profit = (price - self.entry_price) * quantity
+            if quantity <= 0:
+                print("⚠️ Quantidade inválida no SELL")
+                return None
+
+            profit = (price - self.entry_price) * self.quantity
 
             # 🔥 ATUALIZA RISK MANAGER
             if self.risk_manager:
-
                 self.risk_manager.register_trade(profit)
 
-                # 🔴 CONTROLE DE PERDAS CONSECUTIVAS
-                if profit < 0:
-                    self.risk_manager.consecutive_losses += 1
-                    print(f"❌ Loss consecutivo: {self.risk_manager.consecutive_losses}")
-                else:
-                    self.risk_manager.consecutive_losses = 0
-                    print("✅ Reset perdas consecutivas")
-
-            print(f"🔻 SELL {self.symbol} @ {price} | PnL: {profit:.2f}")
-
+            print(f"🔻 SELL {self.symbol} @ {price} | qty={self.quantity} | PnL: {profit:.2f}")
             self.position_open = False
             self.entry_price = 0
             self.quantity = 0
@@ -146,37 +173,6 @@ class BinanceTraderBot:
             return None
 
     # -----------------------------------------
-    # 🧠 TRAILING STOP (ALINHADO COM CONFIG)
-
-    def trailing_stop(self, price):
-
-        if not self.position_open or not price:
-            return False
-
-        trailing_cfg = self.config.get("TRAILING", {})
-
-        activation = trailing_cfg.get("ACTIVATION", 0.7) / 100
-        distance = trailing_cfg.get("DISTANCE", 0.5) / 100
-
-        profit_pct = (price - self.entry_price) / self.entry_price
-
-        # só ativa depois de lucro mínimo
-        if profit_pct < activation:
-            return False
-
-        if price > self.highest_price:
-            self.highest_price = price
-
-        trail_price = self.highest_price * (1 - distance)
-
-        if price < trail_price:
-            print("🔴 Trailing acionado")
-            self.sell()
-            return True
-
-        return False
-
-    # -----------------------------------------
     # ⏱️ COOLDOWN
 
     def can_trade(self):
@@ -197,7 +193,11 @@ class BinanceTraderBot:
         if self.symbol == symbol:
             return
 
-        print(f"🔄 Mudando ativo: {self.symbol} → {symbol}")
+        if self.position_open:
+            print("⚠️ Não pode trocar ativo com posição aberta")    
+            return
+        
+        print(f"🔄 Mudando ativo: {self.symbol} → {symbol}")        
 
         self.symbol = symbol
         self.operation_code = symbol
@@ -238,17 +238,3 @@ class BinanceTraderBot:
 
         # 🔥 simplificado (ideal: usar stepSize da Binance)
         return round(qty, 5)
-
-        spread = data.get("spread", 0)
-        momentum = data.get("momentum", False)
-        volume_spike = bool(data.get("volume_spike", False))
-
-        if spread > 0.2:
-            print("🚫 Spread alto")
-            return False
-
-        if not momentum:
-            print("🚫 Sem momentum")
-            return False
-
-        return True
