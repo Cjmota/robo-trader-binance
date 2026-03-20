@@ -117,7 +117,7 @@ class TradingEngine:
         # 🔥 limpa numpy na raiz
         decision = {k: to_native(v) for k, v in decision.items()}
         
-        print(f"🧠 RAW DECISION: {decision}")
+        #print(f"🧠 RAW DECISION: {decision}")
 
         # -----------------------------------------
         # 🛡️ NORMALIZAÇÃO
@@ -143,7 +143,7 @@ class TradingEngine:
             "orderflow": str(decision.get("orderflow", "BUY"))
         }
 
-        print(f"🧠 NORMALIZED: {decision}")        
+        #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")
 
         # 🚫 FILTRO DE VOLUME (MELHORIA 3)
@@ -164,8 +164,8 @@ class TradingEngine:
             return
 
         # 🔥 FILTRO DE QUALIDADE PROFISSIONAL
-        if abs(decision["score"]) < 0.2:
-            print("⚠️ Score fraco")
+        if decision["score"] == 0 and decision["probability"] < 0.6:
+            print("⚠️ Score zero e prob baixa")
             return
 
         if not decision["momentum"]:
@@ -200,14 +200,14 @@ class TradingEngine:
         # -----------------------------------------
         # 💰 EXECUÇÃO
 
-        self.execute_trade(action)
+        self.execute_trade(action, decision)
 
         print(f"🧠 decision raw: {decision}")
 
     # -----------------------------------------
     # 💰 EXECUÇÃO
 
-    def execute_trade(self, action):
+    def execute_trade(self, action, decision):
 
         price = self.bot.get_price()
 
@@ -270,6 +270,10 @@ class TradingEngine:
 
         # -----------------------------------------
         # 🔺 BUY
+
+        if decision["probability"] < 0.5:
+            print("🚫 Probabilidade insuficiente")
+            return
 
         if action == "BUY" and not self.bot.position_open:
 
