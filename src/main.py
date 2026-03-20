@@ -150,10 +150,3 @@ def stop_bot():
     if CURRENT_TRADER:
         CURRENT_TRADER.is_running = False
 
-
-
-# -----------------------------------------
-# 🚀 ENTRYPOINT
-
-if __name__ == "__main__":
-    safe_trader_master_loop()
