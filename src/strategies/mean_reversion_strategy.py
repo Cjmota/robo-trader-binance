@@ -52,7 +52,7 @@ def mean_reversion_strategy(
 
     # 🔻 VENDA (TOPO)
 
-    if zscore > 2:
+    if zscore > 1.5:
         decision = SELL
 
     elif zscore > 1.5 and rsi > 65:
@@ -60,7 +60,7 @@ def mean_reversion_strategy(
 
     # 🔺 COMPRA (FUNDO)
 
-    elif zscore < -2:
+    elif zscore < -1.5:
         decision = BUY
 
     elif zscore < -1.5 and rsi < 35:

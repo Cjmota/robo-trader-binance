@@ -142,12 +142,19 @@ class TradingEngine:
             "momentum": bool(decision.get("momentum", True)),
             "orderflow": str(decision.get("orderflow", "BUY"))
         }
+        
+        # 🔥 AQUI
+        if decision["score"] <= 0:
+            decision["score"] = max(0.1, decision["probability"])
+            print("⚙️ Score ajustado pelo probability")
+
+        print(f"🧠 NORMALIZED: {decision}")
 
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")
 
         # 🚫 FILTRO DE VOLUME (MELHORIA 3)
-        if not decision["volume_spike"] and decision["probability"] < 0.7:
+        if not decision["volume_spike"] and decision["probability"] < 0.5:
             print("🚫 Volume fraco + baixa confiança")
             return
 
