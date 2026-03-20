@@ -12,6 +12,8 @@ from src.scanner.market_scanner_pro import scan_market_pro
 
 from src.core.risk_manager import RiskManager
 
+from src.exchange.price_stream import PriceStream
+
 # -----------------------------------------
 # 🔐 ENV
 
@@ -22,6 +24,9 @@ API_SECRET = os.getenv("BINANCE_API_SECRET")
 
 BOT_RUNNING = False
 CURRENT_TRADER = None
+
+price_stream = PriceStream(API_KEY, API_SECRET)
+price_stream.start("BTCUSDT")
 
 
 # -----------------------------------------
@@ -44,7 +49,16 @@ print("API_SECRET:", API_SECRET[:5] if API_SECRET else None)
 # -----------------------------------------
 # 🚀 INIT CLIENT
 
-client = Client(API_KEY, API_SECRET)
+client = None
+
+def get_client():
+    global client
+
+    if client is None:
+        from binance.client import Client
+        client = Client(API_KEY, API_SECRET)
+
+    return client
 
 risk_manager = RiskManager(config)
 
@@ -63,12 +77,18 @@ cached_symbols = []
 
 def create_bot():
 
-    return BinanceTraderBot(
+    client = get_client()
+    
+    bot = BinanceTraderBot(
         symbol="BTCUSDT",
         client=client,
         config=config,
         risk_manager=risk_manager
-    )
+    )    
+    
+    bot.price_stream = price_stream
+    
+    return bot
 
 def get_best_symbol():
     global last_scan, cached_symbols

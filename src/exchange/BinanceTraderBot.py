@@ -1,3 +1,5 @@
+from src.data.data_provider import get_klines
+from src.utils.safe_api import safe_api_call
 import pandas as pd
 import datetime
 import time
@@ -30,28 +32,8 @@ class BinanceTraderBot:
     # 📊 DATA
 
     def get_data(self):
+        return get_klines(self.client, self.symbol)
 
-        try:
-            interval = self.config.get("CANDLE_PERIOD", "5m")
-
-            candles = self.client.get_klines(
-                symbol=self.symbol,
-                interval=interval,
-                limit=50
-            )
-
-            df = pd.DataFrame(candles)
-
-            df["close_price"] = pd.to_numeric(df[4])
-            df["high_price"] = pd.to_numeric(df[2])
-            df["low_price"] = pd.to_numeric(df[3])
-            df["volume"] = pd.to_numeric(df[5])
-
-            return df
-
-        except Exception as e:
-            print(f"❌ Erro ao obter dados: {e}")
-            return None
 
     # -----------------------------------------
     # 💰 BUY
@@ -61,55 +43,82 @@ class BinanceTraderBot:
         if self.position_open:
             print("⚠️ Já existe posição aberta")
             return None
-        
+
+        # -----------------------------------------
+        # 💰 SALDO (SAFE API)
+
         try:
-            balance = float(self.client.get_asset_balance(asset="USDT")["free"])
+            balance_data = safe_api_call(
+                self.client.get_asset_balance,
+                asset="USDT"
+            )
+
+            balance = float(balance_data["free"])
+
             if balance < 5:
                 print("💸 Saldo insuficiente")
                 return None
+
         except Exception as e:
             print("❌ Erro ao verificar saldo:", e)
             return None
 
+        # -----------------------------------------
+        # ⏱️ PROTEÇÃO SPAM
+
         if time.time() - self.last_trade_time < 2:
             print("⚠️ Ordem muito rápida")
             return None
-        
+
+        # -----------------------------------------
+        # 🔧 AJUSTE QTD
+
         quantity = self._adjust_quantity(quantity)
-        
+
         if quantity <= 0:
             print("⚠️ Quantidade inválida")
             return None
-        
+
+        # -----------------------------------------
+        # 📈 PREÇO (ANTES DA ORDEM)
+
+        price = self.bot.get_price()
+
+        if not price or price <= 0:
+            print("⚠️ Sem preço → cancelando BUY")
+            return None
+
+        # -----------------------------------------
+        # 🧾 ORDEM (SAFE API)
+
         try:
-            order = self.client.create_order(
+            order = safe_api_call(
+                self.client.create_order,
                 symbol=self.symbol,
                 side="BUY",
                 type="MARKET",
                 quantity=quantity
             )
-            
-            if order and order.get("status") not in ["FILLED", "PARTIALLY_FILLED"]:
+
+            if not order or order.get("status") not in ["FILLED", "PARTIALLY_FILLED"]:
                 print("⚠️ Ordem não executada")
                 return None
 
-            price = self.get_price()
-
-            if price is None or price <= 0:
-                print("⚠️ Preço inválido no BUY")
-                return None
-
             executed_qty = float(order.get("executedQty", quantity))
+
+            # -----------------------------------------
+            # ✅ ATUALIZA ESTADO
 
             self.position_open = True
             self.entry_price = price
             self.quantity = executed_qty
             self.highest_price = price
             self.last_trade_time = time.time()
-            
+
             print(f"🚀 BUY {self.symbol} @ {price} | qty={executed_qty} | balance_used≈{executed_qty * price:.2f}")
+
             return order
-        
+
         except Exception as e:
             print("❌ Erro no BUY:", e)
             return None
@@ -126,7 +135,8 @@ class BinanceTraderBot:
         try:
             quantity = self._adjust_quantity(self.quantity)
 
-            order = self.client.create_order(
+            order = safe_api_call(
+                self.client.create_order,
                 symbol=self.symbol,
                 side="SELL",
                 type="MARKET",
@@ -192,13 +202,20 @@ class BinanceTraderBot:
 
     def get_price(self):
 
+        # 🔥 1. tenta websocket (rápido)
+        if hasattr(self, "price_stream"):
+            price = self.price_stream.get_price(self.symbol)
+            if price:
+                return price
+
+        # 🔥 2. fallback API (lento mas seguro)
         try:
             ticker = self.client.get_symbol_ticker(symbol=self.symbol)
             return float(ticker["price"])
         except Exception as e:
-            print(f"❌ Erro ao obter preço: {e}")
+            print("⚠️ fallback price erro:", e)
             return None
-
+        
     # -----------------------------------------
     # ⏱️ COOLDOWN
 

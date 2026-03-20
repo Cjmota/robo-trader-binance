@@ -4,6 +4,7 @@ from src.strategies.rsi_strategy import getRsiTradeStrategy
 from src.strategies.strategy_runner import rsi_strategy_wrapper  # 🔥 IMPORT CORRETO
 from src.strategies.mean_reversion_strategy import mean_reversion_strategy
 from src.utils.helpers import to_native
+from src.utils.safe_api import safe_api_call
 from src import main
 import time
 import datetime
@@ -208,11 +209,13 @@ class TradingEngine:
 
     def execute_trade(self, action):
 
-        price = float(self.bot.get_price())
+        price = self.bot.get_price()
 
         if not price:
-            print("⚠️ Preço inválido")
+            print("⚠️ Sem preço")
             return
+
+        price = float(price)
 
         # -----------------------------------------
         # 🔥 GERENCIAMENTO DE POSIÇÃO
@@ -220,8 +223,6 @@ class TradingEngine:
         if self.bot.position_open:
 
             entry = float(self.bot.entry_price)
-            price = float(price)
-
             profit_pct = float((price - entry) / entry * 100)
 
             # STOP LOSS
@@ -232,18 +233,23 @@ class TradingEngine:
                 return
 
             # BREAK EVEN
-            if profit_pct >= self.config["BREAK_EVEN"]["ACTIVATION"]:
-                if price < entry:
-                    print("🔒 Break-even")
-                    self.bot.sell()
-                    self.trade_count_today += 1
-                    return
+            be_cfg = self.config.get("BREAK_EVEN", {})
+            be_activation = be_cfg.get("ACTIVATION", 1.0)
+
+            if profit_pct >= be_activation and price <= entry:
+                print("🔒 Break-even")
+                self.bot.sell()
+                self.trade_count_today += 1
+                return
 
             # TRAILING
+            tr_cfg = self.config.get("TRAILING", {})
+            trailing_dist = tr_cfg.get("DISTANCE", 1.0)
+
             if price > self.bot.highest_price:
                 self.bot.highest_price = price
 
-            trailing_price = self.bot.highest_price * (1 - self.config["TRAILING"]["DISTANCE"] / 100)
+            trailing_price = self.bot.highest_price * (1 - trailing_dist / 100)
 
             if price < trailing_price:
                 print("📉 Trailing Stop")
@@ -267,12 +273,29 @@ class TradingEngine:
 
         if action == "BUY" and not self.bot.position_open:
 
-            balance = float(self.bot.client.get_asset_balance(asset="USDT")["free"])
+            price = self.bot.get_price()
+
+            if not price:
+                print("⚠️ Sem preço → cancelando BUY")
+                return
+
+            price = float(price)
+
+            balance_data = safe_api_call(
+                self.bot.client.get_asset_balance,
+                asset="USDT"
+            )
+
+            balance = float(balance_data["free"])
 
             risk_per_trade = 0.005
             risk_value = balance * risk_per_trade
 
             stop_loss_pct = self.config["STOP_LOSS_PERCENTAGE"] / 100
+
+            if stop_loss_pct <= 0:
+                print("⚠️ Stop loss inválido")
+                return
 
             position_size = risk_value / stop_loss_pct
             capital = min(position_size, balance * 0.05)
@@ -286,18 +309,19 @@ class TradingEngine:
             self.bot.buy(qty)
 
             self.trade_count_today += 1
-            
-            if self.bot.position_open:
-                print("📌 Já em posição, aguardando saída")
-                return
-            
+                    
     # -----------------------------------------
     # 🛡️ POSITION SIZE
 
     def get_position_size(self):
 
         try:
-            balance = float(self.bot.client.get_asset_balance(asset="USDT")["free"])
+            balance_data = safe_api_call(
+                self.bot.client.get_asset_balance,
+                asset="USDT"
+            )
+            balance = float(balance_data["free"])
+            
         except Exception as e:
             print(f"❌ Erro ao obter saldo: {e}")
             return 0
@@ -313,11 +337,14 @@ class TradingEngine:
 
         profit_pct = float((current_price - entry_price) / entry_price * 100)
 
-        if profit_pct >= self.config["BREAK_EVEN"]["ACTIVATION"]:
-            print("🔒 Break-even ativado")
-            return entry_price
+        be_cfg = self.config.get("BREAK_EVEN", {})
+        be_activation = be_cfg.get("ACTIVATION", 1.0)
 
-        return None
+        if profit_pct >= be_activation:
+            return True
+
+        return False
+        
     
     def check_trailing(self, current_price, highest_price):
 
