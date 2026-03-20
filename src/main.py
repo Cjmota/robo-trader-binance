@@ -96,9 +96,6 @@ engine = None
 # -----------------------------------------
 # ▶️ START SEGURO
 
-BOT_RUNNING = False
-CURRENT_TRADER = None
-
 def safe_trader_master_loop():
 
     global BOT_RUNNING, CURRENT_TRADER, engine
@@ -149,8 +146,6 @@ def stop_bot():
     global BOT_RUNNING, CURRENT_TRADER
 
     print("🛑 Parando bot...")
-
-    BOT_RUNNING = False
 
     if CURRENT_TRADER:
         CURRENT_TRADER.is_running = False

@@ -7,7 +7,7 @@ import os
 import logging
 import numpy as np
 
-from src import main
+import src.main as main
 from src.utils.performance import calculate_metrics
 
 # ----------------------------------------
