@@ -37,7 +37,7 @@ class BinanceTraderBot:
             candles = self.client.get_klines(
                 symbol=self.symbol,
                 interval=interval,
-                limit=100
+                limit=50
             )
 
             df = pd.DataFrame(candles)

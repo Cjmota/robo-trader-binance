@@ -73,7 +73,7 @@ def create_bot():
 def get_best_symbol():
     global last_scan, cached_symbols
 
-    if time.time() - last_scan > 20:
+    if time.time() - last_scan > 120:
         try:
             cached_symbols = scan_market_pro(client)
             last_scan = time.time()
@@ -113,8 +113,7 @@ def safe_trader_master_loop():
 
         except Exception as e:
             print("❌ ERRO NO BOT:", e)
-
-        time.sleep(2)
+            time.sleep(10)
         
 def start_bot():
 
