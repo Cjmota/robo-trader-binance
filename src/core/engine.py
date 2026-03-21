@@ -117,6 +117,13 @@ class TradingEngine:
         # 🔥 limpa numpy na raiz
         decision = {k: to_native(v) for k, v in decision.items()}
         
+        # 🔥 GARANTE FORMATO LIMPO
+        if isinstance(decision.get("action"), dict):
+            decision = decision["action"]
+
+        if isinstance(decision.get("signal"), dict):
+            decision = decision["signal"]
+        
         #print(f"🧠 RAW DECISION: {decision}")
 
         # -----------------------------------------
@@ -132,10 +139,23 @@ class TradingEngine:
         if not decision:
             return
 
+        if decision.get("confidence") and decision.get("confidence") > 0:
+            decision["probability"] = decision["confidence"]
+
+        signal = decision.get("action") or decision.get("signal") or "HOLD"
+
+        if isinstance(signal, dict):
+            signal = signal.get("action")
+
+        probability = decision.get("probability") or decision.get("confidence", 0)
+
+        if isinstance(probability, dict):
+            probability = probability.get("confidence", 0)
+
         decision = {
-            "signal": decision.get("action") or decision.get("signal"),
+            "signal": signal,
             "score": float(decision.get("score", 0)),
-            "probability": float(decision.get("confidence", 0)),
+            "probability": float(probability),
             "regime": str(decision.get("regime", "UNKNOWN")),
             "spread": float(decision.get("spread", 0)),
             "volume_spike": bool(decision.get("volume_spike", True)),
@@ -143,15 +163,22 @@ class TradingEngine:
             "orderflow": str(decision.get("orderflow", "BUY"))
         }
         
-        # 🔥 AQUI
-        if decision["score"] <= 0:
-            decision["score"] = max(0.1, decision["probability"])
+        # depois de normalizar
+        if decision["score"] == 0 and decision["probability"] > 0:
             print("⚙️ Score ajustado pelo probability")
+            decision["score"] = decision["probability"]
 
         print(f"🧠 NORMALIZED: {decision}")
 
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")
+
+        # 🔍 DEBUG PROFISSIONAL (ANTES DOS FILTROS)
+        print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
+
+        # 🚀 MOSTRA OPORTUNIDADE (ANTES DOS FILTROS)
+        if decision["signal"] != "HOLD":
+            print(f"🚀 POSSÍVEL TRADE → {decision}")
 
         # 🚫 FILTRO DE VOLUME (MELHORIA 3)
         if not decision["volume_spike"] and decision["probability"] < 0.5:
@@ -171,8 +198,8 @@ class TradingEngine:
             return
 
         # 🔥 FILTRO DE QUALIDADE PROFISSIONAL
-        if decision["score"] == 0 and decision["probability"] < 0.6:
-            print("⚠️ Score zero e prob baixa")
+        if decision["score"] < 0.2:
+            print("⚠️ Score fraco")
             return
 
         if not decision["momentum"]:
@@ -216,7 +243,7 @@ class TradingEngine:
 
     def execute_trade(self, action, decision):
 
-        price = self.bot.get_price()
+        price = float(price)
 
         if not price:
             print("⚠️ Sem preço")
