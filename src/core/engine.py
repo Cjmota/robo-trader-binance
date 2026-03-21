@@ -277,6 +277,9 @@ class TradingEngine:
 
     def execute_trade(self, action, decision, df):
 
+        # 🔥 PREÇO (CORRETO)
+        price = self.bot.get_price()
+
         if not price:
             print("⚠️ Sem preço")
             return
@@ -298,23 +301,11 @@ class TradingEngine:
                 self.trade_count_today += 1
                 return
 
-            # BREAK EVEN
-            be_cfg = self.config.get("BREAK_EVEN", {})
-            be_activation = be_cfg.get("ACTIVATION", 1.0)
-
-            if profit_pct >= be_activation and price <= entry:
-                print("🔒 Break-even")
-                self.bot.sell()
-                self.trade_count_today += 1
-                return
-
             # TRAILING
-            tr_cfg = self.config.get("TRAILING", {})
-            trailing_dist = tr_cfg.get("DISTANCE", 1.0)
-
             if price > self.bot.highest_price:
                 self.bot.highest_price = price
 
+            trailing_dist = self.config.get("TRAILING", {}).get("DISTANCE", 1.0)
             trailing_price = self.bot.highest_price * (1 - trailing_dist / 100)
 
             if price < trailing_price:
@@ -327,38 +318,33 @@ class TradingEngine:
         # 🔻 SELL
 
         if action == "SELL" and self.bot.position_open:
-
+            print("🔴 Fechando posição")
             self.bot.sell()
             self.trade_count_today += 1
-
-            print(f"📉 Perdas consecutivas: {self.risk_manager.consecutive_losses}")
             return
+
+        # -----------------------------------------
+        # 🔺 BUY (FILTROS)
 
         if action == "BUY":
 
+            if self.bot.position_open:
+                return
+
+            if decision["probability"] < 0.45:
+                print("🚫 Probabilidade baixa para BUY")
+                return
+
+            # candle filtro
             last_close = df["close_price"].iloc[-1]
             prev_close = df["close_price"].iloc[-2]
 
             if last_close < prev_close:
-                print("🚫 Candle contra entrada")
+                print("🚫 Candle contra tendência")
                 return
 
-        # -----------------------------------------
-        # 🔺 BUY
-
-        if decision["probability"] < 0.45:
-            print("🚫 Probabilidade insuficiente para BUY")
-            return
-
-        if action == "BUY" and not self.bot.position_open:
-
-            price = self.bot.get_price()
-
-            if not price:
-                print("⚠️ Sem preço → cancelando BUY")
-                return
-
-            price = float(price)
+            # -----------------------------------------
+            # 💰 POSITION SIZE
 
             balance_data = safe_api_call(
                 self.bot.client.get_asset_balance,
@@ -367,26 +353,17 @@ class TradingEngine:
 
             balance = float(balance_data["free"])
 
-            risk_per_trade = 0.005
-            risk_value = balance * risk_per_trade
+            capital = balance * 0.05  # 5% da conta
 
-            stop_loss_pct = self.config["STOP_LOSS_PERCENTAGE"] / 100
-
-            if stop_loss_pct <= 0:
-                print("⚠️ Stop loss inválido")
-                return
-
-            position_size = risk_value / stop_loss_pct
-            capital = min(position_size, balance * 0.05)
-
-            if capital <= 0:
-                print("⚠️ Capital inválido")
+            if capital <= 5:
+                print("⚠️ Capital insuficiente")
                 return
 
             qty = float(capital / price)
 
-            self.bot.buy(qty)
+            print(f"🟢 BUY EXECUTADO | qty={qty:.4f}")
 
+            self.bot.buy(qty)
             self.trade_count_today += 1
                     
     # -----------------------------------------
