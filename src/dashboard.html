@@ -516,10 +516,7 @@
                 botMemory: document.getElementById("botMemory")
             }
 
-            const API_BASE =
-                window.location.origin.includes("railway.com")
-                    ? "https://impartial-spirit-production-cd2a.up.railway.app"
-                    : window.location.origin;
+            const API_BASE = "https://impartial-spirit-production-cd2a.up.railway.app";
 
             async function api(url){
                 try{
@@ -563,9 +560,9 @@
                 document.getElementById("btnStop").disabled = !APP_STATE.running || APP_STATE.loading
 
                 // OUTROS
-                UI.asset.innerHTML = data.asset ?? "-"
-                UI.position.innerHTML = data.position ?? "-"
-
+                UI.asset.innerHTML = data.asset || "-"
+                UI.position.innerHTML = data.position || "-"
+                
                 let profit = parseFloat(data.daily_profit) || 0
                 UI.profit.innerHTML = profit.toFixed(2) + " USDT"
 
@@ -573,14 +570,10 @@
 
                 UI.status.classList.remove("glow-green","glow-red","blink")
 
-                if(APP_STATE.running){
-                    UI.status.classList.add("glow-green","blink")
-                }else{
-                    UI.status.classList.add("glow-red")
-                }
+                UI.status.classList.remove("glow-green","glow-red","blink")
 
                 if(APP_STATE.running){
-                    UI.status.classList.add("glow-green")
+                    UI.status.classList.add("glow-green","blink")
                 }else{
                     UI.status.classList.add("glow-red")
                 }
