@@ -181,7 +181,7 @@ class TradingEngine:
             print(f"🚀 POSSÍVEL TRADE → {decision}")
 
         # 🚫 FILTRO DE VOLUME (MELHORIA 3)
-        if not decision["volume_spike"] and decision["probability"] < 0.5:
+        if not decision["volume_spike"] and decision["probability"] < 0.4:
             print("🚫 Volume fraco + baixa confiança")
             return
 
@@ -190,7 +190,7 @@ class TradingEngine:
             return
 
         # 🚫 filtro rápido
-        if decision["probability"] < 0.3:
+        if decision["probability"] < 0.4:
             print("🚫 Probabilidade baixa")
             return
 
@@ -202,8 +202,8 @@ class TradingEngine:
             print("⚠️ Score fraco")
             return
 
-        if not decision["momentum"]:
-            print("⚠️ Sem momentum")
+        if not decision["momentum"] and decision["probability"] < 0.5:
+            print("⚠️ Sem momentum forte")
             return
         
         # 🚫 NÃO VENDE SEM POSIÇÃO (SPOT)
@@ -305,8 +305,8 @@ class TradingEngine:
         # -----------------------------------------
         # 🔺 BUY
 
-        if decision["probability"] < 0.5:
-            print("🚫 Probabilidade insuficiente")
+        if decision["probability"] < 0.45:
+            print("🚫 Probabilidade insuficiente para BUY")
             return
 
         if action == "BUY" and not self.bot.position_open:
