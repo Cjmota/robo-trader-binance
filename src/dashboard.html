@@ -1225,7 +1225,7 @@
 
                 }
 
-                await fetch("/api/config", {
+                await fetch(API_BASE + "/api/config", {
                     method: "POST",
                     headers: { "Content-Type": "application/json" },
                     body: JSON.stringify(config)
