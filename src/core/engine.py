@@ -147,7 +147,7 @@ class TradingEngine:
         if isinstance(signal, dict):
             signal = signal.get("action")
 
-        probability = decision.get("probability") or decision.get("confidence", 0)
+        probability = decision.get("probability", decision.get("confidence", 0))
 
         if isinstance(probability, dict):
             probability = probability.get("confidence", 0)
@@ -164,14 +164,19 @@ class TradingEngine:
         }
         
         # depois de normalizar
-        if decision["score"] == 0 and decision["probability"] > 0:
-            print("⚙️ Score ajustado pelo probability")
-            decision["score"] = decision["probability"]
+        if decision["signal"] != "HOLD":
+            if decision["score"] == 0 and decision["probability"] > 0:
+                print("⚙️ Score ajustado pelo probability")
+                decision["score"] = decision["probability"]
 
         print(f"🧠 NORMALIZED: {decision}")
 
+        if decision["signal"] == "HOLD":
+            decision["score"] = 0
+            decision["probability"] = 0
+
         #print(f"🧠 NORMALIZED: {decision}")        
-        print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")
+        print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")        
 
         # 🔍 DEBUG PROFISSIONAL (ANTES DOS FILTROS)
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
@@ -190,14 +195,43 @@ class TradingEngine:
             return
 
         # 🚫 filtro rápido
-        if decision["probability"] < 0.4:
-            print("🚫 Probabilidade baixa")
+        min_prob = 0.35
+
+        if market_condition == "TREND":
+            min_prob = 0.3
+
+        if market_condition == "SIDEWAYS":
+            min_prob = 0.45
+
+        if decision["probability"] < min_prob:
+            print(f"🚫 Probabilidade baixa ({decision['probability']:.2f} < {min_prob})")
             return
 
         if decision["signal"] == "HOLD":
             return
 
         # 🔥 FILTRO DE QUALIDADE PROFISSIONAL
+        # 🧠 SCORE INTELIGENTE
+
+        score = 0
+
+        if decision["probability"] > 0.6:
+            score += 0.3
+
+        if decision["volume_spike"]:
+            score += 0.2
+
+        if decision["momentum"]:
+            score += 0.2
+
+        if decision["signal"] == "BUY" and trend == "UP":
+            score += 0.3
+
+        if decision["signal"] == "SELL" and trend == "DOWN":
+            score += 0.3
+
+        decision["score"] = max(decision["score"], score)
+        
         if decision["score"] < 0.2:
             print("⚠️ Score fraco")
             return
@@ -234,16 +268,14 @@ class TradingEngine:
         # -----------------------------------------
         # 💰 EXECUÇÃO
 
-        self.execute_trade(action, decision)
+        self.execute_trade(action, decision, df)
 
         print(f"🧠 decision raw: {decision}")
 
     # -----------------------------------------
     # 💰 EXECUÇÃO
 
-    def execute_trade(self, action, decision):
-
-        price = float(price)
+    def execute_trade(self, action, decision, df):
 
         if not price:
             print("⚠️ Sem preço")
@@ -301,6 +333,15 @@ class TradingEngine:
 
             print(f"📉 Perdas consecutivas: {self.risk_manager.consecutive_losses}")
             return
+
+        if action == "BUY":
+
+            last_close = df["close_price"].iloc[-1]
+            prev_close = df["close_price"].iloc[-2]
+
+            if last_close < prev_close:
+                print("🚫 Candle contra entrada")
+                return
 
         # -----------------------------------------
         # 🔺 BUY
