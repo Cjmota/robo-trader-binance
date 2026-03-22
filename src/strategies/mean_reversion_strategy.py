@@ -49,6 +49,26 @@ def mean_reversion_strategy(
 
     df["ma"] = df["close"].rolling(window).mean()
     df["std"] = df["close"].rolling(window).std()
+    
+    # -----------------------------------------
+    # 🚀 VOLATILIDADE DINÂMICA (AUTO AJUSTE)
+
+    volatility = df["std"].iloc[-1]
+    avg_volatility = df["std"].rolling(50).mean().iloc[-1]
+
+    if avg_volatility == 0 or pd.isna(avg_volatility):
+        vol_factor = 1
+    else:
+        vol_factor = volatility / avg_volatility
+
+    base_threshold = 1.0
+
+    dynamic_threshold = base_threshold * (1 + (vol_factor - 1))
+
+    # proteção mínima
+    dynamic_threshold = max(0.8, min(dynamic_threshold, 2.0))
+
+    print(f"📊 VolFactor: {vol_factor:.2f} | Threshold: {dynamic_threshold:.2f}")
 
     df["upper"] = df["ma"] + (2 * df["std"])
     df["lower"] = df["ma"] - (2 * df["std"])
@@ -77,24 +97,31 @@ def mean_reversion_strategy(
 
     signal_strength = 0
 
+    # -----------------------------------------
+    # 🔥 LÓGICA DINÂMICA (AUTO AJUSTE)
+
+    strong_threshold = dynamic_threshold + 0.5
+
     # 🔻 VENDA
-    if zscore > 1.5 and rsi > 60:
+    if zscore > strong_threshold and rsi > 60:
         decision = SELL
-        signal_strength = 2
 
-    elif zscore > 1.2:
+    elif zscore > dynamic_threshold:
         decision = SELL
-        signal_strength = 1
-
 
     # 🔺 COMPRA
-    elif zscore < -1.5 and rsi < 40:
+    elif zscore < -strong_threshold and rsi < 40:
         decision = BUY
-        signal_strength = 2
 
-    elif zscore < -1.2:
+    elif zscore < -dynamic_threshold:
         decision = BUY
-        signal_strength = 1
+        
+    # 🚀 fallback leve (evita HOLD infinito)
+    if decision == HOLD:
+        if zscore > dynamic_threshold * 0.8:
+            decision = SELL
+        elif zscore < -dynamic_threshold * 0.8:
+            decision = BUY
             
     # -----------------------------------------
     # 📈 TREND FILTER (DEPOIS DA DECISÃO)
