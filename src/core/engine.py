@@ -241,6 +241,8 @@ class TradingEngine:
         if decision["signal"] == "HOLD":
             print("⚠️ HOLD original — tentando extrair oportunidade")
             
+        
+            
         # -----------------------------------------
         # 🔄 FORÇAR ENTRADA EM LATERAL / HOLD
 
@@ -258,6 +260,14 @@ class TradingEngine:
                     decision["signal"] = "SELL"
                     decision["probability"] = 0.35
                     print("🔴 HOLD → SELL (RSI alto)")
+
+        # 🔥 BOOST PARA HOLD QUEBRADO
+        if decision["signal"] != "HOLD" and decision["score"] == 0:
+            decision["score"] = 0.3
+            print("⚙️ Score mínimo aplicado (HOLD break)")
+            
+        if decision["signal"] != "HOLD" and decision["probability"] < 0.3:
+            decision["probability"] = 0.3
 
         # -----------------------------------------
         # 🧠 CONFLUÊNCIA PROFISSIONAL
@@ -357,8 +367,8 @@ class TradingEngine:
 
         decision["priority"] = priority
 
-        if decision["priority"] < 0.6:
-            print("⚠️ Trade fraco (prioridade baixa)")
+        if decision["priority"] < 0.5:
+            print("⚠️ Trade fraco (Ajustado)")
             return
 
         # -----------------------------------------
@@ -491,6 +501,9 @@ class TradingEngine:
 
         ma20 = df["close"].rolling(20).mean().iloc[-1]
 
+        last_close = df["close"].iloc[-1]
+        prev_close = df["close"].iloc[-2]
+
         # 🔥 1. Candle favorável
         if decision["signal"] == "BUY" and last_close < prev_close:
             print("🚫 Candle contra entrada")
@@ -498,9 +511,6 @@ class TradingEngine:
 
         # 🔥 2. Anti-FOMO
         distance = (last_close - ma20) / ma20
-
-        if decision["signal"] == "BUY" and distance > 0.025:
-            print("⚠️ Esticado, mas permitido")
 
         perf = self.get_symbol_performance(symbol)
         winrate = perf["winrate"]
