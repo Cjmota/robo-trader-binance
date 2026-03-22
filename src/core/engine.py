@@ -375,10 +375,17 @@ class TradingEngine:
 
             balance = float(balance_data["free"])
 
-            capital = balance * 0.05  # 5% da conta
+            # 💰 POSITION SIZE INTELIGENTE
 
-            if capital <= 5:
-                print("⚠️ Capital insuficiente")
+            balance = float(balance_data["free"])
+
+            capital = max(balance * 0.10, 2)  # mínimo $2
+
+            if capital > balance:
+                capital = balance * 0.95
+
+            if capital < 2:
+                print("⚠️ Capital muito baixo")
                 return
 
             qty = float(capital / price)
