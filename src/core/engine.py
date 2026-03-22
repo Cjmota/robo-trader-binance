@@ -227,7 +227,7 @@ class TradingEngine:
             min_prob = 0.3
 
         if market_condition == "SIDEWAYS":
-            min_prob = 0.45
+            min_prob = 0.30
 
         if decision["probability"] < min_prob:
             print(f"⚠️ Prob baixa ({decision['probability']:.2f}) → reduzindo força")
@@ -239,7 +239,25 @@ class TradingEngine:
             return
 
         if decision["signal"] == "HOLD":
-            return
+            print("⚠️ HOLD original — tentando extrair oportunidade")
+            
+        # -----------------------------------------
+        # 🔄 FORÇAR ENTRADA EM LATERAL / HOLD
+
+        if decision["signal"] == "HOLD":
+
+            if "rsi" in df.columns:
+                rsi = df["rsi"].iloc[-1]
+
+                if rsi < 42:
+                    decision["signal"] = "BUY"
+                    decision["probability"] = 0.35
+                    print("🟢 HOLD → BUY (RSI baixo)")
+
+                elif rsi > 58:
+                    decision["signal"] = "SELL"
+                    decision["probability"] = 0.35
+                    print("🔴 HOLD → SELL (RSI alto)")
 
         # -----------------------------------------
         # 🧠 CONFLUÊNCIA PROFISSIONAL
@@ -322,6 +340,9 @@ class TradingEngine:
         prob += decision["score"] * 0.35
 
         decision["probability"] = min(prob, 1.0)
+        
+        if market_condition == "SIDEWAYS":
+            decision["probability"] *= 1.2
 
         # -----------------------------------------
         # 🧠 PRIORIDADE DO TRADE
