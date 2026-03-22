@@ -277,6 +277,20 @@ class TradingEngine:
 
     def execute_trade(self, action, decision, df):
 
+        # 🔥 GARANTE CLOSE NO EXECUTOR
+        if "close" not in df.columns:
+
+            if "close_price" in df.columns:
+                df["close"] = df["close_price"]
+
+            elif "Close" in df.columns:
+                df["close"] = df["Close"]
+
+            else:
+                print("❌ ERRO: coluna close não encontrada no execute_trade")
+                print(df.columns)
+                return    
+
         # 🔥 PREÇO (CORRETO)
         price = self.bot.get_price()
 
