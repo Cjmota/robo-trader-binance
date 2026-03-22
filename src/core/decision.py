@@ -29,6 +29,13 @@ class DecisionEngine:
         score = score or 0
         probability = probability or 0
         volume_spike = bool(volume_spike)
+        
+        # 🚀 reforço de contexto
+        if momentum and orderflow == "BUY":
+            score += 0.3
+
+        if momentum and orderflow == "SELL":
+            score -= 0.3
 
         # 🔹 pacote de dados
         market_data = {
@@ -45,21 +52,26 @@ class DecisionEngine:
         if signal == HOLD:
             print("⚠️ HOLD recebido — avaliando contexto...")
 
-            if momentum and volume_spike:
-                if orderflow == "BUY":
-                    signal = BUY
-                    score += 0.5
-                    probability += 0.1
-                    print("🚀 HOLD → BUY (contexto forte)")
-                elif orderflow == "SELL":
-                    signal = SELL
-                    score -= 0.5
-                    probability += 0.1
-                    print("🚀 HOLD → SELL (contexto forte)")
-                else:
-                    return HOLD
+            # 🚀 tenta converter mesmo sem momentum
+            if orderflow == "BUY":
+                signal = BUY
+                score += 0.2
+                probability += 0.05
+                print("🚀 HOLD → BUY (orderflow)")
+
+            elif orderflow == "SELL":
+                signal = SELL
+                score -= 0.2
+                probability += 0.05
+                print("🚀 HOLD → SELL (orderflow)")
+
             else:
                 return HOLD
+            
+        # 🚀 fallback por score (OURO)
+        if signal == HOLD and abs(score) > 0.2:
+            signal = BUY if score > 0 else SELL
+            print("🚀 HOLD → sinal por score")
 
         # -----------------------------------------
         # 2️⃣ filtro de risco global
@@ -147,12 +159,12 @@ class DecisionEngine:
             return False
 
         # 🚫 score muito ruim
-        if abs(score) < 0.2:
+        if abs(score) < 0.1:
             print("⚠️ Score muito fraco")
             return False
 
         # 🚫 prob baixa
-        if probability < 0.25:
+        if probability < 0.2:
             print("⛔ Probabilidade baixa")
             return False
 
@@ -166,12 +178,7 @@ class DecisionEngine:
 
         # -----------------------------------------
         # 🚫 sem momentum = nunca entra
-        # 🚀 reforço de contexto
-        if momentum and orderflow == "BUY":
-            score += 0.3
-
-        if momentum and orderflow == "SELL":
-            score -= 0.3
+        
         
         if not momentum:
             print("⚠️ Sem momentum (permitido)")
