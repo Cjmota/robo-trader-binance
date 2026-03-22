@@ -237,7 +237,7 @@ class TradingEngine:
         if decision["signal"] == "SELL" and trend == "DOWN":
             score += 0.3
             
-        decision["score"] = max(decision["score"], score)
+        decision["score"] = (decision["score"] * 0.4) + (score * 0.6)
         
         if decision["score"] < 0.1:
             print("⚠️ Score baixo, mas permitido")
@@ -308,7 +308,7 @@ class TradingEngine:
             # 🟡 BREAK EVEN (PROTEÇÃO DE LUCRO)
 
             if self.check_break_even(entry, price):
-                if price < entry:
+                 if price <= entry * 1.002:
                     print("🟡 Break Even acionado")
                     self.bot.sell()
                     self.trade_count_today += 1
@@ -373,27 +373,43 @@ class TradingEngine:
         # 🔥 2. Anti-FOMO
         distance = (last_close - ma20) / ma20
 
-        if decision["signal"] == "BUY" and distance > 0.02:
-            print("🚫 Muito esticado (anti-FOMO)")
-            return
-
-        # 🔥 3. Momentum obrigatório
-        if not decision["momentum"]:
-            print("🚫 Sem momentum")
-            return
+        if decision["signal"] == "BUY" and distance > 0.25:
+            print("🚫 Esticado mas permitido")
 
         # -----------------------------------------
         # 🔺 BUY (FILTROS)
         
         # evita topo extremo
         if decision["signal"] == "BUY" and decision["probability"] > 0.7:
-            if distance > 0.015:
+            if distance > 0.025:
                 print("🚫 Entrada muito esticada (ajuste fino)")
                 return
         
-        if time.time() - self.bot.last_trade_time < 60:
+        cooldown = 60
+
+        if decision["score"] > 0.7:
+            cooldown = 30  # entra mais rápido em trade forte
+
+        if time.time() - self.bot.last_trade_time < cooldown:
             print("⏱️ Evitando overtrade")
             return
+
+        strong_entry = decision["score"] > 0.7
+        
+        if not strong_entry:
+            if decision["probability"] < 0.35 and decision["score"] < 0.3:
+                print("🚫 Entrada fraca")
+                return
+            
+        last3 = df["close"].iloc[-3:]
+
+        if action == "BUY":
+            if last3.iloc[-1] > last3.iloc[-2] > last3.iloc[-3]:
+                print("📈 Micro tendência confirmada")
+            else:
+                if decision["probability"] < 0.6:
+                    print("🚫 Timing fraco")
+                    return
 
         if action == "BUY":
 
