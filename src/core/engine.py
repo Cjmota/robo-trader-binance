@@ -144,6 +144,8 @@ class TradingEngine:
             stock_data=df
         )
         
+        original_signal = raw_decision
+        
         # 🔥 limpa numpy na raiz
         decision = self.decision_engine.evaluate(raw_decision)
         
@@ -202,7 +204,19 @@ class TradingEngine:
         print(f"🧠 NORMALIZED: {decision}")
 
         #print(f"🧠 NORMALIZED: {decision}")        
-        print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")        
+        print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
+        
+        # -----------------------------------------
+        # 🔥 RECUPERAR SINAL DA ESTRATÉGIA
+
+        if decision["signal"] == "HOLD" and original_signal:
+
+            if isinstance(original_signal, str):
+                decision["signal"] = original_signal
+                decision["probability"] = 0.4
+                decision["score"] = 0.4
+
+                print(f"♻️ Recuperando sinal da estratégia: {original_signal}")     
 
         # 🔍 DEBUG PROFISSIONAL (ANTES DOS FILTROS)
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
