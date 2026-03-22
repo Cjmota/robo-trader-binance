@@ -41,9 +41,25 @@ class DecisionEngine:
 
         # -----------------------------------------
         # 1️⃣ validação básica
-        if signal not in [BUY, SELL]:
-            print("⚠️ Sem sinal válido")
-            return HOLD
+        # 🔥 TRANSFORMA HOLD EM SINAL INTELIGENTE
+        if signal == HOLD:
+            print("⚠️ HOLD recebido — avaliando contexto...")
+
+            if momentum and volume_spike:
+                if orderflow == "BUY":
+                    signal = BUY
+                    score += 0.5
+                    probability += 0.1
+                    print("🚀 HOLD → BUY (contexto forte)")
+                elif orderflow == "SELL":
+                    signal = SELL
+                    score -= 0.5
+                    probability += 0.1
+                    print("🚀 HOLD → SELL (contexto forte)")
+                else:
+                    return HOLD
+            else:
+                return HOLD
 
         # -----------------------------------------
         # 2️⃣ filtro de risco global
@@ -131,12 +147,12 @@ class DecisionEngine:
             return False
 
         # 🚫 score muito ruim
-        if abs(score) < 0.05:
+        if abs(score) < 0.2:
             print("⚠️ Score muito fraco")
             return False
 
         # 🚫 prob baixa
-        if probability < 0.3:
+        if probability < 0.25:
             print("⛔ Probabilidade baixa")
             return False
 
@@ -150,6 +166,13 @@ class DecisionEngine:
 
         # -----------------------------------------
         # 🚫 sem momentum = nunca entra
+        # 🚀 reforço de contexto
+        if momentum and orderflow == "BUY":
+            score += 0.3
+
+        if momentum and orderflow == "SELL":
+            score -= 0.3
+        
         if not momentum:
             print("⚠️ Sem momentum (permitido)")
 
@@ -178,8 +201,8 @@ class DecisionEngine:
 
         # 🚫 BLOQUEIO REAL DE VOLUME
         if not volume_spike:
-            print("🚫 Volume fraco — trade ignorado")
-            return False
+            print("⚠️ Volume fraco (permitido)")
+            # NÃO BLOQUEIA
 
         return True
     
