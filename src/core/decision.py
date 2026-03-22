@@ -26,8 +26,10 @@ class DecisionEngine:
         print("\n🧠 DECISION ENGINE")
 
         # 🛡️ proteção contra None
+        probability = float(probability)
         score = score or 0
-        probability = probability or 0
+        if probability is None:
+            probability = 0.5
         volume_spike = bool(volume_spike)
         
         # 🚀 reforço de contexto
@@ -66,12 +68,25 @@ class DecisionEngine:
                 print("🚀 HOLD → SELL (orderflow)")
 
             else:
-                return HOLD
+               print("⚠️ HOLD mantido — sem confirmação")
+               # NÃO retorna ainda → deixa filtros decidirem
             
         # 🚀 fallback por score (OURO)
         if signal == HOLD and abs(score) > 0.2:
             signal = BUY if score > 0 else SELL
             print("🚀 HOLD → sinal por score")
+    
+        # 🚀 fallback mais agressivo
+        if signal == HOLD and abs(score) > 0.1:
+            signal = BUY if score > 0 else SELL
+            print("🚀 HOLD → convertido por score leve")
+
+        # reforço leve SEM momentum
+        if orderflow == "BUY":
+            score += 0.1
+
+        elif orderflow == "SELL":
+            score -= 0.1
 
         # -----------------------------------------
         # 2️⃣ filtro de risco global
@@ -101,7 +116,7 @@ class DecisionEngine:
             print(f"⚠️ Spread alto: {spread}")
             return HOLD
 
-        # -----------------------------------------
+         # -----------------------------------------
         print(f"✅ TRADE APROVADO → {signal}")
         return signal
 
