@@ -22,17 +22,22 @@ class TradingEngine:
         self.trade_count_today = 0
         self.market_detector = MarketConditionDetector()
 
-        self.performance = {
-            "wins": 0,
-            "losses": 0,
-            "last_results": [],  # últimos trades
-            "winrate": 0.5
-        }
+        self.performance_by_symbol = {}
 
     # -----------------------------------------
     # 🔁 CICLO ÚNICO
 
     def run_once(self):
+        
+        today = datetime.date.today()
+
+        if not hasattr(self, "last_trade_day"):
+            self.last_trade_day = today
+
+        if self.last_trade_day != today:
+            print("🔄 Reset diário")
+            self.trade_count_today = 0
+            self.last_trade_day = today
 
         print("\n🚀 Novo ciclo")
         
@@ -348,14 +353,14 @@ class TradingEngine:
         # -----------------------------------------
         # 💰 EXECUÇÃO
 
-        self.execute_trade(action, decision, df)
+        self.execute_trade(action, decision, df, symbol)
 
         print(f"🧠 decision raw: {decision}")
 
     # -----------------------------------------
     # 💰 EXECUÇÃO
 
-    def execute_trade(self, action, decision, df):
+    def execute_trade(self, action, decision, df, symbol):
 
         # 🔥 GARANTE CLOSE NO EXECUTOR
         if "close" not in df.columns:
@@ -395,7 +400,7 @@ class TradingEngine:
                 if price <= entry * 1.003:
                     print("🟡 Break Even acionado")
                     
-                    self.update_performance(profit_pct)
+                    self.update_performance(symbol, profit_pct)
                     
                     self.bot.sell()
                     self.trade_count_today += 1
@@ -405,7 +410,7 @@ class TradingEngine:
             if profit_pct <= -self.config["STOP_LOSS_PERCENTAGE"]:
                 print("🛑 Stop Loss")
                 
-                self.update_performance(profit_pct)
+                self.update_performance(symbol, profit_pct)
                 
                 self.bot.sell()
                 self.trade_count_today += 1
@@ -427,9 +432,8 @@ class TradingEngine:
 
             if price < trailing_price:
                 print("📉 Trailing Stop")
-                self.bot.sell()
-                
-                self.update_performance(profit_pct)
+                                
+                self.update_performance(symbol, profit_pct)
                 
                 self.bot.sell()
                 self.trade_count_today += 1
@@ -450,7 +454,7 @@ class TradingEngine:
             entry = float(self.bot.entry_price)
             profit_pct = (price - entry) / entry * 100
 
-            self.update_performance(profit_pct)
+            self.update_performance(symbol, profit_pct)
 
             print("🔴 Fechando posição")
             self.bot.sell()
@@ -460,8 +464,9 @@ class TradingEngine:
         # -----------------------------------------
         # 🧠 CONFIRMAÇÃO PROFISSIONAL
 
-        last_close = df["close"].iloc[-1]
-        prev_close = df["close"].iloc[-2]
+        if len(df) < 3:
+            print("⚠️ Dados insuficientes")
+            return
 
         ma20 = df["close"].rolling(20).mean().iloc[-1]
 
@@ -475,6 +480,24 @@ class TradingEngine:
 
         if decision["signal"] == "BUY" and distance > 0.025:
             print("⚠️ Esticado, mas permitido")
+
+        perf = self.get_symbol_performance(symbol)
+        winrate = perf["winrate"]
+
+        # ajuste adaptativo por moeda
+        if winrate > 0.6:
+            decision["probability"] *= 1.1
+            decision["probability"] = min(decision["probability"], 1.0)
+            print(f"🟢 {symbol} forte")
+
+        elif winrate < 0.4:
+            decision["probability"] *= 0.85
+            decision["probability"] = max(decision["probability"], 0.05)
+            print(f"🔴 {symbol} fraco")
+
+        if winrate < 0.3 and len(perf["last_results"]) > 10:
+            print(f"🚫 Ignorando {symbol} (ruim)")
+            return
 
         # -----------------------------------------
         # 🔺 BUY (FILTROS)
@@ -531,11 +554,19 @@ class TradingEngine:
                 self.bot.client.get_asset_balance,
                 asset="USDT"
             )
+            
+            perf = self.get_symbol_performance(symbol)
+            winrate = perf["winrate"]
+
+            if winrate > 0.6:
+                risk_pct = 0.015
+            elif winrate < 0.4:
+                risk_pct = 0.005
+            else:
+                risk_pct = 0.01
 
             # -----------------------------------------
             # 💰 POSITION SIZE PROFISSIONAL
-
-            risk_pct = 0.01  # 1% da conta
 
             if not balance_data or "free" not in balance_data:
                 print("❌ Erro ao obter saldo")
@@ -607,21 +638,34 @@ class TradingEngine:
 
         return trailing_price
     
-    def update_performance(self, profit_pct):
+    def update_performance(self, symbol, profit_pct):
+
+        perf = self.get_symbol_performance(symbol)
 
         if profit_pct > 0:
-            self.performance["wins"] += 1
-            self.performance["last_results"].append(1)
+            perf["wins"] += 1
+            perf["last_results"].append(1)
         else:
-            self.performance["losses"] += 1
-            self.performance["last_results"].append(0)
+            perf["losses"] += 1
+            perf["last_results"].append(0)
 
-        # mantém últimos 20 trades
-        self.performance["last_results"] = self.performance["last_results"][-20:]
+        perf["last_results"] = perf["last_results"][-20:]
 
-        total = len(self.performance["last_results"])
+        total = len(perf["last_results"])
 
         if total > 0:
-            self.performance["winrate"] = sum(self.performance["last_results"]) / total
+            perf["winrate"] = sum(perf["last_results"]) / total
 
-        print(f"📊 Winrate atualizado: {self.performance['winrate']:.2f}")
+        print(f"📊 {symbol} Winrate: {perf['winrate']:.2f}")
+        
+    def get_symbol_performance(self, symbol):
+
+        if symbol not in self.performance_by_symbol:
+            self.performance_by_symbol[symbol] = {
+                "wins": 0,
+                "losses": 0,
+                "last_results": [],
+                "winrate": 0.5
+            }
+
+        return self.performance_by_symbol[symbol]
