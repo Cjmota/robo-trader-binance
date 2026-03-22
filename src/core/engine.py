@@ -144,7 +144,17 @@ class TradingEngine:
             stock_data=df
         )
         
-        original_signal = raw_decision
+        # 🔥 EXTRAI SINAL REAL DA ESTRATÉGIA
+        original_signal = None
+
+        if isinstance(raw_decision, str):
+            original_signal = raw_decision
+
+        elif isinstance(raw_decision, dict):
+            original_signal = (
+                raw_decision.get("action")
+                or raw_decision.get("signal")
+            )
         
         # 🔥 limpa numpy na raiz
         decision = self.decision_engine.evaluate(raw_decision)
@@ -207,16 +217,32 @@ class TradingEngine:
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
         
         # -----------------------------------------
-        # 🔥 RECUPERAR SINAL DA ESTRATÉGIA
+        # -----------------------------------------
+        # 🔥 RECUPERAR SINAL DA ESTRATÉGIA (ROBUSTO)
 
-        if decision["signal"] == "HOLD" and original_signal:
+        if decision["signal"] == "HOLD" and original_signal and original_signal != "HOLD":
 
+            recovered_signal = None
+
+            # caso venha string direta
             if isinstance(original_signal, str):
-                decision["signal"] = original_signal
+                recovered_signal = original_signal
+
+            # caso venha dict
+            elif isinstance(original_signal, dict):
+                recovered_signal = (
+                    original_signal.get("action")
+                    or original_signal.get("signal")
+                )
+
+            if recovered_signal and recovered_signal != "HOLD":
+                decision["signal"] = recovered_signal
                 decision["probability"] = 0.4
                 decision["score"] = 0.4
+                
+                decision["force_trade"] = True
 
-                print(f"♻️ Recuperando sinal da estratégia: {original_signal}")     
+                print(f"♻️ Recuperando sinal da estratégia: {recovered_signal}")     
 
         # 🔍 DEBUG PROFISSIONAL (ANTES DOS FILTROS)
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
@@ -243,7 +269,7 @@ class TradingEngine:
         if market_condition == "SIDEWAYS":
             min_prob = 0.30
 
-        if decision["probability"] < min_prob:
+        if decision["probability"] < min_prob and not decision.get("force_trade"):
             print(f"⚠️ Prob baixa ({decision['probability']:.2f}) → reduzindo força")
             decision["score"] *= 0.5
 
