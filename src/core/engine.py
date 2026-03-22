@@ -144,6 +144,27 @@ class TradingEngine:
             stock_data=df
         )
         
+        # 🔥 GARANTE DECISION VÁLIDA
+        if raw_decision is None:
+            raw_decision = "HOLD"
+            
+        # -----------------------------------------
+        # 🔥 FALLBACK INTELIGENTE (QUANDO ESTRATÉGIA FALHA)
+
+        if raw_decision == "HOLD":
+
+            if "rsi" in df.columns:
+                rsi = df["rsi"].iloc[-1]
+
+                if rsi > 60:
+                    raw_decision = "SELL"
+                elif rsi < 40:
+                    raw_decision = "BUY"
+
+                elif rsi < 35:
+                    raw_decision = "BUY"
+                    print("🟢 Fallback BUY (RSI baixo)")
+        
         # 🔥 EXTRAI SINAL REAL DA ESTRATÉGIA
         original_signal = None
 
@@ -373,8 +394,8 @@ class TradingEngine:
         if decision["score"] < 0.1:
             print("⚠️ Score baixo, mas permitido")
 
-        if not decision["momentum"] and decision["probability"] < 0.55:
-            print("⚠️ Sem momentum forte")
+        if not decision["momentum"] and decision["probability"] < 0.35:
+            print("⚠️ Sem momentum forte(ajustado)")
             return
         
         # 🚫 NÃO VENDE SEM POSIÇÃO (SPOT)
@@ -407,8 +428,8 @@ class TradingEngine:
 
         decision["priority"] = priority
 
-        if decision["priority"] < 0.5:
-            print("⚠️ Trade fraco (Ajustado)")
+        if decision["priority"] < 0.45:
+            print("⚠️ Trade fraco (liberado)")
             return
 
         # -----------------------------------------
