@@ -15,13 +15,35 @@ def mean_reversion_strategy(
     if stock_data is None or len(stock_data) < 50:
         return {"action": HOLD, "confidence": 0}
 
-    df = stock_data.rename(columns={"close_price": "close"}).copy()
+    df = stock_data.copy()
+
+    # 🔥 garante coluna close
+    if "close" not in df.columns:
+
+        if "close_price" in df.columns:
+            df["close"] = df["close_price"]
+
+        elif "Close" in df.columns:
+            df["close"] = df["Close"]
+
+        else:
+            print("❌ ERRO: coluna CLOSE não encontrada")
+            print(df.columns)
+            return {"action": HOLD, "confidence": 0}
 
     from src.indicators.indicators import Indicators
     df["RSI"] = Indicators.getRSI(df, last_only=False)
     
     # -----------------------------------------
     # 📊 BOLLINGER BANDS + Z-SCORE
+
+    if df["close"].nunique() <= 1:
+        print("❌ CLOSE sem variação (std = 0)")
+        return {"action": HOLD, "confidence": 0}
+
+    if len(df) < 50:
+        print("❌ Poucos dados")
+        return {"action": HOLD, "confidence": 0}
 
     window = 20
 
@@ -30,6 +52,12 @@ def mean_reversion_strategy(
 
     df["upper"] = df["ma"] + (2 * df["std"])
     df["lower"] = df["ma"] - (2 * df["std"])
+    
+    print("🔎 CLOSE:")
+    print(df["close"].tail(10))
+
+    print("🔎 STD:")
+    print(df["std"].tail(10))
 
     price = df["close"].iloc[-1]
     upper = df["upper"].iloc[-1]
@@ -47,23 +75,27 @@ def mean_reversion_strategy(
 
     decision = HOLD
 
-    # 🔻 VENDA (TOPO)
+    signal_strength = 0
 
+    # 🔻 VENDA
     if zscore > 1.5 and rsi > 60:
         decision = SELL
+        signal_strength = 2
 
     elif zscore > 1.2:
         decision = SELL
+        signal_strength = 1
 
 
-    # 🔺 COMPRA (FUNDO)
-
+    # 🔺 COMPRA
     elif zscore < -1.5 and rsi < 40:
         decision = BUY
+        signal_strength = 2
 
     elif zscore < -1.2:
         decision = BUY
-        
+        signal_strength = 1
+            
     # -----------------------------------------
     # 📈 TREND FILTER (DEPOIS DA DECISÃO)
 
@@ -74,10 +106,11 @@ def mean_reversion_strategy(
 
     # 🔥 permite extremos mesmo contra tendência
 
-    if trend == "UP" and decision == SELL and zscore < 2:
+    # 🔥 só bloqueia se sinal MUITO fraco
+    if decision == SELL and trend == "UP" and signal_strength == 1:
         decision = HOLD
 
-    if trend == "DOWN" and decision == BUY and zscore > -2:
+    if decision == BUY and trend == "DOWN" and signal_strength == 1:
         decision = HOLD
 
     # -----------------------------------------
