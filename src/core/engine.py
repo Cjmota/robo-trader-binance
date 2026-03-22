@@ -70,6 +70,13 @@ class TradingEngine:
             print("⚠️ Sem dados")
             return
 
+        # 🚫 FILTRO DE VOLATILIDADE
+        volatility = df["close_price"].pct_change().rolling(10).std().iloc[-1]
+
+        if volatility > 0.03:
+            print("⚠️ Volatilidade extrema")
+            return
+
         # -----------------------------------------
         # 🧠 DETECTAR MERCADO
 
@@ -203,6 +210,11 @@ class TradingEngine:
             print(f"⚠️ Prob baixa ({decision['probability']:.2f}) → reduzindo força")
             decision["score"] *= 0.5
 
+        # 🚫 FILTRO DE SPREAD
+        if decision["spread"] > 0.003:
+            print("🚫 Spread alto")
+            return
+
         if decision["signal"] == "HOLD":
             return
 
@@ -211,13 +223,12 @@ class TradingEngine:
 
         score = 0
 
-        if decision["probability"] > 0.6:
-            score += 0.3
-
-        if decision["volume_spike"]:
-            score += 0.2
+        score += decision["probability"]
 
         if decision["momentum"]:
+            score += 0.2
+
+        if decision["volume_spike"]:
             score += 0.2
 
         if decision["signal"] == "BUY" and trend == "UP":
@@ -225,14 +236,13 @@ class TradingEngine:
 
         if decision["signal"] == "SELL" and trend == "DOWN":
             score += 0.3
-
-        decision["score"] += score
+            
+        decision["score"] = max(decision["score"], score)
         
         if decision["score"] < 0.1:
             print("⚠️ Score baixo, mas permitido")
-            return
 
-        if not decision["momentum"] and decision["probability"] < 0.5:
+        if not decision["momentum"] and decision["probability"] < 0.55:
             print("⚠️ Sem momentum forte")
             return
         
@@ -293,6 +303,16 @@ class TradingEngine:
 
             entry = float(self.bot.entry_price)
             profit_pct = float((price - entry) / entry * 100)
+            
+            # -----------------------------------------
+            # 🟡 BREAK EVEN (PROTEÇÃO DE LUCRO)
+
+            if self.check_break_even(entry, price):
+                if price < entry:
+                    print("🟡 Break Even acionado")
+                    self.bot.sell()
+                    self.trade_count_today += 1
+                    return
 
             # STOP LOSS
             if profit_pct <= -self.config["STOP_LOSS_PERCENTAGE"]:
@@ -305,7 +325,14 @@ class TradingEngine:
             if price > self.bot.highest_price:
                 self.bot.highest_price = price
 
-            trailing_dist = self.config.get("TRAILING", {}).get("DISTANCE", 1.0)
+            profit_pct = (price - entry) / entry * 100
+            if profit_pct > 2:
+                trailing_dist = 0.3
+            elif profit_pct > 1:
+                trailing_dist = 0.5
+            else:
+                trailing_dist = 1.0
+                
             trailing_price = self.bot.highest_price * (1 - trailing_dist / 100)
 
             if price < trailing_price:
@@ -331,7 +358,42 @@ class TradingEngine:
             return
 
         # -----------------------------------------
+        # 🧠 CONFIRMAÇÃO PROFISSIONAL
+
+        last_close = df["close"].iloc[-1]
+        prev_close = df["close"].iloc[-2]
+
+        ma20 = df["close"].rolling(20).mean().iloc[-1]
+
+        # 🔥 1. Candle favorável
+        if decision["signal"] == "BUY" and last_close < prev_close:
+            print("🚫 Candle contra entrada")
+            return
+
+        # 🔥 2. Anti-FOMO
+        distance = (last_close - ma20) / ma20
+
+        if decision["signal"] == "BUY" and distance > 0.02:
+            print("🚫 Muito esticado (anti-FOMO)")
+            return
+
+        # 🔥 3. Momentum obrigatório
+        if not decision["momentum"]:
+            print("🚫 Sem momentum")
+            return
+
+        # -----------------------------------------
         # 🔺 BUY (FILTROS)
+        
+        # evita topo extremo
+        if decision["signal"] == "BUY" and decision["probability"] > 0.7:
+            if distance > 0.015:
+                print("🚫 Entrada muito esticada (ajuste fino)")
+                return
+        
+        if time.time() - self.bot.last_trade_time < 60:
+            print("⏱️ Evitando overtrade")
+            return
 
         if action == "BUY":
 
@@ -339,17 +401,13 @@ class TradingEngine:
                 print("⚠️ Já está em posição")
                 return
 
-            if decision["probability"] < 0.45:
-                print("🚫 Probabilidade baixa para BUY")
+            if decision["probability"] < 0.35 and decision["score"] < 0.3:
+                print("🚫 Entrada fraca")
                 return
 
             # candle filtro
             last_close = df["close"].iloc[-1]
             prev_close = df["close"].iloc[-2]
-
-            if last_close < prev_close:
-                print("🚫 Candle contra tendência")
-                return
 
             # -----------------------------------------
             # 💰 POSITION SIZE
@@ -359,16 +417,26 @@ class TradingEngine:
                 asset="USDT"
             )
 
+            # -----------------------------------------
+            # 💰 POSITION SIZE PROFISSIONAL
+
+            risk_pct = 0.01  # 1% da conta
+
+            if not balance_data or "free" not in balance_data:
+                print("❌ Erro ao obter saldo")
+                return
+
             balance = float(balance_data["free"])
 
-            # 💰 POSITION SIZE INTELIGENTE
+            risk_amount = balance * risk_pct
 
-            balance = float(balance_data["free"])
+            # stop estimado (1%)
+            stop_distance = 0.01
 
-            capital = max(balance * 0.10, 2)  # mínimo $2
+            capital = risk_amount / stop_distance
 
-            if capital > balance:
-                capital = balance * 0.95
+            # limite de segurança
+            capital = min(capital, balance * 0.2)
 
             if capital < 2:
                 print("⚠️ Capital muito baixo")
