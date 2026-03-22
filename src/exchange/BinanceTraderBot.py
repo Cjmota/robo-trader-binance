@@ -1,5 +1,6 @@
 from src.data.data_provider import get_klines
 from src.utils.safe_api import safe_api_call
+from src.utils.binance_filters import get_symbol_filters, adjust_to_step_size
 import pandas as pd
 import datetime
 import time
@@ -280,5 +281,20 @@ class BinanceTraderBot:
 
     def _adjust_quantity(self, qty):
 
-        # 🔥 simplificado (ideal: usar stepSize da Binance)
-        return round(qty, 5)
+        try:
+            filters = get_symbol_filters(self.client, self.symbol)
+
+            step = filters["stepSize"]
+            min_qty = filters["minQty"]
+
+            qty = adjust_to_step_size(qty, step)
+
+            if qty < min_qty:
+                print(f"⚠️ Qty menor que minQty ({min_qty})")
+                return 0
+
+            return qty
+
+        except Exception as e:
+            print("❌ Erro ao ajustar quantidade:", e)
+            return 0
