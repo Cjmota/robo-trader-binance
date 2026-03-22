@@ -70,11 +70,22 @@ class TradingEngine:
             print("⚠️ Sem dados")
             return
 
-        # 🚫 FILTRO DE VOLATILIDADE
-        volatility = df["close_price"].pct_change().rolling(10).std().iloc[-1]
+        # 🚫 FILTRO DE VOLATILIDADE (ROBUSTO)
+
+        volatility_series = df["close_price"].pct_change().rolling(10).std()
+
+        if volatility_series.isna().iloc[-1]:
+            print("⚠️ Volatilidade inválida (dados insuficientes)")
+            return
+
+        volatility = float(volatility_series.iloc[-1])
 
         if volatility > 0.03:
-            print("⚠️ Volatilidade extrema")
+            print(f"⚠️ Volatilidade extrema: {volatility:.4f}")
+            return
+
+        if volatility < 0.001:
+            print(f"🚫 Mercado morto: {volatility:.4f}")
             return
 
         # -----------------------------------------
@@ -218,6 +229,46 @@ class TradingEngine:
         if decision["signal"] == "HOLD":
             return
 
+        # -----------------------------------------
+        # 🧠 CONFLUÊNCIA PROFISSIONAL
+
+        confluence = 0
+
+        # RSI (se existir)
+        if "rsi" in df.columns:
+            rsi = df["rsi"].iloc[-1]
+            
+            if decision["signal"] == "BUY" and rsi < 35:
+                confluence += 1
+                
+            if decision["signal"] == "SELL" and rsi > 65:
+                confluence += 1
+
+        # Tendência
+        if decision["signal"] == "BUY" and trend == "UP":
+            confluence += 1
+
+        if decision["signal"] == "SELL" and trend == "DOWN":
+            confluence += 1
+
+        # Volume
+        if decision["volume_spike"]:
+            confluence += 1
+
+        # Momentum
+        if decision["momentum"]:
+            confluence += 1
+
+        # -----------------------------------------
+        # 🔥 SCORE REAL
+
+        factors = 4
+
+        if "rsi" not in df.columns:
+            factors -= 1
+
+        decision["score"] = confluence / max(factors, 1)
+
         # 🔥 FILTRO DE QUALIDADE PROFISSIONAL
         # 🧠 SCORE INTELIGENTE
 
@@ -237,7 +288,7 @@ class TradingEngine:
         if decision["signal"] == "SELL" and trend == "DOWN":
             score += 0.3
             
-        decision["score"] = (decision["score"] * 0.4) + (score * 0.6)
+        decision["score"] = (decision["score"] * 0.3) + (score * 0.7)
         
         if decision["score"] < 0.1:
             print("⚠️ Score baixo, mas permitido")
@@ -249,6 +300,32 @@ class TradingEngine:
         # 🚫 NÃO VENDE SEM POSIÇÃO (SPOT)
         if decision["signal"] == "SELL" and not self.bot.position_open:
             print("🚫 Ignorando SELL sem posição")
+            return
+        
+        # -----------------------------------------
+        # 🔥 PROBABILIDADE INTELIGENTE
+
+        prob = decision["probability"]
+
+        prob += decision["score"] * 0.35
+
+        decision["probability"] = min(prob, 1.0)
+
+        # -----------------------------------------
+        # 🧠 PRIORIDADE DO TRADE
+
+        priority = 0
+
+        priority += decision["probability"]
+        priority += decision["score"]
+
+        if decision["volume_spike"]:
+            priority += 0.3
+
+        decision["priority"] = priority
+
+        if decision["priority"] < 0.6:
+            print("⚠️ Trade fraco (prioridade baixa)")
             return
 
         # -----------------------------------------
@@ -308,7 +385,7 @@ class TradingEngine:
             # 🟡 BREAK EVEN (PROTEÇÃO DE LUCRO)
 
             if self.check_break_even(entry, price):
-                 if price <= entry * 1.002:
+                if price <= entry * 1.003:
                     print("🟡 Break Even acionado")
                     self.bot.sell()
                     self.trade_count_today += 1
@@ -373,17 +450,20 @@ class TradingEngine:
         # 🔥 2. Anti-FOMO
         distance = (last_close - ma20) / ma20
 
-        if decision["signal"] == "BUY" and distance > 0.25:
-            print("🚫 Esticado mas permitido")
+        if decision["signal"] == "BUY" and distance > 0.025:
+            print("⚠️ Esticado, mas permitido")
 
         # -----------------------------------------
         # 🔺 BUY (FILTROS)
         
         # evita topo extremo
-        if decision["signal"] == "BUY" and decision["probability"] > 0.7:
+        if decision["signal"] == "BUY":
             if distance > 0.025:
-                print("🚫 Entrada muito esticada (ajuste fino)")
-                return
+                if decision["probability"] > 0.75:
+                    print("⚠️ Rompimento forte permitido")
+                else:
+                    print("🚫 Muito esticado")
+                    return
         
         cooldown = 60
 
@@ -404,7 +484,7 @@ class TradingEngine:
         last3 = df["close"].iloc[-3:]
 
         if action == "BUY":
-            if last3.iloc[-1] > last3.iloc[-2] > last3.iloc[-3]:
+            if last3.iloc[-1] > last3.iloc[-2] or decision["volume_spike"] or decision["momentum"]:
                 print("📈 Micro tendência confirmada")
             else:
                 if decision["probability"] < 0.6:
@@ -415,10 +495,6 @@ class TradingEngine:
 
             if self.bot.position_open:
                 print("⚠️ Já está em posição")
-                return
-
-            if decision["probability"] < 0.35 and decision["score"] < 0.3:
-                print("🚫 Entrada fraca")
                 return
 
             # candle filtro
