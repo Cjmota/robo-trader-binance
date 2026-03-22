@@ -51,9 +51,12 @@ def get_all_filters(client, symbol):
 # 🔧 AJUSTES
 
 def adjust_quantity(qty, step):
-    precision = int(round(-math.log(step, 10), 0))
-    return float(round(qty - (qty % step), precision))
+    def adjust_quantity(qty, step):
+        if step <= 0:
+            return qty
 
+        precision = int(round(-math.log(step, 10), 0))
+        return float(round(qty - (qty % step), precision))
 
 def adjust_price(price, tick):
     precision = int(round(-math.log(tick, 10), 0))
@@ -65,16 +68,27 @@ def adjust_price(price, tick):
 
 def validate_order(client, symbol, qty, price):
 
+    if not price or price <= 0:
+        return 0, price, "Invalid price"
+
     filters = get_all_filters(client, symbol)
 
-    lot = filters["LOT_SIZE"]
-    min_notional = filters["MIN_NOTIONAL"]
+    lot = filters.get("LOT_SIZE")
+    min_notional = filters.get("MIN_NOTIONAL") or 0
+    price_filter = filters.get("PRICE_FILTER")
+
+    if not lot:
+        return 0, price, "LOT_SIZE missing"
 
     # 🔧 ajusta quantidade
     qty = adjust_quantity(qty, lot["stepSize"])
 
     if qty < lot["minQty"]:
         return 0, price, "Qty < minQty"
+
+    # 🔧 ajusta preço
+    if price_filter:
+        price = adjust_price(price, price_filter["tickSize"])
 
     # 🔧 valida valor mínimo
     notional = qty * price

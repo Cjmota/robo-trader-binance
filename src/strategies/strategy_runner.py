@@ -3,9 +3,9 @@ from src.strategies.rsi_strategy import getRsiTradeStrategy
 
 BUY = "BUY"
 SELL = "SELL"
-HOLD = "HOLD"
+HOLD = None #"HOLD"
 
-def extract_signal(result, HOLD="HOLD"):
+def extract_signal(result, HOLD=None):
         if result is None:
             return HOLD
         if isinstance(result, str):
@@ -50,6 +50,7 @@ class StrategyRunner:
                 return default_decision.copy()
 
             now = time.time()
+            
 
            # -------------------------------
             # 🔒 CACHE (LEITURA)
@@ -118,6 +119,14 @@ class StrategyRunner:
             # 🧠 NORMALIZAÇÃO
             if isinstance(result, dict):
                 decision = {**default_decision, **result}
+            
+            # 🔥 GARANTE VALORES MÍNIMOS
+            if decision["signal"] != HOLD:
+                if decision.get("score", 0) == 0:
+                    decision["score"] = 0.4 if decision["signal"] == BUY else -0.4
+
+                if decision.get("probability", 0) == 0:
+                    decision["probability"] = 0.5
 
             elif isinstance(result, str):
                 decision = {**default_decision, "signal": result}
@@ -135,7 +144,7 @@ class StrategyRunner:
             # -------------------------------
             # 💾 CACHE
             # só cacheia se for útil
-            if decision["signal"] != HOLD and decision["probability"] > 0.5:
+            if decision["signal"] != HOLD:
                 self.cache[symbol] = (decision, now)
 
             # -------------------------------

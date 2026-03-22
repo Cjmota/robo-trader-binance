@@ -10,9 +10,7 @@ from src.core.decision import DecisionEngine
 from src.strategies.strategy_runner import StrategyRunner
 from src.exchange.BinanceTraderBot import BinanceTraderBot
 from src.scanner.market_scanner_pro import scan_market_pro
-
 from src.core.risk_manager import RiskManager
-
 from src.exchange.price_stream import PriceStream
 
 # -----------------------------------------
@@ -26,68 +24,50 @@ API_SECRET = os.getenv("BINANCE_API_SECRET")
 BOT_RUNNING = False
 CURRENT_TRADER = None
 
-price_stream = PriceStream(API_KEY, API_SECRET)
-price_stream.start("BTCUSDT")
-
-
 # -----------------------------------------
 # ⚙️ CONFIG
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "app", "config.json")
 
-
 def load_config():
     with open(CONFIG_PATH, "r") as f:
         return json.load(f)
 
-
 config = load_config()
 
-print("API_KEY:", API_KEY[:5] if API_KEY else None)
-print("API_SECRET:", API_SECRET[:5] if API_SECRET else None)
-
 # -----------------------------------------
-# 🚀 INIT CLIENT
+# 🔧 GLOBAIS IMPORTANTES
+
+risk_manager = RiskManager(config)
+
+price_stream = PriceStream(API_KEY, API_SECRET)
+price_stream.start("BTCUSDT")
 
 client = None
+engine = None
+
+# -----------------------------------------
+# 🚀 CLIENT
 
 def get_client():
     global client
 
     if client is None:
-        from binance.client import Client
         client = Client(API_KEY, API_SECRET)
 
     return client
 
-risk_manager = RiskManager(config)
-
 # -----------------------------------------
-# 🔍 SCANNER (cache simples)
+# 🔍 SCANNER
 
 last_scan = 0
 cached_symbols = []
 
-def create_bot():
-
-    client = get_client()
-    
-    bot = BinanceTraderBot(
-        symbol="BTCUSDT",
-        client=client,
-        config=config,
-        risk_manager=risk_manager
-    )    
-    
-    bot.price_stream = price_stream
-    
-    return bot
-
 def get_best_symbol():
     global last_scan, cached_symbols
 
-    client = get_client()  # 🔥 GARANTE CLIENTE
+    client = get_client()
 
     if time.time() - last_scan > 120:
         try:
@@ -97,53 +77,69 @@ def get_best_symbol():
             print("⚠️ Erro no scanner:", e)
             return None
 
-    return cached_symbols[0] if cached_symbols else None
+    if not cached_symbols:
+        print("⚠️ Scanner vazio")
+        return None
+
+    return cached_symbols[0]
+
+# -----------------------------------------
+# 🤖 BOT
+
+def create_bot():
+    client = get_client()
+
+    bot = BinanceTraderBot(
+        symbol="BTCUSDT",
+        client=client,
+        config=config,
+        risk_manager=risk_manager
+    )
+
+    bot.price_stream = price_stream
+    bot.is_running = True  # 🔥 ESSENCIAL
+
+    return bot
+
 # -----------------------------------------
 # 🧠 COMPONENTES
+
 strategy_runner = StrategyRunner()
 decision_engine = DecisionEngine(config)
 
 # -----------------------------------------
-# ⚙️ ENGINE
-
-engine = None
-
-# -----------------------------------------
-# ▶️ START SEGURO
+# 🔁 LOOP
 
 def safe_trader_master_loop():
-
     global BOT_RUNNING, CURRENT_TRADER, engine
 
     print("🔥 LOOP ATIVO")
 
     while True:
 
-        if not BOT_RUNNING or not engine:
-            time.sleep(2 + random.uniform(0.5, 1.5))
+        if not BOT_RUNNING or not engine or not CURRENT_TRADER or not CURRENT_TRADER.is_running:
+            time.sleep(5)
             continue
 
         try:
             engine.run_once()
-
-            # 🔥🔥🔥 ESSA LINHA É O MAIS IMPORTANTE
-            time.sleep(2 + random.uniform(0.5, 1.5))
+            time.sleep(5 + random.uniform(1, 3))
 
         except Exception as e:
             import traceback
             print("❌ ERRO NO BOT:", e)
             traceback.print_exc()
-            time.sleep(2 + random.uniform(0.5, 1.5))
-                    
-def start_bot():
+            time.sleep(3)
 
+# -----------------------------------------
+# ▶️ START
+
+def start_bot():
     global BOT_RUNNING, CURRENT_TRADER, engine
 
     if BOT_RUNNING:
         print("⚠️ Já está rodando")
         return
-
-    BOT_RUNNING = True  # 🔥 sobe antes (evita clique duplo)
 
     print("🚀 Iniciando bot...")
 
@@ -160,25 +156,29 @@ def start_bot():
             risk_manager=risk_manager
         )
 
-        print("✅ engine criado")
+        BOT_RUNNING = True  # 🔥 SÓ AQUI
+
+        print("✅ Bot iniciado com sucesso")
 
     except Exception as e:
         print("❌ ERRO:", e)
         BOT_RUNNING = False
-            
-def stop_bot():
 
+# -----------------------------------------
+# ⛔ STOP
+
+def stop_bot():
     global BOT_RUNNING, CURRENT_TRADER
 
     print("🛑 Parando bot...")
-    
+
     BOT_RUNNING = False
 
     if CURRENT_TRADER:
         CURRENT_TRADER.is_running = False
-    
+
+# -----------------------------------------
 
 if __name__ == "__main__":
     start_bot()
     safe_trader_master_loop()
-

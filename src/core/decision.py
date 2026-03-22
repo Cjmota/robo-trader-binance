@@ -1,125 +1,68 @@
 BUY = "BUY"
 SELL = "SELL"
-HOLD = "HOLD"
+HOLD = None
 
 
 class DecisionEngine:
 
-    def __init__(self, config=None):
-        self.config = config or {}
+    def __init__(self, config):
+        self.config = config
+        self.min_prob = config.get("MIN_PROB", 0.45)
 
-    def evaluate(
-        self,
-        bot,
-        signal,
-        score,
-        probability,
-        regime,
-        spread,
-        volume_spike,
-        momentum,
-        orderflow
-    ):
-        #modo debug
-        #return signal 
+    def evaluate(self, signal_data):
 
-        print("\n🧠 DECISION ENGINE")
+        if not signal_data:
+            return {"signal": None, "score": 0, "probability": 0}
 
-        # 🛡️ proteção contra None
-        probability = float(probability)
-        score = score or 0
-        if probability is None:
-            probability = 0.5
-        volume_spike = bool(volume_spike)
-        
-        # 🚀 reforço de contexto
-        if momentum and orderflow == "BUY":
-            score += 0.3
+        signal = signal_data.get("signal")
+        score = float(signal_data.get("score", 0))
+        prob = float(signal_data.get("probability", 0))
 
-        if momentum and orderflow == "SELL":
-            score -= 0.3
-
-        # 🔹 pacote de dados
-        market_data = {
-            "spread": spread,
-            "volume_spike": volume_spike,
-            "momentum": momentum,
-            "orderflow": orderflow,
-            "regime": regime
-        }
+        volume = signal_data.get("volume_spike", False)
+        momentum = signal_data.get("momentum", False)
 
         # -----------------------------------------
-        # 1️⃣ validação básica
-        # 🔥 TRANSFORMA HOLD EM SINAL INTELIGENTE
-        if signal == HOLD:
-            print("⚠️ HOLD recebido — avaliando contexto...")
+        # 🧠 REGRA 1: sem sinal → HOLD
 
-            # 🚀 tenta converter mesmo sem momentum
-            if orderflow == "BUY":
-                signal = BUY
-                score += 0.2
-                probability += 0.05
-                print("🚀 HOLD → BUY (orderflow)")
+        if signal is None:
+            return {"signal": None, "score": 0, "probability": 0}
 
-            elif orderflow == "SELL":
-                signal = SELL
-                score -= 0.2
-                probability += 0.05
-                print("🚀 HOLD → SELL (orderflow)")
+        # -----------------------------------------
+        # 🧠 REGRA 2: se score zerado → NÃO matar sinal
 
-            else:
-               print("⚠️ HOLD mantido — sem confirmação")
-               # NÃO retorna ainda → deixa filtros decidirem
-            
-        # 🚀 fallback por score (OURO)
-        if signal == HOLD and abs(score) > 0.2:
-            signal = BUY if score > 0 else SELL
-            print("🚀 HOLD → sinal por score")
+        if score == 0:
+            print("⚠️ Score zerado → ajustando")
+            score = 0.4
+
+        # -----------------------------------------
+        # 🧠 REGRA 3: probabilidade baixa NÃO bloqueia totalmente
+
+        if prob < self.min_prob:
+            print(f"⚠️ Prob baixa ({prob:.2f}) → reduzindo força")
+            score *= 0.5  # enfraquece, mas não mata
+
+        # -----------------------------------------
+        # 🧠 REGRA 4: reforço por confluência
+
+        if volume:
+            score += 0.2
+
+        if momentum:
+            score += 0.2
+
+        # -----------------------------------------
+        # 🧠 REGRA 5: decisão final
+
+        if score >= 0.3:
+            return {
+                "signal": signal,
+                "score": round(score, 2),
+                "probability": round(prob, 2)
+            }
+
+        print("🚫 Score final muito baixo")
+        return {"signal": None, "score": 0, "probability": prob}
     
-        # 🚀 fallback mais agressivo
-        if signal == HOLD and abs(score) > 0.1:
-            signal = BUY if score > 0 else SELL
-            print("🚀 HOLD → convertido por score leve")
-
-        # reforço leve SEM momentum
-        if orderflow == "BUY":
-            score += 0.1
-
-        elif orderflow == "SELL":
-            score -= 0.1
-
-        # -----------------------------------------
-        # 2️⃣ filtro de risco global
-        if not self.market_filter(bot, market_data):
-            return HOLD
-
-        # -----------------------------------------
-        # 3️⃣ regime
-        if not self.regime_filter(signal, regime, momentum, orderflow):
-            return HOLD
-
-        # -----------------------------------------
-        # 4️⃣ qualidade
-        if not self.quality_filter(score, probability, signal):
-            return HOLD
-
-        # -----------------------------------------
-        # 5️⃣ fluxo
-        if not self.flow_filter(signal, momentum, orderflow, volume_spike, score):
-            return HOLD
-
-        # -----------------------------------------
-        # 6️⃣ spread dinâmico
-        spread_limit = self.config.get("SCANNER", {}).get("SPREAD_LIMIT", 0.004)
-
-        if spread > spread_limit:
-            print(f"⚠️ Spread alto: {spread}")
-            return HOLD
-
-         # -----------------------------------------
-        print(f"✅ TRADE APROVADO → {signal}")
-        return signal
-
     # -----------------------------------------
     # 🔒 FILTROS
 

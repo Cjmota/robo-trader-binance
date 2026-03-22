@@ -258,6 +258,9 @@ class BinanceTraderBot:
     # 🔄 TROCA DE ATIVO
 
     def set_symbol(self, symbol):
+        
+        if hasattr(self, "price_stream"):
+            self.price_stream.start(symbol)
 
         if self.symbol == symbol:
             return

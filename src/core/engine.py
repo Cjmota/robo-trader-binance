@@ -107,7 +107,7 @@ class TradingEngine:
         # -----------------------------------------
         # 🧠 EXECUTAR ESTRATÉGIA
 
-        decision = self.strategy_runner.execute(
+        raw_decision = self.strategy_runner.execute(
             bot=self.bot,
             main_strategy=strategy,
             fallback_strategy=None,
@@ -115,7 +115,7 @@ class TradingEngine:
         )
         
         # 🔥 limpa numpy na raiz
-        decision = {k: to_native(v) for k, v in decision.items()}
+        decision = self.decision_engine.evaluate(raw_decision)
         
         # 🔥 GARANTE FORMATO LIMPO
         if isinstance(decision.get("action"), dict):
@@ -171,10 +171,6 @@ class TradingEngine:
 
         print(f"🧠 NORMALIZED: {decision}")
 
-        if decision["signal"] == "HOLD":
-            decision["score"] = 0
-            decision["probability"] = 0
-
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")        
 
@@ -186,9 +182,9 @@ class TradingEngine:
             print(f"🚀 POSSÍVEL TRADE → {decision}")
 
         # 🚫 FILTRO DE VOLUME (MELHORIA 3)
-        if not decision["volume_spike"] and decision["probability"] < 0.4:
-            print("🚫 Volume fraco + baixa confiança")
-            return
+        if market_condition == "TREND":
+            if not decision["volume_spike"] and decision["probability"] < 0.4:
+                return
 
         if not decision["signal"]:
             print("⚠️ Decision sem sinal")
@@ -204,8 +200,8 @@ class TradingEngine:
             min_prob = 0.45
 
         if decision["probability"] < min_prob:
-            print(f"🚫 Probabilidade baixa ({decision['probability']:.2f} < {min_prob})")
-            return
+            print(f"⚠️ Prob baixa ({decision['probability']:.2f}) → reduzindo força")
+            decision["score"] *= 0.5
 
         if decision["signal"] == "HOLD":
             return
@@ -230,10 +226,10 @@ class TradingEngine:
         if decision["signal"] == "SELL" and trend == "DOWN":
             score += 0.3
 
-        decision["score"] = max(decision["score"], score)
+        decision["score"] += score
         
-        if decision["score"] < 0.2:
-            print("⚠️ Score fraco")
+        if decision["score"] < 0.1:
+            print("⚠️ Score baixo, mas permitido")
             return
 
         if not decision["momentum"] and decision["probability"] < 0.5:
@@ -248,17 +244,7 @@ class TradingEngine:
         # -----------------------------------------
         # 🎯 DECISÃO FINAL
 
-        action = self.decision_engine.evaluate(
-            bot=self.bot,
-            signal=decision["signal"],
-            score=decision["score"],
-            probability=decision["probability"],
-            regime=decision["regime"],
-            spread=decision["spread"],
-            volume_spike=decision["volume_spike"],
-            momentum=decision["momentum"],
-            orderflow=decision["orderflow"]
-        )
+        action = decision["signal"]
 
         print(f"📊 {symbol} → {action}")
 
