@@ -22,6 +22,13 @@ class TradingEngine:
         self.trade_count_today = 0
         self.market_detector = MarketConditionDetector()
 
+        self.performance = {
+            "wins": 0,
+            "losses": 0,
+            "last_results": [],  # últimos trades
+            "winrate": 0.5
+        }
+
     # -----------------------------------------
     # 🔁 CICLO ÚNICO
 
@@ -387,6 +394,9 @@ class TradingEngine:
             if self.check_break_even(entry, price):
                 if price <= entry * 1.003:
                     print("🟡 Break Even acionado")
+                    
+                    self.update_performance(profit_pct)
+                    
                     self.bot.sell()
                     self.trade_count_today += 1
                     return
@@ -394,6 +404,9 @@ class TradingEngine:
             # STOP LOSS
             if profit_pct <= -self.config["STOP_LOSS_PERCENTAGE"]:
                 print("🛑 Stop Loss")
+                
+                self.update_performance(profit_pct)
+                
                 self.bot.sell()
                 self.trade_count_today += 1
                 return
@@ -415,6 +428,10 @@ class TradingEngine:
             if price < trailing_price:
                 print("📉 Trailing Stop")
                 self.bot.sell()
+                
+                self.update_performance(profit_pct)
+                
+                self.bot.sell()
                 self.trade_count_today += 1
                 return
 
@@ -429,6 +446,12 @@ class TradingEngine:
         # 🔻 SELL
 
         if action == "SELL" and self.bot.position_open:
+
+            entry = float(self.bot.entry_price)
+            profit_pct = (price - entry) / entry * 100
+
+            self.update_performance(profit_pct)
+
             print("🔴 Fechando posição")
             self.bot.sell()
             self.trade_count_today += 1
@@ -576,7 +599,6 @@ class TradingEngine:
 
         return False
         
-    
     def check_trailing(self, current_price, highest_price):
 
         trailing_pct = self.config["TRAILING"]["DISTANCE"]
@@ -584,3 +606,22 @@ class TradingEngine:
         trailing_price = highest_price * (1 - trailing_pct / 100)
 
         return trailing_price
+    
+    def update_performance(self, profit_pct):
+
+        if profit_pct > 0:
+            self.performance["wins"] += 1
+            self.performance["last_results"].append(1)
+        else:
+            self.performance["losses"] += 1
+            self.performance["last_results"].append(0)
+
+        # mantém últimos 20 trades
+        self.performance["last_results"] = self.performance["last_results"][-20:]
+
+        total = len(self.performance["last_results"])
+
+        if total > 0:
+            self.performance["winrate"] = sum(self.performance["last_results"]) / total
+
+        print(f"📊 Winrate atualizado: {self.performance['winrate']:.2f}")
