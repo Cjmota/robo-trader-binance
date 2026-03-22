@@ -1,6 +1,7 @@
 from src.data.data_provider import get_klines
 from src.utils.safe_api import safe_api_call
 from src.utils.binance_filters import get_symbol_filters, adjust_to_step_size
+from src.utils.binance_execution import validate_order
 import pandas as pd
 import datetime
 import time
@@ -74,7 +75,18 @@ class BinanceTraderBot:
         # -----------------------------------------
         # 🔧 AJUSTE QTD
 
-        quantity = self._adjust_quantity(quantity)
+        price = self.get_price()
+
+        quantity, _, error = validate_order(
+            self.client,
+            self.symbol,
+            quantity,
+            price
+        )
+
+        if error:
+            print(f"⚠️ Ordem inválida: {error}")
+            return None
 
         if quantity <= 0:
             print("⚠️ Quantidade inválida")
@@ -134,7 +146,19 @@ class BinanceTraderBot:
             return None
 
         try:
-            quantity = self._adjust_quantity(self.quantity)
+            
+            price = self.get_price()
+        
+            quantity, price, error = validate_order(
+                self.client,
+                self.symbol,
+                self.quantity,
+                self.get_price()
+            )
+
+            if error:
+                print(f"⚠️ SELL inválido: {error}")
+                return None
 
             order = safe_api_call(
                 self.client.create_order,
