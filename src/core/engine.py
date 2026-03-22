@@ -315,6 +315,13 @@ class TradingEngine:
                 return
 
         # -----------------------------------------
+        # 🚫 BLOQUEIO SPOT (ESSENCIAL)
+
+        if action == "SELL" and not self.bot.position_open:
+            print("🚫 Ignorando SELL sem posição")
+            return
+
+        # -----------------------------------------
         # 🔻 SELL
 
         if action == "SELL" and self.bot.position_open:
@@ -329,6 +336,7 @@ class TradingEngine:
         if action == "BUY":
 
             if self.bot.position_open:
+                print("⚠️ Já está em posição")
                 return
 
             if decision["probability"] < 0.45:
@@ -336,8 +344,8 @@ class TradingEngine:
                 return
 
             # candle filtro
-            last_close = df["close_price"].iloc[-1]
-            prev_close = df["close_price"].iloc[-2]
+            last_close = df["close"].iloc[-1]
+            prev_close = df["close"].iloc[-2]
 
             if last_close < prev_close:
                 print("🚫 Candle contra tendência")
