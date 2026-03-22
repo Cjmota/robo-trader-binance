@@ -155,6 +155,11 @@ def mean_reversion_strategy(
         print(f"Upper: {upper:.2f} | Lower: {lower:.2f}")
         print(f"📈 Trend: {trend} | Decision: {decision}")
 
+    # 🚀 MODO SPOT (ESSENCIAL)
+    if bot is not None:
+        if decision == SELL and not getattr(bot, "position_open", False):
+            decision = HOLD
+
     return {
         "action": decision,
         "confidence": confidence,
