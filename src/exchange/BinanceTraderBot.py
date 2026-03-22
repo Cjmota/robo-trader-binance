@@ -82,7 +82,7 @@ class BinanceTraderBot:
         # -----------------------------------------
         # 📈 PREÇO (ANTES DA ORDEM)
 
-        price = self.bot.get_price()
+        price = self.get_price()
 
         if not price or price <= 0:
             print("⚠️ Sem preço → cancelando BUY")
