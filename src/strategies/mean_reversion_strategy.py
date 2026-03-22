@@ -47,23 +47,21 @@ def mean_reversion_strategy(
 
     decision = HOLD
 
-    # -----------------------------------------
-    # 🔥 LÓGICA COM Z-SCORE + RSI
-
     # 🔻 VENDA (TOPO)
 
-    if zscore > 1.5:
+    if zscore > 1.5 and rsi > 60:
         decision = SELL
 
-    elif zscore > 1.5 and rsi > 65:
+    elif zscore > 1.2:
         decision = SELL
+
 
     # 🔺 COMPRA (FUNDO)
 
-    elif zscore < -1.5:
+    elif zscore < -1.5 and rsi < 40:
         decision = BUY
 
-    elif zscore < -1.5 and rsi < 35:
+    elif zscore < -1.2:
         decision = BUY
         
     # -----------------------------------------
