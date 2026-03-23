@@ -466,11 +466,19 @@ class TradingEngine:
         # 🔥 PREÇO (CORRETO)
         price = self.bot.get_price()
 
-        if not price:
-            print("⚠️ Sem preço")
+        if price is None:
+            print("⚠️ Preço None")
             return
 
-        price = float(price)
+        try:
+            price = float(price)
+        except Exception:
+            print("❌ Preço inválido:", price)
+            return
+
+        if price <= 0:
+            print("❌ Preço inválido (<=0):", price)
+            return
 
         # -----------------------------------------
         # 🔥 GERENCIAMENTO DE POSIÇÃO
@@ -675,10 +683,56 @@ class TradingEngine:
                 print("⚠️ Capital muito baixo")
                 return
 
-            qty = float(capital / price)
+            # -----------------------------------------
+            # 💰 CALCULAR QUANTIDADE (ROBUSTO)
+            
+            try:
+                qty = capital / price
+            except Exception as e:
+                print("❌ Erro cálculo qty:", e)
+                return
 
-            print(f"🟢 BUY EXECUTADO | qty={qty:.4f}")
+            # 🚫 validação básica
+            if qty is None or qty <= 0:
+                print("❌ Quantidade inválida:", qty)
+                return
 
+            # -----------------------------------------
+            # 🚫 CAPITAL MÍNIMO (BINANCE)
+            
+            if capital < 5:
+                print("⚠️ Capital insuficiente (<5 USDT)")
+                return
+            
+            # -----------------------------------------
+            # 🚫 QTY MÍNIMA
+
+            if qty < 0.0001:
+                print("⚠️ Qty muito pequena")
+                return
+
+            # -----------------------------------------
+            # 🔧 AJUSTE DE PRECISÃO (ANTI-ERRO BINANCE)
+
+            qty = round(qty, 6)
+            
+            # -----------------------------------------
+            # 🧪 DEBUG PROFISSIONAL
+
+            print(f"""
+            🧪 DEBUG ORDER
+            symbol={symbol}
+            price={price}
+            balance={balance}
+            capital={capital}
+            qty={qty}
+            """)
+
+            print(f"🟢 BUY EXECUTADO | qty={qty}")
+
+            # -----------------------------------------
+            # 🚀 EXECUÇÃO
+            
             self.bot.buy(qty)
             self.trade_count_today += 1
                     
