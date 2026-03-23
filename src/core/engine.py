@@ -153,30 +153,18 @@ class TradingEngine:
         # 🔥 FALLBACK INTELIGENTE (CORRETO)
 
         if raw_decision is None or raw_decision == "HOLD":
-            
-            if rsi is None:
-                print("⚠️ RSI não disponível — ignorando fallback")
-            else:
+                        
+            # 🔥 EXTRAI SINAL REAL DA ESTRATÉGIA
+            original_signal = None
 
-                if rsi > 60:
-                    raw_decision = "SELL"
-                    print("🔴 Fallback SELL (RSI alto)")
+            if isinstance(raw_decision, str):
+                original_signal = raw_decision
 
-                elif rsi < 40:
-                    raw_decision = "BUY"
-                    print("🟢 Fallback BUY (RSI baixo)")
-            
-        # 🔥 EXTRAI SINAL REAL DA ESTRATÉGIA
-        original_signal = None
-
-        if isinstance(raw_decision, str):
-            original_signal = raw_decision
-
-        elif isinstance(raw_decision, dict):
-            original_signal = (
-                raw_decision.get("action")
-                or raw_decision.get("signal")
-            )
+            elif isinstance(raw_decision, dict):
+                original_signal = (
+                    raw_decision.get("action")
+                    or raw_decision.get("signal")
+                )
         
         # 🔥 limpa numpy na raiz
         decision = self.decision_engine.evaluate(raw_decision)
@@ -329,16 +317,6 @@ class TradingEngine:
         # 🧠 CONFLUÊNCIA PROFISSIONAL
 
         confluence = 0
-
-        if rsi is None:
-            print("⚠️ RSI não disponível — ignorando RSI")
-        else:
-            if rsi is not None:
-                if decision["signal"] == "BUY" and rsi < 35:
-                    confluence += 1
-
-                if decision["signal"] == "SELL" and rsi > 65:
-                    confluence += 1
 
         # Tendência
         if decision["signal"] == "BUY" and trend == "UP":
@@ -504,46 +482,52 @@ class TradingEngine:
         # -----------------------------------------
         # 🔥 GERENCIAMENTO DE POSIÇÃO
 
-        if self.bot.position_open:
-
+        if self.bot.position_open:          
+            
             entry = float(self.bot.entry_price)
-            profit_pct = float((price - entry) / entry * 100)
+            profit_pct = (price - entry) / entry * 100
+            
+            if not hasattr(self.bot, "partial_taken"):
+                self.bot.partial_taken = False
+
+            if profit_pct >= 1.2 and not self.bot.partial_taken:
+                print("💰 Realizando parcial (50%)")
+
+                qty = self.bot.quantity * 0.5
+
+                self.bot.sell(qty)
+                self.bot.partial_taken = True
+
+                return
             
             # -----------------------------------------
-            # 🟡 BREAK EVEN (PROTEÇÃO DE LUCRO)
+            # 🔥 BREAK EVEN REAL (COM TAXA)
 
-            if self.check_break_even(entry, price):
-                if price <= entry * 1.003:
-                    print("🟡 Break Even acionado")
-                    
-                    self.update_performance(symbol, profit_pct)
-                    
+            if profit_pct > 0.6:
+                if price <= entry * 1.006:
+                    print("🟡 Break Even (real)")
                     self.bot.sell()
-                    self.trade_count_today += 1
                     return
-
-            # STOP LOSS
-            if profit_pct <= -self.config["STOP_LOSS_PERCENTAGE"]:
-                print("🛑 Stop Loss")
-                
-                self.update_performance(symbol, profit_pct)
-                
-                self.bot.sell()
-                self.trade_count_today += 1
-                return
-
+            
             # TRAILING
             if price > self.bot.highest_price:
                 self.bot.highest_price = price
 
             profit_pct = (price - entry) / entry * 100
-            if profit_pct > 2:
+            
+            # 🔥 TRAILING PROFISSIONAL
+
+            if profit_pct > 4:
+                trailing_dist = 0.15
+            elif profit_pct > 3:
+                trailing_dist = 0.2
+            elif profit_pct > 2:
                 trailing_dist = 0.3
             elif profit_pct > 1:
                 trailing_dist = 0.5
             else:
-                trailing_dist = 1.0
-                
+                trailing_dist = 0.8  
+            
             trailing_price = self.bot.highest_price * (1 - trailing_dist / 100)
 
             if price < trailing_price:
@@ -551,6 +535,22 @@ class TradingEngine:
                                 
                 self.update_performance(symbol, profit_pct)
                 
+                self.bot.sell()
+                self.trade_count_today += 1
+                return
+                
+            # 🔥 SAÍDA POR FRAQUEZA
+
+            if decision["momentum"] is False and profit_pct > 0.5:
+                print("📉 Saída por fraqueza (momentum)")
+                self.bot.sell()
+                return             
+            
+            # STOP LOSS           
+            
+            if profit_pct < -1.5:
+                print("🛑 Stop inteligente")
+                self.update_performance(symbol, profit_pct)
                 self.bot.sell()
                 self.trade_count_today += 1
                 return
@@ -650,6 +650,12 @@ class TradingEngine:
             return
 
         if action == "BUY":
+            
+            # 🚫 EVITA MÚLTIPLAS POSIÇÕES
+            if self.bot.position_open and decision["score"] < 0.7:
+                print("⚠️ Já em posição — só entra se for trade forte")
+                return
+            
             if last3.iloc[-1] > last3.iloc[-2] or decision["volume_spike"] or decision["momentum"]:
                 print("📈 Micro tendência confirmada")
             else:
