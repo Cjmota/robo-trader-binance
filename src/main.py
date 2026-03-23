@@ -3,8 +3,13 @@ import json
 import time
 import random
 import logging
+import threading
+import asyncio
+from src.utils.websocket_price import start_socket
+
 from dotenv import load_dotenv
 from binance.client import Client
+from src.utils.state import STATE
 
 from src.core.engine import TradingEngine
 from src.core.decision import DecisionEngine
@@ -49,6 +54,28 @@ CONFIG_PATH = os.path.join(BASE_DIR, "app", "config.json")
 def load_config():
     with open(CONFIG_PATH, "r") as f:
         return json.load(f)
+    
+def update_equity(balance, pnl):
+    equity = balance + pnl
+
+    STATE["equity"] = equity
+    
+def log_trade(symbol, profit):
+
+    STATE["trades"].append({
+        "symbol": symbol,
+        "profit": profit,
+        "time": time.time()
+    })
+
+    # limita memória
+    if len(STATE["trades"]) > 500:
+        STATE["trades"].pop(0)
+        
+def run_socket():
+    asyncio.run(start_socket())
+
+threading.Thread(target=run_socket, daemon=True).start()
 
 config = load_config()
 

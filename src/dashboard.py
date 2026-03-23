@@ -1,6 +1,8 @@
 from flask import Flask, render_template, request, jsonify
 from src.main import safe_trader_master_loop
 from datetime import datetime
+from src.utils.state import STATE
+
 import threading
 import json
 import os
@@ -36,7 +38,7 @@ def start_background_loop():
 
     bot_loop_started = True
     print("🧠 Loop do bot iniciado em background")
-    
+
 @app.errorhandler(404)
 def not_found(e):
     return jsonify({"error": "not found"}), 404
@@ -178,11 +180,9 @@ def stop():
 
 @app.route("/api/trades")
 def api_trades():
-    try:
-        trades = getattr(main, "TRADE_HISTORY", [])
-        return ok({"trades": trades})
-    except Exception as e:
-        return fail(str(e))
+    return ok({
+        "trades": STATE["trades"]
+    })
 
 # ----------------------------------------
 # EQUITY (simplificado)
@@ -192,12 +192,13 @@ import random
 
 @app.route("/api/equity")
 def api_equity():
+
     return ok({
-        "equity": 1000 + random.uniform(-50, 50),
-        "btc_price": 60000 + random.uniform(-1000, 1000),
-        "cumulative_pct": random.uniform(-5, 5),
-        "max_drawdown": random.uniform(-3, 0),
-        "sharpe": random.uniform(0.5, 2.0)
+        "equity": STATE["equity"],
+        "btc_price": STATE["btc_price"],
+        "cumulative_pct": 0,
+        "max_drawdown": 0,
+        "sharpe": 0
     })
 
 # ----------------------------------------
