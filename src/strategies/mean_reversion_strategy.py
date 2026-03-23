@@ -165,10 +165,16 @@ def mean_reversion_strategy(
         print(f"📈 Trend: {trend} | Decision: {decision}")
 
     # 🚀 MODO SPOT (ESSENCIAL)
-    if bot is not None:
-        if decision == SELL and not getattr(bot, "position_open", False):
-            print("⚠️ SELL ignorado (modo spot)")
-            # NÃO força HOLD, só avisa
+    if decision == SELL and not getattr(bot, "position_open", False):
+
+        if zscore > dynamic_threshold:
+            print("💡 Esperando reversão para BUY")
+            decision = HOLD
+        
+    if decision == HOLD:
+        if zscore < dynamic_threshold * 0.5:
+            print("🔥 Entrada antecipada BUY")
+            decision = BUY
 
     return {
         "signal": decision,  # 🔥 antes era action
