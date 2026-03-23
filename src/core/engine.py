@@ -32,6 +32,15 @@ class TradingEngine:
     # -----------------------------------------
     def run_once(self):
         
+        balance_data = safe_api_call(
+            self.bot.client.get_asset_balance,
+            asset="USDT"
+        )
+
+        if not balance_data or float(balance_data["free"]) < 5:
+            print("💤 Sem capital suficiente — aguardando")
+            return
+        
         today = datetime.date.today()
 
         if not hasattr(self, "last_trade_day"):
@@ -80,16 +89,26 @@ class TradingEngine:
         # 📊 DADOS
 
         df = self.bot.get_data()
-        
-        rsi = get_rsi_safe(df)
 
         if df is None or df.empty:
             print("⚠️ Sem dados")
             return
 
+        rsi = get_rsi_safe(df)
+        
+        # 🔥 PADRONIZA COLUNA CLOSE
+        if "close" not in df.columns:
+            if "close_price" in df.columns:
+                df["close"] = df["close_price"]
+            elif "Close" in df.columns:
+                df["close"] = df["Close"]
+            else:
+                print("❌ Sem coluna close")
+                return
+
         # 🚫 FILTRO DE VOLATILIDADE (ROBUSTO)
 
-        volatility_series = df["close_price"].pct_change().rolling(10).std()
+        volatility_series = df["close"].pct_change().rolling(10).std()
 
         if volatility_series.isna().iloc[-1]:
             print("⚠️ Volatilidade inválida (dados insuficientes)")
@@ -132,8 +151,8 @@ class TradingEngine:
             return
 
         # 🔥 FILTRO GLOBAL SIMPLES
-        ma50 = float(df["close_price"].rolling(50).mean().iloc[-1])
-        price = float(df["close_price"].iloc[-1])
+        ma50 = float(df["close"].rolling(50).mean().iloc[-1])
+        price = float(df["close"].iloc[-1])
 
         trend = "UP" if price > ma50 else "DOWN"
 
@@ -352,7 +371,7 @@ class TradingEngine:
 
         base_score = decision["score"]
 
-        decision["score"] = confluence / max(factors, 1)
+        confluence_score = confluence / max(factors, 1)
 
         score = 0
 
@@ -369,8 +388,8 @@ class TradingEngine:
 
         if decision["signal"] == "SELL" and trend == "DOWN":
             score += 0.3
-                   
-        decision["score"] = (base_score * 0.3) + (score * 0.7)
+            
+        decision["score"] = (base_score * 0.3) + (score * 0.5) + (confluence_score * 0.2)
         
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
         
@@ -378,7 +397,7 @@ class TradingEngine:
 
         if decision["signal"] == "HOLD":
 
-            if decision["score"] > 0.5 and trend == "UP":
+            if decision["score"] > 0.6 and trend == "UP":
                 decision["signal"] = "BUY"
                 decision["force_trade"] = True
                 print("🔥 HOLD → BUY (score forte)")
@@ -410,7 +429,8 @@ class TradingEngine:
         decision["probability"] = min(prob, 1.0)
         
         if market_condition == "SIDEWAYS":
-            decision["probability"] *= 1.2
+            decision["probability"] *= 1.1
+            decision["probability"] = min(decision["probability"], 1.0)
 
         # -----------------------------------------
         # 🧠 PRIORIDADE DO TRADE
@@ -538,6 +558,13 @@ class TradingEngine:
                 trailing_dist = 0.8  
             
             trailing_price = self.bot.highest_price * (1 - trailing_dist / 100)
+            
+            # 🔥 SAÍDA POR FRAQUEZA
+
+            if decision["momentum"] is False and profit_pct > 0.5:
+                print("📉 Saída por fraqueza (momentum)")
+                self.bot.sell()
+                return  
 
             if price < trailing_price:
                 print("📉 Trailing Stop")
@@ -546,14 +573,7 @@ class TradingEngine:
                 
                 self.bot.sell()
                 self.trade_count_today += 1
-                return
-                
-            # 🔥 SAÍDA POR FRAQUEZA
-
-            if decision["momentum"] is False and profit_pct > 0.5:
-                print("📉 Saída por fraqueza (momentum)")
-                self.bot.sell()
-                return             
+                return           
             
             # STOP LOSS           
             
@@ -638,7 +658,7 @@ class TradingEngine:
         
         cooldown = 60
 
-        if decision["score"] > 0.7:
+        if decision["score"] > 0.6:
             cooldown = 30  # entra mais rápido em trade forte
 
         if time.time() - self.bot.last_trade_time < cooldown:
@@ -658,19 +678,12 @@ class TradingEngine:
             print("🚫 Score muito baixo")
             return
 
-        if action == "BUY":
-            
-            # 🚫 EVITA MÚLTIPLAS POSIÇÕES
-            if self.bot.position_open and decision["score"] < 0.7:
-                print("⚠️ Já em posição — só entra se for trade forte")
-                return
-            
-            if last3.iloc[-1] > last3.iloc[-2] or decision["volume_spike"] or decision["momentum"]:
-                print("📈 Micro tendência confirmada")
-            else:
-                if decision["probability"] < 0.6:
-                    print("🚫 Timing fraco")
-                    return
+        perf = self.get_symbol_performance(symbol)
+
+        # 🚫 BLOQUEIO INTELIGENTE
+        if perf["winrate"] < 0.4 and len(perf["last_results"]) > 10:
+            print(f"🚫 {symbol} bloqueado (ruim)")
+            return
 
         if action == "BUY":
 
@@ -693,12 +706,12 @@ class TradingEngine:
             perf = self.get_symbol_performance(symbol)
             winrate = perf["winrate"]
 
-            if winrate > 0.6:
-                risk_pct = 0.015
+            if winrate > 0.65:
+                risk_pct = 0.02   # agressivo
             elif winrate < 0.4:
-                risk_pct = 0.005
+                risk_pct = 0.005  # defensivo
             else:
-                risk_pct = 0.01
+                risk_pct = 0.01   # normal
 
             # -----------------------------------------
             # 💰 POSITION SIZE PROFISSIONAL
@@ -770,6 +783,12 @@ class TradingEngine:
             """)
 
             print(f"🟢 BUY EXECUTADO | qty={qty}")
+
+            perf = self.get_symbol_performance(symbol)
+
+            if perf["winrate"] > 0.65:
+                decision["score"] *= 1.2
+                decision["probability"] *= 1.1
 
             # -----------------------------------------
             # 🚀 EXECUÇÃO
@@ -843,6 +862,7 @@ class TradingEngine:
             perf["losses"] += 1
             perf["last_results"].append(0)
 
+        # mantém últimos 20 trades
         perf["last_results"] = perf["last_results"][-20:]
 
         total = len(perf["last_results"])
@@ -850,7 +870,12 @@ class TradingEngine:
         if total > 0:
             perf["winrate"] = sum(perf["last_results"]) / total
 
-        print(f"📊 {symbol} Winrate: {perf['winrate']:.2f}")
+        # 🔥 SCORE INTELIGENTE (NOVA PARTE)
+        avg = (perf["wins"] - perf["losses"]) / max(total, 1)
+
+        perf["score"] = (perf["winrate"] * 0.7) + (avg * 0.3)
+
+        print(f"📊 {symbol} | Winrate: {perf['winrate']:.2f} | Score: {perf['score']:.2f}")
         
     def get_symbol_performance(self, symbol):
 

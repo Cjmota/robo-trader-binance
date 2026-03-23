@@ -2,6 +2,7 @@ from src.data.data_provider import get_klines
 from src.utils.safe_api import safe_api_call
 from src.utils.binance_filters import get_symbol_filters, adjust_to_step_size
 from src.utils.binance_execution import validate_order
+from src.utils.report import generate_report
 import pandas as pd
 import datetime
 import logging
@@ -265,6 +266,11 @@ class BinanceTraderBot:
             main.TRADE_HISTORY.append(trade)
 
             print(f"✅ TRADE SALVO: {trade}")
+            
+            # 📊 GERAR RELATÓRIO AUTOMÁTICO
+
+            if len(main.TRADE_HISTORY) % 5 == 0:
+                generate_report(main.TRADE_HISTORY)
 
             # 🔥 ATUALIZA RISK MANAGER
             if self.risk_manager:

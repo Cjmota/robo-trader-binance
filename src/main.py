@@ -13,6 +13,7 @@ from src.exchange.BinanceTraderBot import BinanceTraderBot
 from src.scanner.market_scanner_pro import scan_market_pro
 from src.core.risk_manager import RiskManager
 from src.exchange.price_stream import PriceStream
+from src.utils.report import generate_report
 
 # -----------------------------------------
 # 🔐 ENV
@@ -137,6 +138,8 @@ def safe_trader_master_loop():
             print("❌ ERRO NO BOT:", e)
             traceback.print_exc()
             time.sleep(3)
+        
+    
 
 # -----------------------------------------
 # ▶️ START
