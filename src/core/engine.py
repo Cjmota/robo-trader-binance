@@ -149,6 +149,8 @@ class TradingEngine:
             stock_data=df
         )
         
+        original_signal = None
+        
         # -----------------------------------------
         # 🔥 FALLBACK INTELIGENTE (CORRETO)
 
