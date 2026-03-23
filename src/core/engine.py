@@ -9,6 +9,11 @@ from src import main
 import time
 import datetime
 
+def get_rsi_safe(df):
+    if "rsi" not in df.columns:
+        return None
+    return df["rsi"].iloc[-1]
+
 class TradingEngine:
 
     def __init__(self, bot, scanner, strategy_runner, decision_engine, config, risk_manager):
@@ -25,8 +30,6 @@ class TradingEngine:
         self.performance_by_symbol = {}
 
     # -----------------------------------------
-    # 🔁 CICLO ÚNICO
-
     def run_once(self):
         
         today = datetime.date.today()
@@ -149,8 +152,11 @@ class TradingEngine:
 
         if raw_decision is None or raw_decision == "HOLD":
 
-            if "rsi" in df.columns:
-                rsi = df["rsi"].iloc[-1]
+            rsi = get_rsi_safe(df)
+            
+            if rsi is None:
+                print("⚠️ RSI não disponível — ignorando fallback")
+            else:
 
                 if rsi > 60:
                     raw_decision = "SELL"
@@ -159,7 +165,7 @@ class TradingEngine:
                 elif rsi < 40:
                     raw_decision = "BUY"
                     print("🟢 Fallback BUY (RSI baixo)")
-        
+            
         # 🔥 EXTRAI SINAL REAL DA ESTRATÉGIA
         original_signal = None
 
@@ -302,17 +308,15 @@ class TradingEngine:
         # 🔄 FORÇAR ENTRADA EM LATERAL / HOLD
 
         if decision["signal"] == "HOLD" and not decision.get("force_trade"):
-            rsi = df["rsi"].iloc[-1]
-
-            if rsi < 42:
-                decision["signal"] = "BUY"
-                decision["probability"] = 0.35
-                print("🟢 HOLD → BUY (RSI baixo)")
-
-            elif rsi > 58:
-                decision["signal"] = "SELL"
-                decision["probability"] = 0.35
-                print("🔴 HOLD → SELL (RSI alto)")
+            rsi = get_rsi_safe(df)
+            
+            if rsi is None:
+                print("⚠️ RSI não disponível — ignorando força")
+            else:
+                if rsi < 42:
+                    decision["signal"] = "BUY"
+                elif rsi > 58:
+                    decision["signal"] = "SELL"
 
         # 🔥 BOOST PARA HOLD QUEBRADO
         if decision["signal"] != "HOLD" and decision["score"] == 0:
@@ -327,15 +331,22 @@ class TradingEngine:
 
         confluence = 0
 
-        # RSI (se existir)
-        if "rsi" in df.columns:
-            rsi = df["rsi"].iloc[-1]
-            
+        rsi = get_rsi_safe(df)
+
+        if rsi is None:
+            print("⚠️ RSI não disponível — ignorando RSI")
+        else:
             if decision["signal"] == "BUY" and rsi < 35:
                 confluence += 1
-                
+
             if decision["signal"] == "SELL" and rsi > 65:
                 confluence += 1
+            
+        if decision["signal"] == "BUY" and rsi < 35:
+            confluence += 1
+                
+        if decision["signal"] == "SELL" and rsi > 65:
+            confluence += 1
 
         # Tendência
         if decision["signal"] == "BUY" and trend == "UP":
