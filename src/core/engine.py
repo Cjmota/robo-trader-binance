@@ -14,6 +14,9 @@ def get_rsi_safe(df):
         return None
     return df["rsi"].iloc[-1]
 
+def adjust_qty_to_step(qty, step_size):
+        return float((qty // step_size) * step_size)  
+
 class TradingEngine:
 
     def __init__(self, bot, scanner, strategy_runner, decision_engine, config, risk_manager):
@@ -317,9 +320,7 @@ class TradingEngine:
 
         if decision["signal"] == "HOLD":
             print("⚠️ HOLD original — tentando extrair oportunidade")
-            
-        
-            
+                
         # -----------------------------------------
         # 🔄 FORÇAR ENTRADA EM LATERAL / HOLD
 
@@ -465,6 +466,12 @@ class TradingEngine:
         if action == "HOLD":
             return
 
+        perf = self.get_symbol_performance(symbol)
+
+        if perf["winrate"] < 0.45 and len(perf["last_results"]) >= 8:
+            print(f"🚫 {symbol} ignorado antes da entrada")
+            return
+
         # -----------------------------------------
         # 💰 EXECUÇÃO
 
@@ -476,6 +483,18 @@ class TradingEngine:
     # 💰 EXECUÇÃO
 
     def execute_trade(self, action, decision, df, symbol):
+        
+        balance_data = safe_api_call(
+            self.bot.client.get_asset_balance,
+            asset="USDT"
+        )
+        
+        if not balance_data or "free" not in balance_data:
+            print("❌ Erro ao obter saldo")
+            return
+
+        balance = float(balance_data["free"])        
+        capital = 0
 
         # 🔥 GARANTE CLOSE NO EXECUTOR
         if "close" not in df.columns:
@@ -557,14 +576,7 @@ class TradingEngine:
             else:
                 trailing_dist = 0.8  
             
-            trailing_price = self.bot.highest_price * (1 - trailing_dist / 100)
-            
-            # 🔥 SAÍDA POR FRAQUEZA
-
-            if decision["momentum"] is False and profit_pct > 0.5:
-                print("📉 Saída por fraqueza (momentum)")
-                self.bot.sell()
-                return  
+            trailing_price = self.bot.highest_price * (1 - trailing_dist / 100) 
 
             if price < trailing_price:
                 print("📉 Trailing Stop")
@@ -574,6 +586,13 @@ class TradingEngine:
                 self.bot.sell()
                 self.trade_count_today += 1
                 return           
+            
+            # 🔥 SAÍDA POR FRAQUEZA
+
+            if decision["momentum"] is False and profit_pct > 0.5:
+                print("📉 Saída por fraqueza (momentum)")
+                self.bot.sell()
+                return 
             
             # STOP LOSS           
             
@@ -645,172 +664,58 @@ class TradingEngine:
             return
 
         # -----------------------------------------
-        # 🔺 BUY (FILTROS)
-        
-        # evita topo extremo
-        if decision["signal"] == "BUY":
-            if distance > 0.025:
-                if decision["probability"] > 0.75:
-                    print("⚠️ Rompimento forte permitido")
-                else:
-                    print("🚫 Muito esticado")
-                    return
-        
-        cooldown = 60
+        # 🔥 LOT (OBRIGATÓRIO)
 
-        if decision["score"] > 0.6:
-            cooldown = 30  # entra mais rápido em trade forte
+        lot = self.bot.get_lot_size(symbol)
 
-        if time.time() - self.bot.last_trade_time < cooldown:
-            print("⏱️ Evitando overtrade")
+        if not lot:
+            print("❌ Não conseguiu obter LOT_SIZE")
             return
 
-        strong_entry = decision["score"] > 0.7
+        step_size = float(lot["stepSize"])
+        min_notional = float(lot["minNotional"])
+
+        # -----------------------------------------
+        # 🔧 AJUSTA QTY (CRÍTICO)
+
+        qty = adjust_qty_to_step(qty, step_size)
+
+        if qty <= 0:
+            print("❌ qty inválido após ajuste")
+            return
+
+        # -----------------------------------------
+        # 🔍 VALIDA BINANCE
+
+        notional = qty * price
+
+        if notional < min_notional:
+            print(f"⚠️ Ordem abaixo do mínimo ({min_notional}) → {notional}")
+            return
+
+        # -----------------------------------------
+        # 🧪 DEBUG FINAL
+
+        print(f"""
+        🧪 DEBUG FINAL
+        symbol={symbol}
+        price={price}
+        balance={balance}
+        capital={capital}
+        qty={qty}
+        notional={notional}
+        """)
+
+        # -----------------------------------------
+        # 🚀 EXECUTA (AGORA SIM)
+
+        self.bot.buy(qty)
+        self.trade_count_today += 1
+
+        print(f"🟢 BUY REAL EXECUTADO | qty={qty}")                             
+
         
-        if not strong_entry:
-            if decision["probability"] < 0.35 and decision["score"] < 0.3:
-                print("🚫 Entrada fraca")
-                return
-            
-        last3 = df["close"].iloc[-3:]
-
-        if decision["score"] < 0.25:
-            print("🚫 Score muito baixo")
-            return
-
-        perf = self.get_symbol_performance(symbol)
-
-        # 🚫 BLOQUEIO INTELIGENTE
-        if perf["winrate"] < 0.4 and len(perf["last_results"]) > 10:
-            print(f"🚫 {symbol} bloqueado (ruim)")
-            return
-
-        if action == "BUY":
-
-            if self.bot.position_open:
-                print("⚠️ Já está em posição")
-                return
-
-            # candle filtro
-            last_close = df["close"].iloc[-1]
-            prev_close = df["close"].iloc[-2]
-
-            # -----------------------------------------
-            # 💰 POSITION SIZE
-
-            balance_data = safe_api_call(
-                self.bot.client.get_asset_balance,
-                asset="USDT"
-            )
-            
-            perf = self.get_symbol_performance(symbol)
-            winrate = perf["winrate"]
-
-            if winrate > 0.65:
-                risk_pct = 0.02   # agressivo
-            elif winrate < 0.4:
-                risk_pct = 0.005  # defensivo
-            else:
-                risk_pct = 0.01   # normal
-
-            # -----------------------------------------
-            # 💰 POSITION SIZE PROFISSIONAL
-
-            if not balance_data or "free" not in balance_data:
-                print("❌ Erro ao obter saldo")
-                return
-
-            balance = float(balance_data["free"])
-
-            risk_amount = balance * risk_pct
-
-            # stop estimado (1%)
-            stop_distance = 0.01
-
-            capital = risk_amount / stop_distance
-
-            # limite de segurança
-            capital = min(capital, balance * 0.2)
-
-            if capital < 2:
-                print("⚠️ Capital muito baixo")
-                return
-
-            # -----------------------------------------
-            # 💰 CALCULAR QUANTIDADE (ROBUSTO)
-            
-            try:
-                qty = capital / price
-                qty = float(qty)  # 🔥 FORÇA FLOAT
-            except Exception as e:
-                print("❌ Erro cálculo qty:", e)
-                return
-
-            # 🚫 validação básica
-            if qty is None or qty <= 0:
-                print("❌ Quantidade inválida:", qty)
-                return
-
-            # -----------------------------------------
-            # 🚫 CAPITAL MÍNIMO (BINANCE)
-            
-            if capital < 5:
-                print("⚠️ Capital insuficiente (<5 USDT)")
-                return
-            
-            # -----------------------------------------
-            # 🚫 QTY MÍNIMA
-
-            if qty < 0.0001:
-                print("⚠️ Qty muito pequena")
-                return
-
-            # -----------------------------------------
-            # 🔧 AJUSTE DE PRECISÃO (ANTI-ERRO BINANCE)
-
-            qty = round(qty, 6)
-            
-            # -----------------------------------------
-            # 🧪 DEBUG PROFISSIONAL
-
-            print(f"""
-            🧪 DEBUG ORDER
-            symbol={symbol}
-            price={price}
-            balance={balance}
-            capital={capital}
-            qty={qty}
-            """)
-
-            print(f"🟢 BUY EXECUTADO | qty={qty}")
-
-            perf = self.get_symbol_performance(symbol)
-
-            if perf["winrate"] > 0.65:
-                decision["score"] *= 1.2
-                decision["probability"] *= 1.1
-
-            # -----------------------------------------
-            # 🚀 EXECUÇÃO
-            
-            if qty is None:
-                print("❌ qty veio None — abortando ordem")
-                return
-
-            if not isinstance(qty, (int, float)):
-                print(f"❌ qty inválido: {qty}")
-                return
-
-            if qty <= 0:
-                print(f"❌ qty <= 0: {qty}")
-                return
-            
-            self.bot.buy(qty)
-            self.trade_count_today += 1
-                    
-    # -----------------------------------------
-    # 🛡️ POSITION SIZE
-
+                            
     def get_position_size(self):
 
         try:
