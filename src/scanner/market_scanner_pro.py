@@ -1,6 +1,5 @@
 import pandas as pd
 
-
 def scan_market_pro(client):
 
     print("🔎 Scanner PRO otimizado...")
@@ -27,7 +26,8 @@ def scan_market_pro(client):
 
     print(f"📊 Candidatos: {len(candidates)}")
 
-    results = []
+    ranking = []
+    smart_money = []
 
     # -----------------------------------------
     # 2️⃣ ANÁLISE (limitada + eficiente)
@@ -77,21 +77,66 @@ def scan_market_pro(client):
             # volatilidade saudável
             if volatility > 0.002:
                 score += 1.5
+                
+            # 🔥 DETECÇÃO DE SINAL (Smart Money)
+            signal = None
 
-            # filtro final
-            if score >= 4.5:
-                results.append((symbol, score))
+            if price_change > 0 and vol_ratio > 1.5:
+                signal = "BUY"
+            elif price_change < 0 and vol_ratio > 1.5:
+                signal = "SELL"
 
-        except Exception:
+            # 🔥 SE TEM SINAL → PRIORIDADE TOTAL
+            if signal:
+
+                smart_money.append(f"{signal} {symbol}")
+
+                ranking.append({
+                    "symbol": symbol,
+                    "score": round(score * 10) if score else 50,
+                    "momentum": price_change > 0,
+                    "volume": int(current_volume)
+                })
+
+            # 🔥 SENÃO, entra por score
+            elif score >= 4.0:
+
+                ranking.append({
+                    "symbol": symbol,
+                    "score": round(score * 10),
+                    "momentum": price_change > 0,
+                    "volume": int(current_volume)
+                })
+
+        except Exception as e:
+            print(f"Erro em {symbol}: {e}")
             continue
 
     # -----------------------------------------
     # 3️⃣ RANKING
     # -----------------------------------------
-    results.sort(key=lambda x: x[1], reverse=True)
+    # ordenar ranking
+    ranking = sorted(ranking, key=lambda x: x["score"], reverse=True)
 
-    top_symbols = [r[0] for r in results[:10]]
+    # limitar top 10
+    ranking = ranking[:10]
 
-    print(f"🔥 TOP: {top_symbols}")
+    print(f"🔥 RANKING: {[r['symbol'] for r in ranking]}")
+    print(f"💰 SMART MONEY: {smart_money}")
 
-    return top_symbols
+    # fallback (evita vazio)
+    if not ranking and smart_money:
+        for sm in smart_money:
+            symbol = sm.split()[1]
+            ranking.append({
+                "symbol": symbol,
+                "score": 50,
+                "momentum": True,
+                "volume": 0
+            })
+
+    # retorno padrão API
+    return {
+        "ranking": ranking,
+        "smart_money": smart_money
+    }
