@@ -53,7 +53,9 @@ class DecisionEngine:
         # -----------------------------------------
         # 🧠 REGRA 5: decisão final
 
-        if abs(score) >= 0.3:
+        threshold = 0.25 if prob > 0.7 else 0.3
+
+        if abs(score) >= threshold:
             return {
                 "signal": signal,
                 "score": round(score, 2),
@@ -61,7 +63,11 @@ class DecisionEngine:
             }
 
         print("🚫 Score final muito baixo")
-        return {"signal": None, "score": 0, "probability": prob}
+        return {
+            "signal": signal if prob > 0.6 else None,
+            "score": round(score, 2),
+            "probability": prob
+        }
     
     # -----------------------------------------
     # 🔒 FILTROS
@@ -101,20 +107,13 @@ class DecisionEngine:
 
     def quality_filter(self, score, probability, signal):
 
-        # 🔥 corrige prob para SELL
-        if signal == SELL:
-            probability = 1 - probability
-
         print(f"📊 Score: {score} | Prob: {probability:.2f}")
-
-        # 🚫 incoerência total
-        if score < 0 and signal == BUY:
-            print("⛔ Direção incoerente")
-            return False
-
+        
         if score > 0 and signal == SELL:
-            print("⛔ Direção incoerente")
-            return False
+            print("⚠️ Score inconsistente com SELL (permitido)")
+            
+        if score < 0 and signal == BUY:
+            print("⚠️ Score inconsistente com BUY (permitido)")
 
         # 🚫 score muito ruim
         if abs(score) < 0.1:
