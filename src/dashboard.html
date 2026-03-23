@@ -1233,8 +1233,6 @@
                 }, 800)
             }
 
-            
-
             async function stopBot() {
 
                 if(APP_STATE.loading) return
@@ -1342,6 +1340,7 @@
             document.getElementById("cfg_loss_cooldown").value =
                 data.RISK.LOSS_COOLDOWN
         }
+        
             async function saveConfig() {
 
                 let config = {

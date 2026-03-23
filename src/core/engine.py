@@ -548,6 +548,14 @@ class TradingEngine:
             entry = float(self.bot.entry_price)
             profit_pct = (price - entry) / entry * 100
             
+            # 🔥 STOP RÁPIDO (anti travamento)
+            if profit_pct < -1.0:
+                print("🛑 Stop rápido (anti-travamento)")
+                self.update_performance(symbol, profit_pct)
+                self.bot.sell()
+                self.trade_count_today += 1
+                return
+            
             if not hasattr(self.bot, "partial_taken"):
                 self.bot.partial_taken = False
 
@@ -615,14 +623,6 @@ class TradingEngine:
                 self.bot.sell()
                 self.trade_count_today += 1
                 return
-
-        # 🔥 STOP RÁPIDO (anti travamento)
-        if profit_pct < -1.0:
-            print("🛑 Stop rápido (anti-travamento)")
-            self.update_performance(symbol, profit_pct)
-            self.bot.sell()
-            self.trade_count_today += 1
-            return
         
         # ⏰ tempo máximo em posição
         max_hold_time = 60 * 30  # 30 minutos
