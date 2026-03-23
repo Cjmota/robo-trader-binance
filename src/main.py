@@ -2,6 +2,7 @@ import os
 import json
 import time
 import random
+import logging
 from dotenv import load_dotenv
 from binance.client import Client
 
@@ -15,6 +16,12 @@ from src.exchange.price_stream import PriceStream
 
 # -----------------------------------------
 # 🔐 ENV
+
+logging.basicConfig(
+    filename="logs/trading_bot.log",
+    level=logging.INFO,
+    format="%(asctime)s - %(levelname)s - %(message)s"
+)
 
 load_dotenv()
 

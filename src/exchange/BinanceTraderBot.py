@@ -4,6 +4,7 @@ from src.utils.binance_filters import get_symbol_filters, adjust_to_step_size
 from src.utils.binance_execution import validate_order
 import pandas as pd
 import datetime
+import logging
 import time
 
 from src import main
@@ -161,6 +162,25 @@ class BinanceTraderBot:
 
             print(f"🚀 BUY {self.symbol} @ {price} | qty={executed_qty} | balance_used≈{executed_qty * price:.2f}")
 
+            log_msg = f"""
+            --------------------
+            ORDEM ENVIADA:
+            Status: {order.get('status')}
+            Side: BUY
+            Ativo: {self.symbol}
+            Quantidade: {executed_qty}
+            Preço executado: {price}
+            Valor total: {order.get('cummulativeQuoteQty')}
+            Type: {order.get('type')}
+            Data/Hora: {datetime.datetime.now()}
+
+            Complete_order:
+            {order}
+            -----------------------------------------
+            """
+
+            logging.info(log_msg)
+
             return order
 
         except Exception as e:
@@ -251,6 +271,26 @@ class BinanceTraderBot:
                 self.risk_manager.register_trade(profit)
 
             print(f"🔻 SELL {self.symbol} @ {price} | qty={quantity} | PnL: {profit:.2f}")
+
+            log_msg = f"""
+            --------------------
+            ORDEM ENVIADA:
+            Status: {order.get('status')}
+            Side: SELL
+            Ativo: {self.symbol}
+            Quantidade: {quantity}
+            Preço executado: {exec_price}
+            Valor total: {order.get('cummulativeQuoteQty')}
+            PnL: {profit}
+            Type: {order.get('type')}
+            Data/Hora: {datetime.datetime.now()}
+
+            Complete_order:
+            {order}
+            -----------------------------------------
+            """
+
+            logging.info(log_msg)
 
             # reset posição
             self.position_open = False
