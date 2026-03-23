@@ -261,8 +261,7 @@ class TradingEngine:
                 print(f"♻️ Recuperando sinal da estratégia: {recovered_signal}")     
 
         # 🔍 DEBUG PROFISSIONAL (ANTES DOS FILTROS)
-        print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
-
+                
         # 🚀 MOSTRA OPORTUNIDADE (ANTES DOS FILTROS)
         if decision["signal"] != "HOLD":
             print(f"🚀 POSSÍVEL TRADE → {decision}")
@@ -302,20 +301,18 @@ class TradingEngine:
         # -----------------------------------------
         # 🔄 FORÇAR ENTRADA EM LATERAL / HOLD
 
-        if decision["signal"] == "HOLD":
+        if decision["signal"] == "HOLD" and not decision.get("force_trade"):
+            rsi = df["rsi"].iloc[-1]
 
-            if "rsi" in df.columns:
-                rsi = df["rsi"].iloc[-1]
+            if rsi < 42:
+                decision["signal"] = "BUY"
+                decision["probability"] = 0.35
+                print("🟢 HOLD → BUY (RSI baixo)")
 
-                if rsi < 42:
-                    decision["signal"] = "BUY"
-                    decision["probability"] = 0.35
-                    print("🟢 HOLD → BUY (RSI baixo)")
-
-                elif rsi > 58:
-                    decision["signal"] = "SELL"
-                    decision["probability"] = 0.35
-                    print("🔴 HOLD → SELL (RSI alto)")
+            elif rsi > 58:
+                decision["signal"] = "SELL"
+                decision["probability"] = 0.35
+                print("🔴 HOLD → SELL (RSI alto)")
 
         # 🔥 BOOST PARA HOLD QUEBRADO
         if decision["signal"] != "HOLD" and decision["score"] == 0:
@@ -363,6 +360,8 @@ class TradingEngine:
         if "rsi" not in df.columns:
             factors -= 1
 
+        base_score = decision["score"]
+
         decision["score"] = confluence / max(factors, 1)
 
         # 🔥 FILTRO DE QUALIDADE PROFISSIONAL
@@ -383,13 +382,29 @@ class TradingEngine:
 
         if decision["signal"] == "SELL" and trend == "DOWN":
             score += 0.3
-            
-        decision["score"] = (decision["score"] * 0.3) + (score * 0.7)
+                   
+        decision["score"] = (base_score * 0.3) + (score * 0.7)
+        
+        print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
+        
+        # 🔥 DESTRAVAR HOLD COM SCORE (CRÍTICO)
+
+        if decision["signal"] == "HOLD":
+
+            if decision["score"] > 0.5 and trend == "UP":
+                decision["signal"] = "BUY"
+                decision["force_trade"] = True
+                print("🔥 HOLD → BUY (score forte)")
+
+            elif decision["score"] < 0.3 and trend == "DOWN":
+                decision["signal"] = "SELL"
+                decision["force_trade"] = True
+                print("🔥 HOLD → SELL (score forte)")
         
         if decision["score"] < 0.1:
             print("⚠️ Score baixo, mas permitido")
 
-        if not decision["momentum"] and decision["probability"] < 0.35:
+        if not decision["momentum"] and decision["probability"] < 0.25:
             print("⚠️ Sem momentum forte(ajustado)")
             return
         
@@ -423,8 +438,8 @@ class TradingEngine:
 
         decision["priority"] = priority
 
-        if decision["priority"] < 0.45:
-            print("⚠️ Trade fraco (liberado)")
+        if decision["priority"] < 0.35 and not decision.get("force_trade"):
+            print("⚠️ Trade fraco")
             return
 
         # -----------------------------------------
@@ -623,6 +638,10 @@ class TradingEngine:
                 return
             
         last3 = df["close"].iloc[-3:]
+
+        if decision["score"] < 0.25:
+            print("🚫 Score muito baixo")
+            return
 
         if action == "BUY":
             if last3.iloc[-1] > last3.iloc[-2] or decision["volume_spike"] or decision["momentum"]:
