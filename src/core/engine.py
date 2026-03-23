@@ -40,6 +40,9 @@ class TradingEngine:
             asset="USDT"
         )
 
+        if self.trade_count_today == 0:
+            self.auto_clear_dust()
+
         if not balance_data or float(balance_data["free"]) < 5:
             print("💤 Sem capital suficiente — aguardando")
             return
@@ -491,8 +494,6 @@ class TradingEngine:
 
         print(f"🧠 decision raw: {decision}")
 
-    # -----------------------------------------
-    # 💰 EXECUÇÃO
 
     def execute_trade(self, action, decision, df, symbol):
         
@@ -615,6 +616,26 @@ class TradingEngine:
                 self.trade_count_today += 1
                 return
 
+        # 🔥 STOP RÁPIDO (anti travamento)
+        if profit_pct < -1.0:
+            print("🛑 Stop rápido (anti-travamento)")
+            self.update_performance(symbol, profit_pct)
+            self.bot.sell()
+            self.trade_count_today += 1
+            return
+        
+        # ⏰ tempo máximo em posição
+        max_hold_time = 60 * 30  # 30 minutos
+
+        if hasattr(self.bot, "entry_time"):
+            if time.time() - self.bot.entry_time > max_hold_time:
+                print("⏰ Saindo por tempo (capital preso)")
+                self.update_performance(symbol, profit_pct)
+                self.bot.sell()
+                self.trade_count_today += 1
+                return
+       
+
         # -----------------------------------------
         # 🚫 BLOQUEIO SPOT (ESSENCIAL)
 
@@ -673,6 +694,10 @@ class TradingEngine:
 
         if winrate < 0.3 and len(perf["last_results"]) > 10:
             print(f"🚫 Ignorando {symbol} (ruim)")
+            return
+
+        if decision["score"] < 0.4:
+            print("🚫 Entrada fraca (anti-travamento)")
             return
 
         # -------------------BUY----------------------
@@ -776,11 +801,12 @@ class TradingEngine:
         # 🚀 EXECUTA
 
         self.bot.buy(qty)
+        self.bot.entry_time = time.time()
         self.trade_count_today += 1
+        
 
         print(f"🟢 BUY REAL EXECUTADO | qty={qty}")
-  
-                            
+                    
     def get_position_size(self):
 
         try:
@@ -885,3 +911,23 @@ class TradingEngine:
         ranking.sort(key=lambda x: x[1], reverse=True)
 
         return [s[0] for s in ranking[:top_n]]
+    
+    def auto_clear_dust(self):
+        account = self.bot.client.get_account()
+
+        for asset in account["balances"]:
+            free = float(asset["free"])
+            asset_name = asset["asset"]
+
+            if asset_name == "USDT":
+                continue
+
+            if free > 0:
+                symbol = asset_name + "USDT"
+
+                try:
+                    print(f"🧹 Limpando {asset_name}")
+                    self.bot.set_symbol(symbol)
+                    self.bot.sell(free)
+                except Exception as e:
+                    print(f"Erro ao limpar {asset_name}: {e}")
