@@ -188,14 +188,16 @@ def api_trades():
 # EQUITY (simplificado)
 # ----------------------------------------
 
+import random
+
 @app.route("/api/equity")
 def api_equity():
     return ok({
-        "equity": 1000,
-        "btc_price": 60000,
-        "cumulative_pct": 2.5,
-        "max_drawdown": -1.2,
-        "sharpe": 1.5
+        "equity": 1000 + random.uniform(-50, 50),
+        "btc_price": 60000 + random.uniform(-1000, 1000),
+        "cumulative_pct": random.uniform(-5, 5),
+        "max_drawdown": random.uniform(-3, 0),
+        "sharpe": random.uniform(0.5, 2.0)
     })
 
 # ----------------------------------------
