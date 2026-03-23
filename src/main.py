@@ -65,23 +65,23 @@ last_scan = 0
 cached_symbols = []
 
 def get_best_symbol():
-    global last_scan, cached_symbols
 
-    client = get_client()
+    data = scan_market_pro(client)
 
-    if time.time() - last_scan > 120:
-        try:
-            cached_symbols = scan_market_pro(client)
-            last_scan = time.time()
-        except Exception as e:
-            print("⚠️ Erro no scanner:", e)
-            return None
-
-    if not cached_symbols:
-        print("⚠️ Scanner vazio")
+    if not data:
         return None
 
-    return cached_symbols[0]
+    ranking = data.get("ranking", [])
+
+    if not ranking:
+        print("⚠️ Nenhum ativo encontrado")
+        return None
+
+    symbol = ranking[0].get("symbol")
+
+    print(f"🎯 Melhor ativo: {symbol}")
+
+    return symbol
 
 # -----------------------------------------
 # 🤖 BOT
