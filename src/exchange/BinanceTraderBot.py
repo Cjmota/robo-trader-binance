@@ -107,6 +107,10 @@ class BinanceTraderBot:
             print("⚠️ Sem preço → cancelando BUY")
             return None
         
+        if quantity is None:
+            print("❌ quantity None antes da validação")
+            return None
+        
         # ----------------------------------------
         #VALIDAÇÃO BINANCE
         quantity, _, error = validate_order(

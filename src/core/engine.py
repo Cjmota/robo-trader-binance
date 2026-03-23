@@ -753,6 +753,18 @@ class TradingEngine:
             # -----------------------------------------
             # 🚀 EXECUÇÃO
             
+            if qty is None:
+                print("❌ qty veio None — abortando ordem")
+                return
+
+            if not isinstance(qty, (int, float)):
+                print(f"❌ qty inválido: {qty}")
+                return
+
+            if qty <= 0:
+                print(f"❌ qty <= 0: {qty}")
+                return
+            
             self.bot.buy(qty)
             self.trade_count_today += 1
                     

@@ -51,12 +51,14 @@ def get_all_filters(client, symbol):
 # 🔧 AJUSTES
 
 def adjust_quantity(qty, step):
-    def adjust_quantity(qty, step):
-        if step <= 0:
-            return qty
+    if qty is None:
+        return None
 
-        precision = int(round(-math.log(step, 10), 0))
-        return float(round(qty - (qty % step), precision))
+    if step <= 0:
+        return qty
+
+    precision = int(round(-math.log(step, 10), 0))
+    return float(round(qty - (qty % step), precision))
 
 def adjust_price(price, tick):
     precision = int(round(-math.log(tick, 10), 0))
@@ -80,8 +82,24 @@ def validate_order(client, symbol, qty, price):
     if not lot:
         return 0, price, "LOT_SIZE missing"
 
+    # 🔥 PROTEÇÃO ANTI-CRASH
+    if qty is None:
+        return None, price, "qty is None"
+
+    if not isinstance(qty, (int, float)):
+        return None, price, f"qty inválido: {qty}"
+
+    if qty <= 0:
+        return None, price, "qty <= 0"
+
     # 🔧 ajusta quantidade
     qty = adjust_quantity(qty, lot["stepSize"])
+    
+    if qty is None:
+        return None, price, "qty inválido após ajuste"
+    
+    if qty == 0:
+        return 0, price, "qty virou 0 após ajuste"    
 
     if qty < lot["minQty"]:
         return 0, price, "Qty < minQty"
