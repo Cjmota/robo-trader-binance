@@ -80,6 +80,8 @@ class TradingEngine:
         # 📊 DADOS
 
         df = self.bot.get_data()
+        
+        rsi = get_rsi_safe(df)
 
         if df is None or df.empty:
             print("⚠️ Sem dados")
@@ -151,8 +153,6 @@ class TradingEngine:
         # 🔥 FALLBACK INTELIGENTE (CORRETO)
 
         if raw_decision is None or raw_decision == "HOLD":
-
-            rsi = get_rsi_safe(df)
             
             if rsi is None:
                 print("⚠️ RSI não disponível — ignorando fallback")
@@ -308,7 +308,6 @@ class TradingEngine:
         # 🔄 FORÇAR ENTRADA EM LATERAL / HOLD
 
         if decision["signal"] == "HOLD" and not decision.get("force_trade"):
-            rsi = get_rsi_safe(df)
             
             if rsi is None:
                 print("⚠️ RSI não disponível — ignorando força")
@@ -331,22 +330,15 @@ class TradingEngine:
 
         confluence = 0
 
-        rsi = get_rsi_safe(df)
-
         if rsi is None:
             print("⚠️ RSI não disponível — ignorando RSI")
         else:
-            if decision["signal"] == "BUY" and rsi < 35:
-                confluence += 1
+            if rsi is not None:
+                if decision["signal"] == "BUY" and rsi < 35:
+                    confluence += 1
 
-            if decision["signal"] == "SELL" and rsi > 65:
-                confluence += 1
-            
-        if decision["signal"] == "BUY" and rsi < 35:
-            confluence += 1
-                
-        if decision["signal"] == "SELL" and rsi > 65:
-            confluence += 1
+                if decision["signal"] == "SELL" and rsi > 65:
+                    confluence += 1
 
         # Tendência
         if decision["signal"] == "BUY" and trend == "UP":
@@ -368,15 +360,12 @@ class TradingEngine:
 
         factors = 4
 
-        if "rsi" not in df.columns:
+        if rsi is None:
             factors -= 1
 
         base_score = decision["score"]
 
         decision["score"] = confluence / max(factors, 1)
-
-        # 🔥 FILTRO DE QUALIDADE PROFISSIONAL
-        # 🧠 SCORE INTELIGENTE
 
         score = 0
 
@@ -455,6 +444,12 @@ class TradingEngine:
 
         # -----------------------------------------
         # 🎯 DECISÃO FINAL
+
+        # 🚫 FILTRO FINAL DE QUALIDADE (CORRETO)
+
+        if decision["score"] < 0.25 and decision["probability"] < 0.4:
+            print("🚫 Entrada fraca (final)")
+            return
 
         action = decision["signal"]
 
