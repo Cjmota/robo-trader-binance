@@ -1058,15 +1058,22 @@
                 }
 
                 //auto scale
-                profitChart.options.scales.y.min = Math.min(...equityHistory) - 1;
-                profitChart.options.scales.y.max = Math.max(...equityHistory) + 1;
-                
+                if (equityHistory.length > 0) {
+                    profitChart.options.scales.y.min = Math.min(...equityHistory) - 1;
+                    profitChart.options.scales.y.max = Math.max(...equityHistory) + 1;
+                }
                 //render
                 profitChart.update('active');
 
                 document.getElementById("statCumulative").innerText = data.cumulative_pct + "%";
                 document.getElementById("statDrawdown").innerText = data.max_drawdown + "%";
                 document.getElementById("statSharpe").innerText = data.sharpe;
+
+                equityHistory.push(Math.random() * 10);
+                btcHistory.push(Math.random() * 10);
+                buyHoldHistory.push(Math.random() * 10);
+
+                console.log("EQUITY API:", data);
             }
 
             function movingAverage(data, period){
@@ -1340,7 +1347,7 @@
             document.getElementById("cfg_loss_cooldown").value =
                 data.RISK.LOSS_COOLDOWN
         }
-        
+
             async function saveConfig() {
 
                 let config = {
