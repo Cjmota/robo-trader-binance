@@ -401,8 +401,8 @@ class TradingEngine:
                 decision["force_trade"] = True
                 print("🔥 HOLD → SELL (score forte)")
         
-        if decision["score"] < 0.1:
-            print("⚠️ Score baixo, mas permitido")
+        if decision["score"] < 0.15:
+            print("⚠️ Score muito baixo")
 
         if not decision["momentum"] and decision["probability"] < 0.25:
             print("⚠️ Sem momentum forte(ajustado)")
