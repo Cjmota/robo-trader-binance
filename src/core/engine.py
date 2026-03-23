@@ -87,6 +87,18 @@ class TradingEngine:
             return
 
         self.bot.set_symbol(symbol)
+        
+        perf = self.get_symbol_performance(symbol)
+
+        if len(perf["last_results"]) >= 8 and perf["winrate"] < 0.45:
+            print(f"🚫 {symbol} bloqueado (ruim)")
+            return
+        
+        top_symbols = self.get_top_symbols()
+
+        if top_symbols and symbol not in top_symbols:
+            print(f"🚫 {symbol} fora do TOP {len(top_symbols)}")
+            return
 
         # -----------------------------------------
         # 📊 DADOS
@@ -663,8 +675,64 @@ class TradingEngine:
             print(f"🚫 Ignorando {symbol} (ruim)")
             return
 
+        # -------------------BUY----------------------
+        # 💰 POSITION SIZE
+
+        if not balance_data or "free" not in balance_data:
+            print("❌ Erro ao obter saldo")
+            return
+
+        balance = float(balance_data["free"])
+
+        if balance < 5:
+            print("⚠️ Saldo insuficiente (<5 USDT)")
+            return
+
+        # 🔥 RISCO ADAPTATIVO
+        perf = self.get_symbol_performance(symbol)
+        winrate = perf["winrate"]
+
+        if winrate > 0.65:
+            risk_pct = 0.02
+        elif winrate < 0.4:
+            risk_pct = 0.005
+        else:
+            risk_pct = 0.01
+
         # -----------------------------------------
-        # 🔥 LOT (OBRIGATÓRIO)
+        # 🚀 INTELIGÊNCIA (ITEM 5)
+
+        capital = balance * risk_pct
+
+        score = self.get_symbol_score(symbol)
+
+        if score > 0.7:
+            capital *= 1.3
+            print(f"🚀 Aumentando lote ({symbol} forte)")
+
+        elif score < 0.4:
+            capital *= 0.7
+            print(f"⚠️ Reduzindo lote ({symbol} fraca)")
+
+        # -----------------------------------------
+        # 🚫 CAPITAL MÍNIMO
+
+        if capital < 5:
+            print("⚠️ Capital muito baixo")
+            return
+
+        # -----------------------------------------
+        # 🔢 CALCULA QTY
+
+        capital = capital * 0.99
+        qty = capital / price
+
+        if qty <= 0:
+            print("❌ qty inválido")
+            return
+
+        # -----------------------------------------
+        # 🔥 LOT (AGORA SIM)
 
         lot = self.bot.get_lot_size(symbol)
 
@@ -675,9 +743,6 @@ class TradingEngine:
         step_size = float(lot["stepSize"])
         min_notional = float(lot["minNotional"])
 
-        # -----------------------------------------
-        # 🔧 AJUSTA QTY (CRÍTICO)
-
         qty = adjust_qty_to_step(qty, step_size)
 
         if qty <= 0:
@@ -685,7 +750,7 @@ class TradingEngine:
             return
 
         # -----------------------------------------
-        # 🔍 VALIDA BINANCE
+        # 🔍 VALIDAÇÃO FINAL
 
         notional = qty * price
 
@@ -694,7 +759,7 @@ class TradingEngine:
             return
 
         # -----------------------------------------
-        # 🧪 DEBUG FINAL
+        # 🧪 DEBUG
 
         print(f"""
         🧪 DEBUG FINAL
@@ -704,17 +769,17 @@ class TradingEngine:
         capital={capital}
         qty={qty}
         notional={notional}
+        score={score}
         """)
 
         # -----------------------------------------
-        # 🚀 EXECUTA (AGORA SIM)
+        # 🚀 EXECUTA
 
         self.bot.buy(qty)
         self.trade_count_today += 1
 
-        print(f"🟢 BUY REAL EXECUTADO | qty={qty}")                             
-
-        
+        print(f"🟢 BUY REAL EXECUTADO | qty={qty}")
+  
                             
     def get_position_size(self):
 
@@ -793,3 +858,30 @@ class TradingEngine:
             }
 
         return self.performance_by_symbol[symbol]
+    
+    def get_symbol_score(self, symbol):
+        perf = self.get_symbol_performance(symbol)
+
+        total = len(perf["last_results"])
+
+        if total < 5:
+            return 0.5  # neutro
+
+        winrate = perf["winrate"]
+
+        streak = sum(perf["last_results"][-3:])  # últimos 3 trades
+
+        score = (winrate * 0.7) + (streak / 3 * 0.3)
+
+        return score
+    
+    def get_top_symbols(self, top_n=3):
+        ranking = []
+
+        for symbol in self.performance_by_symbol:
+            score = self.get_symbol_score(symbol)
+            ranking.append((symbol, score))
+
+        ranking.sort(key=lambda x: x[1], reverse=True)
+
+        return [s[0] for s in ranking[:top_n]]
