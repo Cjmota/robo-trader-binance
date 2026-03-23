@@ -927,7 +927,10 @@ class TradingEngine:
 
                 try:
                     print(f"🧹 Limpando {asset_name}")
+
                     self.bot.set_symbol(symbol)
-                    self.bot.sell(free)
+                    self.bot.quantity = free  # 🔥 AJUSTE AQUI
+                    self.bot.sell()
+
                 except Exception as e:
                     print(f"Erro ao limpar {asset_name}: {e}")
