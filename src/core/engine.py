@@ -688,6 +688,7 @@ class TradingEngine:
             
             try:
                 qty = capital / price
+                qty = float(qty)  # 🔥 FORÇA FLOAT
             except Exception as e:
                 print("❌ Erro cálculo qty:", e)
                 return

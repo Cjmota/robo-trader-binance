@@ -73,10 +73,31 @@ class BinanceTraderBot:
             return None
 
         # -----------------------------------------
-        # 🔧 AJUSTE QTD
+        # 🔧 VALIDAÇÃO QTD
 
-        price = self.get_price()
+        if quantity is None:
+            print("❌ BUY cancelado: quantity None")
+            return None
 
+        if not isinstance(quantity, (int, float)):
+            print("❌ BUY cancelado: quantity inválido")
+            return None
+
+        if quantity <= 0:
+            print("❌ BUY cancelado: quantity <= 0")
+            return None
+
+        quantity = float(quantity)
+        quantity = round(quantity, 6)
+
+        # -----------------------------------------
+        # 🔧 AJUSTE BINANCE
+
+        quantity = self._adjust_quantity(quantity)
+
+        if quantity <= 0:
+            print("❌ Quantity inválida após ajuste")
+            return None
         quantity, _, error = validate_order(
             self.client,
             self.symbol,
