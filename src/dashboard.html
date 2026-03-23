@@ -1007,16 +1007,26 @@
                     page === "trades" ? "block" : "none";
 
                 if (page === "performance") {
-                    setTimeout(() => {
-                        initProfitChart();
-                        initTradeChart();
-                        initDrawdownChart();
-                        initProfitTradeChart();
-                        initProfitHistogramChart();
-                        initProfitHourChart();
-                        updateEquity();
-                        updateTradeStats();
-                    }, 200);
+
+                    document.getElementById("performancePage").style.display = "block";
+
+                    requestAnimationFrame(() => {
+
+                        setTimeout(() => {
+
+                            initProfitChart();     // 🔥 IMPORTANTE
+                            initTradeChart();
+                            initDrawdownChart();
+                            initProfitTradeChart();
+                            initProfitHistogramChart();
+                            initProfitHourChart();
+
+                            updateEquity();
+                            updateTradeStats();
+
+                        }, 100);
+
+                    });
                 }
 
                 if (page === "settings") {
