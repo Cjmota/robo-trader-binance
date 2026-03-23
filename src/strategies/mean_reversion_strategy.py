@@ -99,7 +99,7 @@ def mean_reversion_strategy(
 
     decision = HOLD
 
-    signal_strength = 0
+    signal_strength = abs(zscore)
 
     # -----------------------------------------
     # 🔥 LÓGICA DINÂMICA (AUTO AJUSTE)
@@ -122,9 +122,11 @@ def mean_reversion_strategy(
         
     # 🚀 fallback leve (evita HOLD infinito)
     if decision == HOLD:
-        if zscore > dynamic_threshold * 0.6:
+
+        if zscore > dynamic_threshold * 0.4:
             decision = SELL
-        elif zscore < -dynamic_threshold * 0.6:
+
+        elif zscore < -dynamic_threshold * 0.4:
             decision = BUY
             
     # -----------------------------------------
@@ -138,17 +140,20 @@ def mean_reversion_strategy(
     # 🔥 permite extremos mesmo contra tendência
 
     # 🔥 só bloqueia se sinal MUITO fraco
-    if decision == SELL and trend == "UP" and signal_strength == 1:
+    if decision == SELL and trend == "UP" and signal_strength < 1.2:
         decision = HOLD
 
-    if decision == BUY and trend == "DOWN" and signal_strength == 1:
+    if decision == BUY and trend == "DOWN" and signal_strength < 1.2:
         decision = HOLD
 
     # -----------------------------------------
     # 🔥 CONFIANÇA INTELIGENTE
 
     distance = abs(rsi - 50)
-    confidence = min((distance / 50) + (abs(rsi_diff) / 10), 1)
+    confidence = min(
+        (distance / 40) + (abs(zscore) / 2) + (abs(rsi_diff) / 8),
+        1
+    )
 
     # -----------------------------------------
     if verbose:
@@ -162,13 +167,14 @@ def mean_reversion_strategy(
     # 🚀 MODO SPOT (ESSENCIAL)
     if bot is not None:
         if decision == SELL and not getattr(bot, "position_open", False):
-            decision = HOLD
+            print("⚠️ SELL ignorado (modo spot)")
+            # NÃO força HOLD, só avisa
 
     return {
-        "action": decision,
-        "confidence": confidence,
+        "signal": decision,  # 🔥 antes era action
+        "probability": confidence,  # 🔥 antes era confidence
         "score": 0.4 if decision == BUY else -0.4 if decision == SELL else 0,
         "momentum": abs(rsi_diff) > 1,
-        "volume_spike": abs(rsi_diff) > 2,
+        "volume_spike": df["close"].pct_change().abs().iloc[-1] > 0.002,
         "orderflow": "BUY" if decision == BUY else "SELL" if decision == SELL else "NEUTRAL"
     }
