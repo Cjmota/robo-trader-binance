@@ -168,8 +168,15 @@ def mean_reversion_strategy(
     if decision == SELL and not getattr(bot, "position_open", False):
 
         if zscore > dynamic_threshold:
-            print("💡 Esperando reversão para BUY")
-            decision = HOLD
+
+            print("💡 Zona de topo → aguardando pullback")
+
+            # 🔥 NOVA LÓGICA INTELIGENTE
+            if rsi_diff < -0.5:
+                print("🔥 Pullback detectado → entrando BUY antecipado")
+                decision = BUY
+            else:
+                decision = HOLD
         
     if decision == HOLD:
         if zscore < dynamic_threshold * 0.5:

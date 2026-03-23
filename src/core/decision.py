@@ -2,7 +2,6 @@ BUY = "BUY"
 SELL = "SELL"
 HOLD = None
 
-
 class DecisionEngine:
 
     def __init__(self, config):
