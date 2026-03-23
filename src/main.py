@@ -18,8 +18,16 @@ from src.utils.report import generate_report
 # -----------------------------------------
 # 🔐 ENV
 
+# 📁 caminho absoluto correto
+BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+LOG_DIR = os.path.join(BASE_DIR, "..", "logs")
+
+os.makedirs(LOG_DIR, exist_ok=True)
+
+LOG_FILE = os.path.join(LOG_DIR, "trading_bot.log")
+
 logging.basicConfig(
-    filename="logs/trading_bot.log",
+    filename=LOG_FILE,
     level=logging.INFO,
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
