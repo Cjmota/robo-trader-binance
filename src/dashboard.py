@@ -1,7 +1,7 @@
 from flask import Flask, render_template, request, jsonify
 from src.main import safe_trader_master_loop
 from datetime import datetime
-from src.utils.state import STATE
+from src.state import STATE
 
 import threading
 import json

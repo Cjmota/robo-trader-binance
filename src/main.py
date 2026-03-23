@@ -9,7 +9,7 @@ from src.utils.websocket_price import start_socket
 
 from dotenv import load_dotenv
 from binance.client import Client
-from src.utils.state import STATE
+from src.state import STATE
 
 from src.core.engine import TradingEngine
 from src.core.decision import DecisionEngine

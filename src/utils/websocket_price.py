@@ -1,6 +1,6 @@
 import asyncio
 from binance import AsyncClient, BinanceSocketManager
-from state import STATE
+from src.state import STATE
 
 async def start_socket():
 
