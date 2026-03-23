@@ -136,6 +136,30 @@ def mean_reversion_strategy(
     price = df["close"].iloc[-1]
 
     trend = "UP" if price > ema50 else "DOWN"
+    
+    # -----------------------------------------
+    # 🔥 SCORE PROFISSIONAL (SUBSTITUI SCORE FIXO)
+
+    score = 0
+
+    # ZSCORE (principal driver)
+    score += zscore * 0.6
+
+    # RSI (força)
+    score += ((rsi - 50) / 50) * 0.3
+
+    # MOMENTUM
+    if abs(rsi_diff) > 1:
+        score += 0.2 if rsi_diff > 0 else -0.2
+
+    # TREND BOOST
+    if trend == "UP":
+        score += 0.1
+    else:
+        score -= 0.1
+
+    # LIMITA SCORE
+    score = max(-1, min(1, score))
 
     # 🔥 permite extremos mesmo contra tendência
 
@@ -179,15 +203,15 @@ def mean_reversion_strategy(
                 decision = HOLD
         
     if decision == HOLD:
-        if zscore < dynamic_threshold * 0.5:
-            print("🔥 Entrada antecipada BUY")
+        if zscore < -dynamic_threshold * 0.5 and rsi < 50:
+            print("🔥 Entrada antecipada BUY (controlada)")
             decision = BUY
 
     return {
-        "signal": decision,  # 🔥 antes era action
-        "probability": confidence,  # 🔥 antes era confidence
-        "score": 0.4 if decision == BUY else -0.4 if decision == SELL else 0,
+        "signal": decision,
+        "probability": confidence,
+        "score": score,
         "momentum": abs(rsi_diff) > 1,
-        "volume_spike": df["close"].pct_change().abs().iloc[-1] > 0.002,
+        "volume_spike": df["close"].pct_change().abs().iloc[-1] > 0.004,
         "orderflow": "BUY" if decision == BUY else "SELL" if decision == SELL else "NEUTRAL"
     }
