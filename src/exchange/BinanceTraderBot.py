@@ -98,6 +98,17 @@ class BinanceTraderBot:
         if quantity <= 0:
             print("❌ Quantity inválida após ajuste")
             return None
+        # -----------------------------------------
+        # 📈 PREÇO (ANTES DE VALIDAR)
+
+        price = self.get_price()
+
+        if not price or price <= 0:
+            print("⚠️ Sem preço → cancelando BUY")
+            return None
+        
+        # ----------------------------------------
+        #VALIDAÇÃO BINANCE
         quantity, _, error = validate_order(
             self.client,
             self.symbol,
@@ -111,15 +122,6 @@ class BinanceTraderBot:
 
         if quantity <= 0:
             print("⚠️ Quantidade inválida")
-            return None
-
-        # -----------------------------------------
-        # 📈 PREÇO (ANTES DA ORDEM)
-
-        price = self.get_price()
-
-        if not price or price <= 0:
-            print("⚠️ Sem preço → cancelando BUY")
             return None
 
         # -----------------------------------------
@@ -144,6 +146,10 @@ class BinanceTraderBot:
             # ✅ ATUALIZA ESTADO
 
             self.position_open = True
+            fills = order.get("fills", [])
+            if fills:
+                price = float(fills[0]["price"])
+            
             self.entry_price = price
             self.quantity = executed_qty
             self.highest_price = price
@@ -169,12 +175,16 @@ class BinanceTraderBot:
         try:
             
             price = self.get_price()
+            
+            if price is None or price <= 0:
+                print("⚠️ Preço inválido no SELL")
+                return None
         
-            quantity, price, error = validate_order(
+            quantity, _, error = validate_order(
                 self.client,
                 self.symbol,
                 self.quantity,
-                self.get_price()
+                price
             )
 
             if error:
@@ -193,7 +203,19 @@ class BinanceTraderBot:
                 print("⚠️ Ordem não executada")
                 return None
 
-            price = float(self.get_price())
+            # 🔥 PREÇO REAL DA EXECUÇÃO
+            exec_price = price  # preço inicial (fallback)
+
+            fills = order.get("fills", [])
+            if fills:
+                exec_price = float(fills[0]["price"])
+
+            entry = float(self.entry_price)
+
+            # 🔥 CÁLCULO CORRETO
+            profit = float((exec_price - entry) * quantity)
+            
+            print(f"💰 Execução real: {exec_price} | Entrada: {entry}")
             
             if price is None or price <= 0:
                 print("⚠️ Preço inválido no SELL")
@@ -202,10 +224,6 @@ class BinanceTraderBot:
             if quantity <= 0:
                 print("⚠️ Quantidade inválida no SELL")
                 return None
-
-            entry = float(self.entry_price)
-
-            profit = float((price - entry) * quantity)
             
             # 🔥 ATUALIZA LUCRO DIÁRIO
             self.daily_profit += profit
@@ -216,7 +234,7 @@ class BinanceTraderBot:
                 "symbol": self.symbol,
                 "side": "SELL",
                 "entry": entry,
-                "exit": price,
+                "exit": exec_price,
                 "profit": profit
             }
 
