@@ -144,24 +144,19 @@ class TradingEngine:
             stock_data=df
         )
         
-        # 🔥 GARANTE DECISION VÁLIDA
-        if raw_decision is None:
-            raw_decision = "HOLD"
-            
         # -----------------------------------------
-        # 🔥 FALLBACK INTELIGENTE (QUANDO ESTRATÉGIA FALHA)
+        # 🔥 FALLBACK INTELIGENTE (CORRETO)
 
-        if raw_decision == "HOLD":
+        if raw_decision is None or raw_decision == "HOLD":
 
             if "rsi" in df.columns:
                 rsi = df["rsi"].iloc[-1]
 
                 if rsi > 60:
                     raw_decision = "SELL"
-                elif rsi < 40:
-                    raw_decision = "BUY"
+                    print("🔴 Fallback SELL (RSI alto)")
 
-                elif rsi < 35:
+                elif rsi < 40:
                     raw_decision = "BUY"
                     print("🟢 Fallback BUY (RSI baixo)")
         

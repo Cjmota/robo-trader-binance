@@ -61,7 +61,11 @@ def mean_reversion_strategy(
     else:
         vol_factor = volatility / avg_volatility
 
-    base_threshold = 1.0
+    # 🔥 threshold adaptativo por mercado
+    if volatility < avg_volatility:
+        base_threshold = 0.6   # mercado calmo → mais entradas
+    else:
+        base_threshold = 0.9   # mercado forte → mais seletivo
 
     dynamic_threshold = base_threshold * (1 + (vol_factor - 1))
 
@@ -106,11 +110,11 @@ def mean_reversion_strategy(
     if zscore > strong_threshold and rsi > 60:
         decision = SELL
 
-    elif zscore > dynamic_threshold:
+    elif zscore > dynamic_threshold and rsi > 55:
         decision = SELL
 
     # 🔺 COMPRA
-    elif zscore < -strong_threshold and rsi < 40:
+    elif zscore < -strong_threshold and rsi < 45:
         decision = BUY
 
     elif zscore < -dynamic_threshold:
@@ -118,9 +122,9 @@ def mean_reversion_strategy(
         
     # 🚀 fallback leve (evita HOLD infinito)
     if decision == HOLD:
-        if zscore > dynamic_threshold * 0.8:
+        if zscore > dynamic_threshold * 0.6:
             decision = SELL
-        elif zscore < -dynamic_threshold * 0.8:
+        elif zscore < -dynamic_threshold * 0.6:
             decision = BUY
             
     # -----------------------------------------
