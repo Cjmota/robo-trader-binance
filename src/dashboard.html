@@ -111,6 +111,7 @@
 </head>
 
 <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/chartjs-plugin-zoom@2.0.1"></script>
 
 <body>
 
@@ -220,6 +221,10 @@
 
                 <button id="btnStop" class="btn btn-danger" onclick="stopBot()" disabled>
                     <i class="bi bi-stop-fill"></i> Parar
+                </button>
+
+                <button class="btn btn-outline-info mb-2" onclick="resetZoom()">
+                    🔍 Reset Zoom
                 </button>
 
             </div>
@@ -589,6 +594,12 @@
                 }
             }
 
+            function resetZoom(){
+                if(profitChart){
+                    profitChart.resetZoom();
+                }
+            }
+
             function initProfitChart(){
 
                 if(profitChart) return;
@@ -604,29 +615,82 @@
                                 label: 'Equity (%)',
                                 data: [],
                                 borderColor: '#22c55e',
-                                tension: 0.3
+                                borderWidth: 2,
+                                tension: 0.3,
+                                pointRadius: 0
                             },
                             {
                                 label: 'BTC (%)',
                                 data: [],
                                 borderColor: '#f59e0b',
-                                tension: 0.3
+                                borderWidth: 2,
+                                tension: 0.3,
+                                pointRadius: 0
                             },
                             {
                                 label: 'Buy & Hold (%)',
                                 data: [],
                                 borderColor: '#38bdf8',
-                                tension: 0.3
+                                borderWidth: 2,
+                                tension: 0.3,
+                                pointRadius: 0
+                            },
+
+                            // 🔥 NOVO DATASET (CORREÇÃO)
+                            {
+                                label: 'MA(10)',
+                                data: [],
+                                borderColor: '#a78bfa',
+                                borderWidth: 3,
+                                tension: 0.5,
+                                borderDash: [5,5],
+                                pointRadius: 0
                             }
                         ]
                     },
                     options: {
+                        responsive: true,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false
+                        },
+                        animation: {
+                            duration: 500
+                        },
                         plugins:{
-                            legend:{ labels:{ color:"white"} }
+                            legend:{
+                                labels:{ color:"white" }
+                            },
+                            tooltip:{
+                                backgroundColor:"#111827",
+                                borderColor:"#38bdf8",
+                                borderWidth:1
+                            },
+                            zoom: {
+                                pan: {
+                                    enabled: true,
+                                    mode: 'x'
+                                },
+                                zoom: {
+                                    wheel: {
+                                        enabled: true
+                                    },
+                                    pinch: {
+                                        enabled: true
+                                    },
+                                    mode: 'x'
+                                }
+                            }
                         },
                         scales:{
-                            x:{ ticks:{ color:"white"} },
-                            y:{ ticks:{ color:"white"} }
+                            x:{
+                                ticks:{ color:"white" },
+                                grid:{ color:"rgba(255,255,255,0.05)" }
+                            },
+                            y:{
+                                ticks:{ color:"white" },
+                                grid:{ color:"rgba(255,255,255,0.05)" }
+                            }
                         }
                     }
                 });
@@ -968,25 +1032,61 @@
 
                 equityHistory.push(equityPct);
                 btcHistory.push(btcPct);
-                buyHoldHistory.push(buyHoldPct)
+                buyHoldHistory.push(buyHoldPct);
+                
+                // 🔥 AGORA sim calcula MA com dados atualizados
+                let ma = movingAverage(equityHistory, 10);
 
-                profitChart.data.labels.push(now);
+                // labels (IMPORTANTE)
+                if (profitChart.data.datasets.length < 4) return;               
 
+                // atualiza datasets
                 profitChart.data.datasets[0].data = equityHistory;
                 profitChart.data.datasets[1].data = btcHistory;
-                profitChart.data.datasets[2].data = buyHoldHistory    
+                profitChart.data.datasets[2].data = buyHoldHistory;
+                profitChart.data.datasets[3].data = ma;
 
+                // labels (IMPORTANTE)
+                profitChart.data.labels.push(now);
+
+                // limitar tamanho
                 if (equityHistory.length > 100) {
                     equityHistory.shift();
                     btcHistory.shift();
+                    buyHoldHistory.shift();
                     profitChart.data.labels.shift();
                 }
 
-                profitChart.update();
+                //auto scale
+                profitChart.options.scales.y.min = Math.min(...equityHistory) - 1;
+                profitChart.options.scales.y.max = Math.max(...equityHistory) + 1;
+                
+                //render
+                profitChart.update('active');
 
                 document.getElementById("statCumulative").innerText = data.cumulative_pct + "%";
                 document.getElementById("statDrawdown").innerText = data.max_drawdown + "%";
                 document.getElementById("statSharpe").innerText = data.sharpe;
+            }
+
+            function movingAverage(data, period){
+                let result = [];
+
+                for(let i=0; i<data.length; i++){
+                    if(i < period){
+                        result.push(null);
+                        continue;
+                    }
+
+                    let sum = 0;
+                    for(let j=0; j<period; j++){
+                        sum += data[i - j];
+                    }
+
+                    result.push(sum / period);
+                }
+
+                return result;
             }
    
             function showPage(page) {
