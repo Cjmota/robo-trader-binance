@@ -228,6 +228,13 @@ class TradingEngine:
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
         
+        # 🚫 BLOQUEIO CONTRA TENDÊNCIA (CRÍTICO)
+
+        if decision.get("signal") == "BUY" and trend == "DOWN":
+            if decision.get("score", 0) < 0.6:
+                print("🚫 BUY contra tendência fraca")
+                return
+        
         # -----------------------------------------
         # -----------------------------------------
         # 🔥 RECUPERAR SINAL DA ESTRATÉGIA (ROBUSTO)
@@ -298,13 +305,13 @@ class TradingEngine:
         # 🔄 FORÇAR ENTRADA EM LATERAL / HOLD
 
         if decision["signal"] == "HOLD" and not decision.get("force_trade"):
-            
-            if rsi is None:
-                print("⚠️ RSI não disponível — ignorando força")
-            else:
-                if rsi < 42:
+
+            if trend == "UP":
+                if rsi is not None and rsi < 42:
                     decision["signal"] = "BUY"
-                elif rsi > 58:
+
+            elif trend == "DOWN":
+                if rsi is not None and rsi > 58:
                     decision["signal"] = "SELL"
 
         # 🔥 BOOST PARA HOLD QUEBRADO
