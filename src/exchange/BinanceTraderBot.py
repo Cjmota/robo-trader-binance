@@ -417,3 +417,20 @@ class BinanceTraderBot:
         except Exception as e:
             print("❌ Erro ao ajustar quantidade:", e)
             return 0
+
+    def get_lot_size(self, symbol):
+        try:
+            info = self.client.get_symbol_info(symbol)
+
+            for f in info["filters"]:
+                if f["filterType"] == "LOT_SIZE":
+                    return {
+                        "minQty": float(f["minQty"]),
+                        "maxQty": float(f["maxQty"]),
+                        "stepSize": float(f["stepSize"])
+                    }
+
+        except Exception as e:
+            print(f"❌ Erro ao obter LOT_SIZE de {symbol}: {e}")
+
+        return None

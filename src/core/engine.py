@@ -7,6 +7,7 @@ from src.utils.helpers import to_native
 from src.utils.safe_api import safe_api_call
 from src import main
 import time
+import math
 import datetime
 
 def get_rsi_safe(df):
@@ -14,8 +15,11 @@ def get_rsi_safe(df):
         return None
     return df["rsi"].iloc[-1]
 
+import math
+
 def adjust_qty_to_step(qty, step_size):
-        return float((qty // step_size) * step_size)  
+    precision = int(round(-math.log(step_size, 10), 0))
+    return float(round(math.floor(qty / step_size) * step_size, precision)) 
 
 class TradingEngine:
 
@@ -516,7 +520,6 @@ class TradingEngine:
 
         print(f"🧠 decision raw: {decision}")
 
-
     def execute_trade(self, action, decision, df, symbol):
         
         balance_data = safe_api_call(
@@ -584,9 +587,12 @@ class TradingEngine:
             if profit_pct >= 1.2 and not self.bot.partial_taken:
                 print("💰 Realizando parcial (50%)")
 
-                qty = self.bot.quantity * 0.5
+                qty = adjust_qty_to_step(self.bot.quantity * 0.5, lot["stepSize"])
 
-                self.bot.sell(qty)
+                if qty < lot["minQty"]:
+                    print("⚠️ Parcial abaixo do mínimo")
+                    return
+                
                 self.bot.partial_taken = True
 
                 return
@@ -782,7 +788,7 @@ class TradingEngine:
         lot = self.bot.get_lot_size(symbol)
 
         if not lot:
-            print("❌ Não conseguiu obter LOT_SIZE")
+            print(f"⚠️ Não foi possível obter LOT_SIZE para {symbol}")
             return
 
         step_size = float(lot["stepSize"])
