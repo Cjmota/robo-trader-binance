@@ -39,10 +39,10 @@ class TradingEngine:
     # -----------------------------------------
     def run_once(self):
         
-        lot = self.bot.get_lot_size(symbol)
+        symbol = getattr(self.bot, "symbol", None)
 
-        if not lot:
-            print("❌ Erro ao obter LOT_SIZE")
+        if not symbol:
+            print("❌ Symbol inválido")
             return
     
         balance_data = safe_api_call(
