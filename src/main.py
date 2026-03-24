@@ -60,18 +60,6 @@ def update_equity(balance, pnl):
 
     STATE["equity"] = equity
     
-def log_trade(symbol, profit):
-
-    STATE["trades"].append({
-        "symbol": symbol,
-        "profit": profit,
-        "time": time.time()
-    })
-
-    # limita memória
-    if len(STATE["trades"]) > 500:
-        STATE["trades"].pop(0)
-        
 def run_socket():
     asyncio.run(start_socket())
 

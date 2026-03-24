@@ -3,7 +3,7 @@ from src.utils.safe_api import safe_api_call
 from src.utils.binance_filters import get_symbol_filters, adjust_to_step_size
 from src.utils.binance_execution import validate_order
 from src.utils.report import generate_report
-from src.main import log_trade
+from src.utils.trade_logger import log_trade
 import pandas as pd
 import datetime
 import logging
