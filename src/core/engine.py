@@ -39,6 +39,12 @@ class TradingEngine:
     # -----------------------------------------
     def run_once(self):
         
+        lot = self.bot.get_lot_size(symbol)
+
+        if not lot:
+            print("❌ Erro ao obter LOT_SIZE")
+            return
+    
         balance_data = safe_api_call(
             self.bot.client.get_asset_balance,
             asset="USDT"
@@ -587,12 +593,6 @@ class TradingEngine:
             if profit_pct >= 1.2 and not self.bot.partial_taken:
                 print("💰 Realizando parcial (50%)")
                 
-                lot = self.bot.get_lot_size(symbol)
-
-                if not lot:
-                    print("❌ Erro ao obter LOT_SIZE")
-                    return
-
                 qty = adjust_qty_to_step(self.bot.quantity * 0.5, lot["stepSize"])
 
                 if qty < lot["minQty"]:
