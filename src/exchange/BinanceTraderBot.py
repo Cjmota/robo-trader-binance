@@ -422,15 +422,26 @@ class BinanceTraderBot:
         try:
             info = self.client.get_symbol_info(symbol)
 
+            lot = {}
+            min_notional = 5  # fallback padrão Binance
+
             for f in info["filters"]:
+
                 if f["filterType"] == "LOT_SIZE":
-                    return {
-                        "minQty": float(f["minQty"]),
-                        "maxQty": float(f["maxQty"]),
-                        "stepSize": float(f["stepSize"])
-                    }
+                    lot["minQty"] = float(f["minQty"])
+                    lot["maxQty"] = float(f["maxQty"])
+                    lot["stepSize"] = float(f["stepSize"])
+
+                elif f["filterType"] == "MIN_NOTIONAL":
+                    min_notional = float(f["minNotional"])
+
+                elif f["filterType"] == "NOTIONAL":  # 🔥 Binance nova
+                    min_notional = float(f.get("minNotional", 5))
+
+            lot["minNotional"] = min_notional
+
+            return lot
 
         except Exception as e:
-            print(f"❌ Erro ao obter LOT_SIZE de {symbol}: {e}")
-
-        return None
+            print(f"❌ Erro ao obter LOT_SIZE: {e}")
+            return None

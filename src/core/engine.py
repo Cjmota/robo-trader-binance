@@ -586,15 +586,23 @@ class TradingEngine:
 
             if profit_pct >= 1.2 and not self.bot.partial_taken:
                 print("💰 Realizando parcial (50%)")
+                
+                lot = self.bot.get_lot_size(symbol)
+
+                if not lot:
+                    print("❌ Erro ao obter LOT_SIZE")
+                    return
 
                 qty = adjust_qty_to_step(self.bot.quantity * 0.5, lot["stepSize"])
 
                 if qty < lot["minQty"]:
                     print("⚠️ Parcial abaixo do mínimo")
                     return
-                
-                self.bot.partial_taken = True
 
+                print(f"💰 Vendendo parcial: {qty}")
+                self.bot.sell(qty)
+
+                self.bot.partial_taken = True
                 return
             
             # -----------------------------------------
@@ -785,14 +793,12 @@ class TradingEngine:
         # -----------------------------------------
         # 🔥 LOT (AGORA SIM)
 
-        lot = self.bot.get_lot_size(symbol)
-
         if not lot:
             print(f"⚠️ Não foi possível obter LOT_SIZE para {symbol}")
             return
 
-        step_size = float(lot["stepSize"])
-        min_notional = float(lot["minNotional"])
+        step_size = float(lot.get("stepSize", 0.0001))
+        min_notional = float(lot.get("minNotional", 5))
 
         qty = adjust_qty_to_step(qty, step_size)
 
@@ -801,8 +807,8 @@ class TradingEngine:
             return
 
         # -----------------------------------------
-        # 🔍 VALIDAÇÃO FINAL
-
+        # 🔍 VALIDAÇÃO FINAL  
+        
         notional = qty * price
 
         if notional < min_notional:
