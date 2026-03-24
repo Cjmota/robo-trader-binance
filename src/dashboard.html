@@ -1287,7 +1287,44 @@
 
                     if(!data.ranking || data.ranking.length === 0){
                         table.innerHTML = "<tr><td colspan='4'>Sem oportunidades</td></tr>"
-                        return
+                    } else {
+
+                        data.ranking.forEach((r, i) => {
+                            let star = i === 0 ? "⭐ " : ""
+                            let highlight = i === 0 ? "style='color:#22c55e;font-weight:bold'" : ""
+
+                            let vol = r.volume
+                            if(vol > 1e9) vol = (vol/1e9).toFixed(2) + "B"
+                            else vol = (vol/1e6).toFixed(2) + "M"
+
+                            html += `
+                            <tr ${highlight}>
+                                <td>${star}${r.symbol}</td>
+                                <td>${r.score.toFixed(2)}</td>
+                                <td>${r.momentum}</td>
+                                <td>${vol}</td>
+                            </tr>`
+                        })
+
+                        table.innerHTML = html
+                    }
+
+                    smart.innerHTML = ""
+
+                    if (data.smart_money && data.smart_money.length > 0) {
+
+                        data.smart_money.forEach(s => {
+
+                            let color = "#94a3b8"
+
+                            if (s.includes("BUY")) color = "#22c55e"
+                            else if (s.includes("SELL")) color = "#ef4444"
+
+                            smart.innerHTML += `<li style="color:${color}; font-weight:500;">${s}</li>`
+                        })
+
+                    } else {
+                        smart.innerHTML = "<li>Sem dados</li>"
                     }
 
                     data.ranking.forEach((r, i) => {
