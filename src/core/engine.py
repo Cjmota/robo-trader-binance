@@ -528,7 +528,7 @@ class TradingEngine:
 
     def execute_trade(self, action, decision, df, symbol):
 
-        # 🔥 DEFINE LOT AQUI (OBRIGATÓRIO)
+        # 🔥 CRÍTICO — SEM ISSO VAI QUEBRAR
         lot = self.bot.get_lot_size(symbol)
 
         if not lot:
@@ -807,9 +807,6 @@ class TradingEngine:
         if not lot:
             print(f"⚠️ Não foi possível obter LOT_SIZE para {symbol}")
             return
-
-        step_size = float(lot.get("stepSize", 0.0001))
-        min_notional = float(lot.get("minNotional", 5))
 
         qty = adjust_qty_to_step(qty, step_size)
 

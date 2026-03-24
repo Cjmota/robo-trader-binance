@@ -1,6 +1,6 @@
 BUY = "BUY"
 SELL = "SELL"
-HOLD = None
+HOLD = "HOLD"
 
 class DecisionEngine:
 
@@ -11,7 +11,7 @@ class DecisionEngine:
     def evaluate(self, signal_data):
 
         if not signal_data:
-            return {"signal": None, "score": 0, "probability": 0}
+            return {"signal": HOLD, "score": 0, "probability": 0}
 
         signal = signal_data.get("signal")
         score = float(signal_data.get("score", 0))
@@ -64,7 +64,7 @@ class DecisionEngine:
 
         print("🚫 Score final muito baixo")
         return {
-            "signal": signal if prob > 0.6 else None,
+            "signal": signal if prob > 0.6 else HOLD,
             "score": round(score, 2),
             "probability": prob
         }
