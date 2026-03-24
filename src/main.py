@@ -162,16 +162,6 @@ decision_engine = DecisionEngine(config)
 
 def safe_trader_master_loop():
     global BOT_RUNNING, CURRENT_TRADER, engine
-    
-    engine.run_once()
-    
-    try:
-        balance = CURRENT_TRADER.get_balance()
-        pnl = CURRENT_TRADER.get_pnl()
-
-        update_equity(balance, pnl)
-    except:
-        pass
 
     print("🔥 LOOP ATIVO")
 
@@ -183,6 +173,14 @@ def safe_trader_master_loop():
 
         try:
             engine.run_once()
+
+            try:
+                balance = CURRENT_TRADER.get_balance()
+                pnl = CURRENT_TRADER.get_pnl()
+                update_equity(balance, pnl)
+            except:
+                pass
+
             time.sleep(5 + random.uniform(1, 3))
 
         except Exception as e:
@@ -190,9 +188,7 @@ def safe_trader_master_loop():
             print("❌ ERRO NO BOT:", e)
             traceback.print_exc()
             time.sleep(3)
-        
-    
-
+            
 # -----------------------------------------
 # ▶️ START
 
