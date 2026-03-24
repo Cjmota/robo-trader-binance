@@ -40,8 +40,9 @@ class TradingEngine:
             asset="USDT"
         )
 
-        if self.trade_count_today == 0:
+        if self.trade_count_today == 0 and not hasattr(self, "dust_cleaned"):
             self.auto_clear_dust()
+            self.dust_cleaned = True
 
         if not balance_data or float(balance_data["free"]) < 5:
             print("💤 Sem capital suficiente — aguardando")
@@ -92,7 +93,7 @@ class TradingEngine:
                 if not hasattr(self, "last_symbol_change"):
                     self.last_symbol_change = 0
 
-                if time.time() - self.last_symbol_change > 60:
+                if time.time() - self.last_symbol_change > 120:
                     print(f"🔄 Mudando ativo: {self.bot.symbol} → {new_symbol}")
                     self.bot.set_symbol(new_symbol)
                     self.last_symbol_change = time.time()
@@ -261,7 +262,7 @@ class TradingEngine:
         # 🚫 BLOQUEIO CONTRA TENDÊNCIA (CRÍTICO)
 
         if decision.get("signal") == "BUY" and trend == "DOWN":
-            if decision.get("score", 0) < 0.6:
+            if decision.get("score", 0) < 0.35:
                 print("🚫 BUY contra tendência fraca")
                 return
         
@@ -407,7 +408,10 @@ class TradingEngine:
         if decision["signal"] == "SELL" and trend == "DOWN":
             score += 0.3
             
-        decision["score"] = (base_score * 0.3) + (score * 0.5) + (confluence_score * 0.2)
+        raw_score = (base_score * 0.3) + (score * 0.5) + (confluence_score * 0.2)
+
+        # 🔥 CORREÇÃO CRÍTICA (ANTI-SCORE NEGATIVO)
+        decision["score"] = max(min(raw_score, 1), 0)
         
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
         
