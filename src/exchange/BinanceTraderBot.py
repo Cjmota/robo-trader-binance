@@ -240,6 +240,8 @@ class BinanceTraderBot:
             # 🔥 CÁLCULO CORRETO
             profit = float((exec_price - entry) * quantity)
             
+            log_trade(self.symbol, profit)
+            
             print(f"💰 Execução real: {exec_price} | Entrada: {entry}")
             
             if price is None or price <= 0:

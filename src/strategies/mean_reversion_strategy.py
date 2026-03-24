@@ -191,7 +191,8 @@ def mean_reversion_strategy(
     # 🚀 MODO SPOT (ESSENCIAL)
     if decision == SELL and not getattr(bot, "position_open", False):
 
-        if zscore > dynamic_threshold:
+        if zscore < -dynamic_threshold * 0.7:
+            decision = BUY
 
             print("💡 Zona de topo → aguardando pullback")
 

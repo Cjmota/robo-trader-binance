@@ -83,29 +83,22 @@ class TradingEngine:
         # -----------------------------------------
         # 🔍 SCANNER
 
-        symbol = self.scanner()
+        new_symbol = self.scanner()
 
-        if not symbol:
-            print("⚠️ Nenhum ativo encontrado")
-            return
+        if new_symbol and new_symbol != self.bot.symbol:
 
-        self.bot.set_symbol(symbol)
-        
-        perf = self.get_symbol_performance(symbol)
+            if not self.bot.position_open:
 
-        if len(perf["last_results"]) >= 8 and perf["winrate"] < 0.45:
-            print(f"🚫 {symbol} bloqueado (ruim)")
-            return
-        
-        top_symbols = self.get_top_symbols()
+                if not hasattr(self, "last_symbol_change"):
+                    self.last_symbol_change = 0
 
-        if top_symbols and symbol not in top_symbols:
-            print(f"🚫 {symbol} fora do TOP {len(top_symbols)}")
-            return
+                if time.time() - self.last_symbol_change > 60:
+                    print(f"🔄 Mudando ativo: {self.bot.symbol} → {new_symbol}")
+                    self.bot.set_symbol(new_symbol)
+                    self.last_symbol_change = time.time()
 
-        # -----------------------------------------
-        # 📊 DADOS
 
+        symbol = self.bot.symbol
         df = self.bot.get_data()
 
         if df is None or df.empty:
@@ -298,9 +291,7 @@ class TradingEngine:
                 
                 decision["force_trade"] = True
 
-                print(f"♻️ Recuperando sinal da estratégia: {recovered_signal}")     
-
-        # 🔍 DEBUG PROFISSIONAL (ANTES DOS FILTROS)
+                print(f"♻️ Recuperando sinal da estratégia: {recovered_signal}")
                 
         # 🚀 MOSTRA OPORTUNIDADE (ANTES DOS FILTROS)
         if decision["signal"] != "HOLD":
@@ -341,14 +332,14 @@ class TradingEngine:
 
         if decision["signal"] == "HOLD" and not decision.get("force_trade"):
 
-            if trend == "UP":
-                if rsi is not None and rsi < 42:
+            if decision["score"] > 0.3:
+
+                if trend == "UP":
                     decision["signal"] = "BUY"
 
-            elif trend == "DOWN":
-                if rsi is not None and rsi > 58:
+                elif trend == "DOWN":
                     decision["signal"] = "SELL"
-
+                    
         # 🔥 BOOST PARA HOLD QUEBRADO
         if decision["signal"] != "HOLD" and decision["score"] == 0:
             decision["score"] = 0.3
@@ -357,6 +348,17 @@ class TradingEngine:
         if decision["signal"] != "HOLD" and decision["probability"] < 0.3:
             decision["probability"] = 0.3
 
+        if decision["signal"] == "HOLD":
+
+            if decision["score"] > 0.35:
+
+                if trend == "UP":
+                    decision["signal"] = "BUY"
+                    print("🔥 HOLD → BUY")
+
+                elif trend == "DOWN":
+                    decision["signal"] = "SELL"
+                    print("🔥 HOLD → SELL")
         # -----------------------------------------
         # 🧠 CONFLUÊNCIA PROFISSIONAL
 
@@ -409,6 +411,22 @@ class TradingEngine:
         
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
         
+        # 🔥 FILTRO FINAL INTELIGENTE
+        if decision["score"] < 0.2 and not decision.get("force_trade"):
+            print("⚠️ Score baixo final")
+            return
+        
+        # 🔥 FORÇA PRIMEIRA ENTRADA (CRÍTICO)
+        if decision["signal"] == "HOLD" and decision["score"] > 0.4:
+
+            if trend == "UP":
+                decision["signal"] = "BUY"
+                print("🔥 Forçando BUY")
+
+            elif trend == "DOWN":
+                decision["signal"] = "SELL"
+                print("🔥 Forçando SELL")
+        
         # 🔥 DESTRAVAR HOLD COM SCORE (CRÍTICO)
 
         if decision["signal"] == "HOLD":
@@ -426,8 +444,8 @@ class TradingEngine:
         if decision["score"] < 0.15:
             print("⚠️ Score muito baixo")
 
-        if not decision["momentum"] and decision["probability"] < 0.25:
-            print("⚠️ Sem momentum forte(ajustado)")
+        if not decision["momentum"] and decision["score"] < 0.2:
+            print("⚠️ Momentum fraco(ajustado)")
             return
         
         # 🚫 NÃO VENDE SEM POSIÇÃO (SPOT)
@@ -470,8 +488,8 @@ class TradingEngine:
 
         # 🚫 FILTRO FINAL DE QUALIDADE (CORRETO)
 
-        if decision["score"] < 0.25 and decision["probability"] < 0.4:
-            print("🚫 Entrada fraca (final)")
+        if decision["score"] < 0.18:
+            print("⚠️ Entrada fraca (ajustada)")
             return
 
         action = decision["signal"]
@@ -624,16 +642,16 @@ class TradingEngine:
                 self.trade_count_today += 1
                 return
         
-        # ⏰ tempo máximo em posição
-        max_hold_time = 60 * 30  # 30 minutos
+            # ⏰ tempo máximo em posição
+            max_hold_time = 60 * 30  # 30 minutos
 
-        if hasattr(self.bot, "entry_time"):
-            if time.time() - self.bot.entry_time > max_hold_time:
-                print("⏰ Saindo por tempo (capital preso)")
-                self.update_performance(symbol, profit_pct)
-                self.bot.sell()
-                self.trade_count_today += 1
-                return
+            if hasattr(self.bot, "entry_time"):
+                if time.time() - self.bot.entry_time > max_hold_time:
+                    print("⏰ Saindo por tempo (capital preso)")
+                    self.update_performance(symbol, profit_pct)
+                    self.bot.sell()
+                    self.trade_count_today += 1
+                    return
        
 
         # -----------------------------------------
@@ -671,8 +689,8 @@ class TradingEngine:
         prev_close = df["close"].iloc[-2]
 
         # 🔥 1. Candle favorável
-        if decision["signal"] == "BUY" and last_close < prev_close:
-            print("🚫 Candle contra entrada")
+        if decision["signal"] == "BUY" and last_close < prev_close and decision["score"] < 0.6:
+            print("🚫 Candle contra entrada (ajustado)")
             return
 
         # 🔥 2. Anti-FOMO
@@ -696,8 +714,8 @@ class TradingEngine:
             print(f"🚫 Ignorando {symbol} (ruim)")
             return
 
-        if decision["score"] < 0.4:
-            print("🚫 Entrada fraca (anti-travamento)")
+        if decision["score"] < 0.18:
+            print("⚠️ Entrada muito fraca")
             return
 
         # -------------------BUY----------------------
@@ -742,9 +760,7 @@ class TradingEngine:
         # -----------------------------------------
         # 🚫 CAPITAL MÍNIMO
 
-        if capital < 5:
-            print("⚠️ Capital muito baixo")
-            return
+        capital = max(balance * risk_pct, 3)
 
         # -----------------------------------------
         # 🔢 CALCULA QTY

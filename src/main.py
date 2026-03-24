@@ -108,21 +108,28 @@ last_scan = 0
 cached_symbols = []
 
 def get_best_symbol():
+    global last_scan, cached_symbol
+
+    if time.time() - last_scan < 60:
+        return cached_symbol
 
     data = scan_market_pro(client)
 
     if not data:
-        return None
+        return cached_symbol
 
     ranking = data.get("ranking", [])
 
     if not ranking:
         print("⚠️ Nenhum ativo encontrado")
-        return None
+        return cached_symbol
 
     symbol = ranking[0].get("symbol")
 
     print(f"🎯 Melhor ativo: {symbol}")
+
+    cached_symbol = symbol
+    last_scan = time.time()
 
     return symbol
 
@@ -155,6 +162,16 @@ decision_engine = DecisionEngine(config)
 
 def safe_trader_master_loop():
     global BOT_RUNNING, CURRENT_TRADER, engine
+    
+    engine.run_once()
+    
+    try:
+        balance = CURRENT_TRADER.get_balance()
+        pnl = CURRENT_TRADER.get_pnl()
+
+        update_equity(balance, pnl)
+    except:
+        pass
 
     print("🔥 LOOP ATIVO")
 
