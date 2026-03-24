@@ -527,6 +527,17 @@ class TradingEngine:
         print(f"🧠 decision raw: {decision}")
 
     def execute_trade(self, action, decision, df, symbol):
+
+        # 🔥 DEFINE LOT AQUI (OBRIGATÓRIO)
+        lot = self.bot.get_lot_size(symbol)
+
+        if not lot:
+            print("❌ Erro ao obter LOT_SIZE")
+            return
+
+        step_size = float(lot.get("stepSize", 0.0001))
+        min_qty = float(lot.get("minQty", 0))
+        min_notional = float(lot.get("minNotional", 5))
         
         balance_data = safe_api_call(
             self.bot.client.get_asset_balance,
