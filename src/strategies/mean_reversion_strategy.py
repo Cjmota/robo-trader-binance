@@ -31,8 +31,19 @@ def mean_reversion_strategy(
             print(df.columns)
             return {"action": HOLD, "confidence": 0}
 
+
     from src.indicators.indicators import Indicators
-    df["RSI"] = Indicators.getRSI(df, last_only=False)
+    
+    
+    rsi_data = Indicators.getRSI(df, last_only=False)
+
+    if isinstance(rsi_data, pd.DataFrame):
+        if "rsi" in rsi_data.columns:
+            df["RSI"] = rsi_data["rsi"]
+        else:
+            df["RSI"] = rsi_data.iloc[:, 0]
+    else:
+        df["RSI"] = rsi_data
     
     # -----------------------------------------
     # 📊 BOLLINGER BANDS + Z-SCORE
