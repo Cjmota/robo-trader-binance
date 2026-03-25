@@ -111,6 +111,14 @@ class TradingEngine:
 
         symbol = self.bot.symbol
         df = self.bot.get_data()
+        
+        # 🚫 MERCADO TRAVADO (SEM MOVIMENTO REAL)
+        price_range = df["close"].max() - df["close"].min()
+
+        if df["close"].iloc[-1] > 0:
+            if price_range / df["close"].iloc[-1] < 0.003:
+                print("🚫 Mercado travado — ignorando")
+                return
 
         if df is None or df.empty:
             print("⚠️ Sem dados")

@@ -61,6 +61,11 @@ def mean_reversion_strategy(
     df["ma"] = df["close"].rolling(window).mean()
     df["std"] = df["close"].rolling(window).std()
     
+    # 🚫 VOLATILIDADE MUITO BAIXA (EVITA FALSO SINAL)
+    if df["std"].iloc[-1] < 1e-8:
+        print("⚠️ Volatilidade muito baixa — ignorando")
+        return {"action": HOLD, "confidence": 0}
+    
     # -----------------------------------------
     # 🚀 VOLATILIDADE DINÂMICA (AUTO AJUSTE)
 
