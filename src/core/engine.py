@@ -258,13 +258,17 @@ class TradingEngine:
             "orderflow": str(decision.get("orderflow", "BUY"))
         }
         
-        if decision["signal"] == "BUY" and decision["orderflow"] == "SELL":
-            print("🚫 Conflito de fluxo")
-            return
+        # 🔥 CONFLITO CONTEXTUAL (PRO)
 
-        if decision["signal"] == "SELL" and decision["orderflow"] == "BUY":
-            print("🚫 Conflito de fluxo")
-            return
+        if decision["signal"] != decision["orderflow"]:
+
+            if market_condition == "SIDEWAYS":
+                # mean reversion pode ir contra fluxo
+                print("⚠️ Conflito ignorado (mean reversion)")
+            
+            elif decision["score"] < 0.65:
+                print("🚫 Conflito fraco")
+                return
         
         # depois de normalizar
         if decision["signal"] != "HOLD":
@@ -277,12 +281,19 @@ class TradingEngine:
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
         
-        # 🚫 BLOQUEIO CONTRA TENDÊNCIA (CRÍTICO)
+        # 🔥 BLOQUEIO INTELIGENTE (POR CONTEXTO)
 
-        if decision.get("signal") == "BUY" and trend == "DOWN":
-            if decision.get("score", 0) < 0.35:
-                print("🚫 BUY contra tendência fraca")
-                return
+        if market_condition != "SIDEWAYS":
+
+            if decision["signal"] == "BUY" and trend == "DOWN":
+                if decision["score"] < 0.5:
+                    print("🚫 BUY contra tendência")
+                    return
+
+            if decision["signal"] == "SELL" and trend == "UP":
+                if decision["score"] < 0.5:
+                    print("🚫 SELL contra tendência")
+                    return
         
         # -----------------------------------------
         # -----------------------------------------
@@ -398,22 +409,21 @@ class TradingEngine:
         
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
         
-        # 🔥 FILTRO FINAL INTELIGENTE
-        if decision["score"] < 0.2 and not decision.get("force_trade"):
-            print("⚠️ Score baixo final")
+        # 🔥 FILTRO FINAL SIMPLES
+
+        if decision["score"] < 0.15 and not decision.get("force_trade"):
+            print("⚠️ Entrada muito fraca")
             return
         
         # 🔒 Só força trade em caso MUITO forte
         if decision["signal"] == "HOLD" and decision.get("force_trade"):
             if decision["score"] > 0.65:
                 decision["signal"] = "BUY" if trend == "UP" else "SELL"
-           
-        if decision["score"] < 0.15:
-            print("⚠️ Score muito baixo")
 
-        if not decision["momentum"] and decision["score"] < 0.2:
-            print("⚠️ Momentum fraco(ajustado)")
-            return
+        if market_condition != "SIDEWAYS":
+            if not decision["momentum"] and decision["score"] < 0.2 and not decision.get("force_trade"):
+                print("⚠️ Momentum fraco")
+                return
         
         # 🚫 NÃO VENDE SEM POSIÇÃO (SPOT)
         if decision["signal"] == "SELL" and not self.bot.position_open:
@@ -445,18 +455,12 @@ class TradingEngine:
 
         decision["priority"] = priority
 
-        if decision["priority"] < 0.35 and not decision.get("force_trade"):
-            print("⚠️ Trade fraco")
-            return
+    
 
         # -----------------------------------------
         # 🎯 DECISÃO FINAL
 
         # 🚫 FILTRO FINAL DE QUALIDADE (CORRETO)
-
-        if decision["score"] < 0.18:
-            print("⚠️ Entrada fraca (ajustada)")
-            return
 
         action = decision["signal"]
 
@@ -473,6 +477,13 @@ class TradingEngine:
 
         # -----------------------------------------
         # 💰 EXECUÇÃO
+        
+        if hasattr(self, "last_signal"):
+            if self.last_signal == decision["signal"] and self.bot.position_open:
+                print("🔁 Sinal repetido ignorado")
+                return
+
+        self.last_signal = decision["signal"]
 
         self.execute_trade(action, decision, df, symbol)
 
@@ -686,11 +697,6 @@ class TradingEngine:
         if winrate < 0.3 and len(perf["last_results"]) > 10:
             print(f"🚫 Ignorando {symbol} (ruim)")
             return
-
-        if decision["score"] < 0.18:
-            print("⚠️ Entrada muito fraca")
-            return
-
         # -------------------BUY----------------------
         # 💰 POSITION SIZE
 
