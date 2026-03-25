@@ -854,9 +854,14 @@ class TradingEngine:
         if profit_pct > 0:
             perf["wins"] += 1
             perf["last_results"].append(1)
-        else:
+
+        elif profit_pct < 0:
             perf["losses"] += 1
             perf["last_results"].append(0)
+
+        else:
+            print("⚖️ Trade neutro (0%) — ignorado")
+            return
 
         # mantém últimos 20 trades
         perf["last_results"] = perf["last_results"][-20:]

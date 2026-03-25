@@ -48,6 +48,11 @@ CURRENT_TRADER = None
 # -----------------------------------------
 # ⚙️ CONFIG
 
+TRADE_HISTORY = []
+
+def add_trade(trade):
+    TRADE_HISTORY.append(trade)
+
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "app", "config.json")
 

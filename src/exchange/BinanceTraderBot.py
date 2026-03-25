@@ -266,7 +266,7 @@ class BinanceTraderBot:
                 "profit": profit
             }
 
-            main.TRADE_HISTORY.append(trade)
+            main.add_trade(trade)
 
             print(f"✅ TRADE SALVO: {trade}")
             
