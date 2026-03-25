@@ -946,6 +946,49 @@
                 document.getElementById("statDrawdown").innerText = data.max_drawdown + "%";
                 document.getElementById("statSharpe").innerText = data.sharpe;
             }
+
+            function initChart() {
+
+                if (profitChart) return;
+
+                let ctx = document.getElementById('profitChart').getContext('2d');
+
+                profitChart = new Chart(ctx, {
+                    type: 'line',
+                    data: {
+                        labels: [],
+                        datasets: [
+                            {
+                                label: 'Equity (%)',
+                                data: [],
+                                borderColor: '#22c55e',
+                                tension: 0.3
+                            },
+                            {
+                                label: 'BTC (%)',
+                                data: [],
+                                borderColor: '#f59e0b',
+                                tension: 0.3
+                            },
+                            {
+                                label: 'Buy & Hold (%)',
+                                data: [],
+                                borderColor: '#38bdf8',
+                                tension: 0.3
+                            }
+                        ]
+                    },
+                    options: {
+                        plugins: {
+                            legend: { labels: { color: "white" } }
+                        },
+                        scales: {
+                            x: { ticks: { color: "white" } },
+                            y: { ticks: { color: "white" } }
+                        }
+                    }
+                });
+            }
    
             function showPage(page) {
 
@@ -966,7 +1009,7 @@
 
                 if (page === "performance") {
                     setTimeout(() => {
-                        //initChart();
+                        initChart();
                         initTradeChart();
                         initDrawdownChart();
                         initProfitTradeChart();
