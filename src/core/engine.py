@@ -434,7 +434,7 @@ class TradingEngine:
         # 🔥 PROBABILIDADE INTELIGENTE
 
         decision["probability"] = min(
-            decision["probability"] * 0.7 + decision["score"] * 0.3,
+            decision["probability"] * 0.5 + decision["score"] * 0.5,
             1.0
         )
         
