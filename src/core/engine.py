@@ -258,6 +258,14 @@ class TradingEngine:
             "orderflow": str(decision.get("orderflow", "BUY"))
         }
         
+        if decision["signal"] == "BUY" and decision["orderflow"] == "SELL":
+            print("🚫 Conflito de fluxo")
+            return
+
+        if decision["signal"] == "SELL" and decision["orderflow"] == "BUY":
+            print("🚫 Conflito de fluxo")
+            return
+        
         # depois de normalizar
         if decision["signal"] != "HOLD":
             if decision["score"] == 0 and decision["probability"] > 0:
@@ -299,7 +307,6 @@ class TradingEngine:
                 decision["signal"] = recovered_signal
                 decision["probability"] = 0.4
                 decision["score"] = 0.4
-                
                 decision["force_trade"] = True
 
                 print(f"♻️ Recuperando sinal da estratégia: {recovered_signal}")
@@ -336,40 +343,12 @@ class TradingEngine:
             return
 
         if decision["signal"] == "HOLD":
-            print("⚠️ HOLD original — tentando extrair oportunidade")
+            print("🧊 HOLD — sem trade")
+            return
                 
-        # -----------------------------------------
-        # 🔄 FORÇAR ENTRADA EM LATERAL / HOLD
-
-        if decision["signal"] == "HOLD" and not decision.get("force_trade"):
-
-            if decision["score"] > 0.3:
-
-                if trend == "UP":
-                    decision["signal"] = "BUY"
-
-                elif trend == "DOWN":
-                    decision["signal"] = "SELL"
+       
                     
-        # 🔥 BOOST PARA HOLD QUEBRADO
-        if decision["signal"] != "HOLD" and decision["score"] == 0:
-            decision["score"] = 0.3
-            print("⚙️ Score mínimo aplicado (HOLD break)")
-            
-        if decision["signal"] != "HOLD" and decision["probability"] < 0.3:
-            decision["probability"] = 0.3
-
-        if decision["signal"] == "HOLD":
-
-            if decision["score"] > 0.35:
-
-                if trend == "UP":
-                    decision["signal"] = "BUY"
-                    print("🔥 HOLD → BUY")
-
-                elif trend == "DOWN":
-                    decision["signal"] = "SELL"
-                    print("🔥 HOLD → SELL")
+      
         # -----------------------------------------
         # 🧠 CONFLUÊNCIA PROFISSIONAL
 
@@ -404,19 +383,13 @@ class TradingEngine:
 
         score = 0
 
-        score += decision["probability"]
-
-        if decision["momentum"]:
-            score += 0.2
-
-        if decision["volume_spike"]:
-            score += 0.2
-
-        if decision["signal"] == "BUY" and trend == "UP":
-            score += 0.3
-
-        if decision["signal"] == "SELL" and trend == "DOWN":
-            score += 0.3
+        score = (
+            decision["probability"] * 0.5 +
+            (0.2 if decision["momentum"] else 0) +
+            (0.2 if decision["volume_spike"] else 0) +
+            (0.3 if decision["signal"] == "BUY" and trend == "UP" else 0) +
+            (0.3 if decision["signal"] == "SELL" and trend == "DOWN" else 0)
+        )
             
         raw_score = (base_score * 0.3) + (score * 0.5) + (confluence_score * 0.2)
 
@@ -430,31 +403,11 @@ class TradingEngine:
             print("⚠️ Score baixo final")
             return
         
-        # 🔥 FORÇA PRIMEIRA ENTRADA (CRÍTICO)
-        if decision["signal"] == "HOLD" and decision["score"] > 0.4:
-
-            if trend == "UP":
-                decision["signal"] = "BUY"
-                print("🔥 Forçando BUY")
-
-            elif trend == "DOWN":
-                decision["signal"] = "SELL"
-                print("🔥 Forçando SELL")
-        
-        # 🔥 DESTRAVAR HOLD COM SCORE (CRÍTICO)
-
-        if decision["signal"] == "HOLD":
-
-            if decision["score"] > 0.6 and trend == "UP":
-                decision["signal"] = "BUY"
-                decision["force_trade"] = True
-                print("🔥 HOLD → BUY (score forte)")
-
-            elif decision["score"] < 0.3 and trend == "DOWN":
-                decision["signal"] = "SELL"
-                decision["force_trade"] = True
-                print("🔥 HOLD → SELL (score forte)")
-        
+        # 🔒 Só força trade em caso MUITO forte
+        if decision["signal"] == "HOLD" and decision.get("force_trade"):
+            if decision["score"] > 0.65:
+                decision["signal"] = "BUY" if trend == "UP" else "SELL"
+           
         if decision["score"] < 0.15:
             print("⚠️ Score muito baixo")
 
@@ -470,11 +423,10 @@ class TradingEngine:
         # -----------------------------------------
         # 🔥 PROBABILIDADE INTELIGENTE
 
-        prob = decision["probability"]
-
-        prob += decision["score"] * 0.35
-
-        decision["probability"] = min(prob, 1.0)
+        decision["probability"] = min(
+            decision["probability"] * 0.7 + decision["score"] * 0.3,
+            1.0
+        )
         
         if market_condition == "SIDEWAYS":
             decision["probability"] *= 1.1
@@ -604,7 +556,7 @@ class TradingEngine:
             if profit_pct >= 1.2 and not self.bot.partial_taken:
                 print("💰 Realizando parcial (50%)")
                 
-                qty = adjust_qty_to_step(self.bot.quantity * 0.5, lot["stepSize"])
+                qty = adjust_qty_to_step(self.bot.quantity * 0.5, step_size)
 
                 if qty < lot["minQty"]:
                     print("⚠️ Parcial abaixo do mínimo")
@@ -681,14 +633,6 @@ class TradingEngine:
                     self.bot.sell()
                     self.trade_count_today += 1
                     return
-       
-
-        # -----------------------------------------
-        # 🚫 BLOQUEIO SPOT (ESSENCIAL)
-
-        if action == "SELL" and not self.bot.position_open:
-            print("🚫 Ignorando SELL sem posição")
-            return
 
         # -----------------------------------------
         # 🔻 SELL
@@ -789,7 +733,7 @@ class TradingEngine:
         # -----------------------------------------
         # 🚫 CAPITAL MÍNIMO
 
-        capital = max(balance * risk_pct, 3)
+        capital = max(capital, 3)
 
         # -----------------------------------------
         # 🔢 CALCULA QTY
