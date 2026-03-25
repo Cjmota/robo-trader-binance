@@ -427,8 +427,8 @@ class TradingEngine:
         
         # 🚫 NÃO VENDE SEM POSIÇÃO (SPOT)
         if decision["signal"] == "SELL" and not self.bot.position_open:
-            print("🚫 Ignorando SELL sem posição")
-            return
+            print("🔄 Convertendo SELL → BUY (modo spot)")
+            decision["signal"] = "BUY"
         
         # -----------------------------------------
         # 🔥 PROBABILIDADE INTELIGENTE
@@ -470,10 +470,19 @@ class TradingEngine:
             return
 
         perf = self.get_symbol_performance(symbol)
+        
+        print(
+            f"🧠 DEBUG FINAL → {symbol} | "
+            f"signal={decision['signal']} | "
+            f"score={decision['score']:.2f} | "
+            f"prob={decision['probability']:.2f} | "
+            f"winrate={perf['winrate']:.2f} | "
+            f"trades={len(perf['last_results'])}"
+        )
 
-        if perf["winrate"] < 0.45 and len(perf["last_results"]) >= 8:
-            print(f"🚫 {symbol} ignorado antes da entrada")
-            return
+        if perf["winrate"] < 0.35 and len(perf["last_results"]) >= 10:
+            print(f"🚫 {symbol} fraco, reduzindo risco")
+            decision["score"] *= 0.7
 
         # -----------------------------------------
         # 💰 EXECUÇÃO
@@ -695,8 +704,9 @@ class TradingEngine:
             print(f"🔴 {symbol} fraco")
 
         if winrate < 0.3 and len(perf["last_results"]) > 10:
-            print(f"🚫 Ignorando {symbol} (ruim)")
-            return
+            print(f"⚠️ {symbol} fraco → reduzindo risco")
+            decision["score"] *= 0.6
+            
         # -------------------BUY----------------------
         # 💰 POSITION SIZE
 
