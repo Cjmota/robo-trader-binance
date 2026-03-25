@@ -19,27 +19,35 @@ def getRsiTradeStrategy(
 
     stock_data = stock_data.copy()
 
-    stock_data = stock_data.rename(columns={"close_price": "close"})
+    # 🔥 garante coluna close
+    if "close" not in stock_data.columns:
+        if "close_price" in stock_data.columns:
+            stock_data["close"] = stock_data["close_price"]
+        else:
+            return {"action": HOLD, "confidence": 0}
 
-    # 🔥 CORREÇÃO RSI
-    rsi = Indicators.getRSI(stock_data, last_only=False)
+    # 🔥 RSI SEGURO
+    rsi_data = Indicators.getRSI(stock_data, last_only=False)
 
-    if hasattr(rsi, "columns"):
-        stock_data["RSI"] = rsi.iloc[:, 0]
+    if isinstance(rsi_data, pd.DataFrame):
+        if "rsi" in rsi_data.columns:
+            rsi_series = rsi_data["rsi"]
+        else:
+            rsi_series = rsi_data.iloc[:, 0]
     else:
-        stock_data["RSI"] = rsi
+        rsi_series = pd.Series(rsi_data, index=stock_data.index)
 
-    rsi_series = stock_data["RSI"]
+    rsi_series = rsi_series.astype(float)
+    stock_data["RSI"] = rsi_series
 
-    last_rsi = rsi_series.iloc[-1]
-    prev_rsi = rsi_series.iloc[-2]
+    # 🔥 valores seguros
+    last_rsi = float(rsi_series.iloc[-1])
+    prev_rsi = float(rsi_series.iloc[-2])
 
-    # força
     rsi_diff = last_rsi - prev_rsi
 
     confidence = min(abs(rsi_diff) / 10, 1.0)
 
-    # tendência
     ema_fast = stock_data["close"].ewm(span=9).mean().iloc[-1]
     ema_slow = stock_data["close"].ewm(span=21).mean().iloc[-1]
 
@@ -64,6 +72,5 @@ def getRsiTradeStrategy(
     return {
         "action": decision,
         "confidence": confidence
-    }
-    
+    }    
     
