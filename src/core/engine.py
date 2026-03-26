@@ -275,7 +275,7 @@ class TradingEngine:
                 # mean reversion pode ir contra fluxo
                 print("⚠️ Conflito ignorado (mean reversion)")
             
-            elif decision["score"] < 0.65:
+            elif decision["score"] < 0.3:
                 print("🚫 Conflito fraco")
                 return
         
@@ -397,6 +397,8 @@ class TradingEngine:
         if rsi is None:
             factors -= 1
 
+        decision["score"] = max(decision["score"], 0)
+        
         base_score = decision["score"]
 
         confluence_score = confluence / max(factors, 1)
@@ -418,9 +420,14 @@ class TradingEngine:
         
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
         
+        # 🔥 LIBERAÇÃO POR PROBABILIDADE (CRÍTICO)
+        if decision["probability"] > 0.65:
+            print("🚀 Alta probabilidade — liberando trade")
+            decision["score"] = max(decision["score"], 0.2)
+        
         # 🔥 FILTRO FINAL SIMPLES
 
-        if decision["score"] < 0.15 and not decision.get("force_trade"):
+        if decision["score"] < 0.08 and not decision.get("force_trade"):
             print("⚠️ Entrada muito fraca")
             return
         
@@ -430,7 +437,7 @@ class TradingEngine:
                 decision["signal"] = "BUY" if trend == "UP" else "SELL"
 
         if market_condition != "SIDEWAYS":
-            if not decision["momentum"] and decision["score"] < 0.2 and not decision.get("force_trade"):
+            if not decision["momentum"] and decision["score"] < 0.1 and not decision.get("force_trade"):
                 print("⚠️ Momentum fraco")
                 return
         
@@ -691,7 +698,7 @@ class TradingEngine:
         prev_close = df["close"].iloc[-2]
 
         # 🔥 1. Candle favorável
-        if decision["signal"] == "BUY" and last_close < prev_close and decision["score"] < 0.6:
+        if decision["signal"] == "BUY" and last_close < prev_close and decision["score"] < 0.4:
             print("🚫 Candle contra entrada (ajustado)")
             return
 
