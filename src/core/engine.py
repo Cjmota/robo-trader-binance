@@ -765,7 +765,7 @@ class TradingEngine:
         # -----------------------------------------
         # 🚫 CAPITAL MÍNIMO
 
-        capital = max(capital, 3)
+        capital = max(capital, min_notional * 1.1)
 
         # -----------------------------------------
         # 🔢 CALCULA QTY
