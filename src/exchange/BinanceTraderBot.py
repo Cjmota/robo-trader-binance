@@ -317,28 +317,13 @@ class BinanceTraderBot:
     # -----------------------------------------
     # 📈 PRICE
 
-    def get_price(self):
-
-        # 🔥 1. tenta websocket (rápido)
-        if hasattr(self, "price_stream"):
-            price = self.price_stream.get_price(self.symbol)
-            if price:
-                return price
-
-        # 🔥 2. fallback API (lento mas seguro)
-        try:
-            ticker = self.client.get_symbol_ticker(symbol=self.symbol)
-            return float(ticker["price"])
-        except Exception as e:
-            print("⚠️ fallback price erro:", e)
-            return None
-        
-    # -----------------------------------------
-    # ⏱️ COOLDOWN
-
-    def can_trade(self):
+    def can_trade(self, force=False):
 
         cooldown = self.config.get("TEMPO_ENTRE_TRADES", 60)
+
+        if force:
+            print("🚀 Ignorando cooldown (forçado)")
+            return True
 
         if time.time() - self.last_trade_time < cooldown:
             print("⏱️ Aguardando cooldown")

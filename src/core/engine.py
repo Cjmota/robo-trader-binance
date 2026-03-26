@@ -81,7 +81,7 @@ class TradingEngine:
             return
 
         # ⏱️ cooldown bot
-        if not self.bot.can_trade():
+        if not self.bot.can_trade(force=decision.get("probability", 0) > 0.8):
             return
 
         # 🛑 limite diário
