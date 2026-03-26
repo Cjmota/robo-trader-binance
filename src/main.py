@@ -7,6 +7,10 @@ import threading
 import asyncio
 from src.utils.websocket_price import start_socket
 
+from src.config.settings import load_config
+
+from src.utils.state_manager import StateManager
+
 from dotenv import load_dotenv
 from binance.client import Client
 from src.state import STATE
@@ -44,6 +48,10 @@ API_SECRET = os.getenv("BINANCE_API_SECRET")
 
 BOT_RUNNING = False
 CURRENT_TRADER = None
+
+config = load_config()
+MAX_TRADES_PER_DAY = config.get("MAX_TRADES_PER_DAY", 10)
+state = StateManager()
 
 # -----------------------------------------
 # ⚙️ CONFIG
@@ -165,7 +173,20 @@ def safe_trader_master_loop():
             continue
 
         try:
+            print("🚀 Novo ciclo")
+
+            # 🔄 RESET DIÁRIO
+            state.check_reset()
+
+            # 🛑 LIMITE DE TRADES
+            if not state.can_trade(MAX_TRADES_PER_DAY):
+                time.sleep(10)
+                continue
+
+            # 🧠 EXECUÇÃO
             engine.run_once()
+
+            print(f"📊 Trades hoje: {state.trades_today}")
 
             try:
                 balance = CURRENT_TRADER.get_balance()

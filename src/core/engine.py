@@ -72,6 +72,8 @@ class TradingEngine:
 
         print("\n🚀 Novo ciclo")
         
+        print(f"📊 Trades hoje: {self.trade_count_today}/{max_trades}")
+        
         # 🔴 BLOQUEIO POR SEQUÊNCIA DE PERDAS
         if self.risk_manager.consecutive_losses >= self.config["RISK"].get("MAX_CONSECUTIVE_LOSSES", 3):
             print("🛑 Muitas perdas seguidas - pausando bot")
@@ -86,8 +88,14 @@ class TradingEngine:
         max_trades = self.config["RISK"].get("MAX_TRADES_PER_DAY", 999)
 
         if self.trade_count_today >= max_trades:
-            print("🛑 Limite diário de trades atingido")
+
+            if not hasattr(self, "limit_warned"):
+                print("🛑 Limite diário de trades atingido")
+                self.limit_warned = True
+
             return
+        else:
+            self.limit_warned = False
 
         # -----------------------------------------
         # 🔍 SCANNER
