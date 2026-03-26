@@ -21,33 +21,43 @@ class Indicators:
     
     @staticmethod
     def getRSI(data, window=14, period=None, last_only=True):
-        """
-        Calcula o Relative Strength Index (RSI)
-        
-        Parâmetros:
-        - data: DataFrame com os dados de preço
-        - window: Período para cálculo do RSI
-        - period: Período alternativo (mantido para compatibilidade)
-        - last_only: Se True, retorna apenas o último valor
-        
-        Retorno:
-        - Série com os valores do RSI
-        """
+
         actual_window = period if period is not None else window
-        close_col = 'close' if 'close' in data.columns else data.columns[0]
-        series = data[close_col]
-        
+
+        # 🔥 GARANTE COLUNA CORRETA
+        if "close" not in data.columns:
+            raise ValueError("RSI precisa da coluna 'close'")
+
+        series = pd.to_numeric(data["close"], errors="coerce")
+
         delta = series.diff()
+
         gain = (delta.where(delta > 0, 0)).rolling(window=actual_window).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=actual_window).mean()
-        
-        # Evitar divisão por zero
-        rs = gain / loss.replace(0, np.finfo(float).eps)
+
+        # 🔥 evita divisão por zero
+        loss = loss.replace(0, np.finfo(float).eps)
+        rs = gain / loss
+
         rsi_values = 100 - (100 / (1 + rs))
-        
+
+        # 🔥 GARANTE FORMATO SEGURO
+        if isinstance(rsi_values, pd.DataFrame):
+            rsi_values = rsi_values.iloc[:, 0]
+
+        if not isinstance(rsi_values, pd.Series):
+            rsi_values = pd.Series(rsi_values)
+
+        rsi_values = rsi_values.copy()
+        rsi_values.index = data.index
+
+        rsi_values = pd.to_numeric(rsi_values, errors="coerce")
+        rsi_values = rsi_values.replace([np.inf, -np.inf], np.nan)
+
         if last_only:
             valid = rsi_values.dropna()
-            return valid.iloc[-1] if not valid.empty else np.nan
+            return float(valid.iloc[-1]) if not valid.empty else np.nan
+
         return rsi_values
 
     @staticmethod
