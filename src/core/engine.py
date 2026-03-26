@@ -39,6 +39,8 @@ class TradingEngine:
     # -----------------------------------------
     def run_once(self):
         
+        decision = {"probability": 0, "signal": "HOLD", "score": 0}
+        
         symbol = getattr(self.bot, "symbol", None)
 
         if not symbol:
@@ -78,10 +80,6 @@ class TradingEngine:
         # 🛑 risco global
         if not self.risk_manager.can_trade():
             print("⛔ Bloqueado por risco")
-            return
-
-        # ⏱️ cooldown bot
-        if not self.bot.can_trade(force=decision.get("probability", 0) > 0.8):
             return
 
         # 🛑 limite diário
@@ -192,19 +190,35 @@ class TradingEngine:
         # -----------------------------------------
         # 🧠 EXECUTAR ESTRATÉGIA
 
-        raw_decision = self.strategy_runner.execute(
-            bot=self.bot,
-            main_strategy=strategy,
-            fallback_strategy=None,
-            stock_data=df
-        )
+       
+
+        # 🔥 DECISION PADRÃO (NUNCA QUEBRA)
+        raw_decision = {"action": "HOLD", "confidence": 0}
+
+        try:
+            raw_decision = self.strategy_runner.execute(
+                bot=self.bot,
+                main_strategy=strategy,
+                fallback_strategy=None,
+                stock_data=df
+            )
+
+            if raw_decision is None:
+                print("⚠️ Estratégia retornou None")
+                raw_decision = {"action": "HOLD", "confidence": 0}
+
+        except Exception as e:
+            print(f"❌ ERRO ESTRATÉGIA ({symbol}): {e}")
+            import traceback
+            traceback.print_exc()
+            raw_decision = {"action": "HOLD", "confidence": 0}
         
         original_signal = None
         
         # -----------------------------------------
         # 🔥 FALLBACK INTELIGENTE (CORRETO)
 
-        if raw_decision is None or raw_decision == "HOLD":
+        if not raw_decision or raw_decision == "HOLD":
                         
             # 🔥 EXTRAI SINAL REAL DA ESTRATÉGIA
             original_signal = None
@@ -219,7 +233,15 @@ class TradingEngine:
                 )
         
         # 🔥 limpa numpy na raiz
-        decision = self.decision_engine.evaluate(raw_decision)
+        try:
+            decision = self.decision_engine.evaluate(raw_decision)
+        except Exception as e:
+            print(f"❌ ERRO decision_engine ({symbol}): {e}")
+            decision = {"signal": "HOLD", "probability": 0, "score": 0}
+        
+        if decision is None:
+            print("⚠️ Decision veio None do decision_engine")
+            decision = {"signal": "HOLD", "probability": 0, "score": 0}
         
         # 🔥 GARANTE FORMATO LIMPO
         if isinstance(decision.get("action"), dict):
@@ -289,6 +311,15 @@ class TradingEngine:
 
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
+        
+         # ⏱️ cooldown bot
+        force_trade = False
+
+        if decision and isinstance(decision, dict):
+            force_trade = decision.get("probability", 0) > 0.8
+
+        if not self.bot.can_trade(force=force_trade):
+            return
         
         # 🔥 BLOQUEIO INTELIGENTE (POR CONTEXTO)
 
