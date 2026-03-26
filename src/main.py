@@ -63,10 +63,6 @@ def add_trade(trade):
 
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 CONFIG_PATH = os.path.join(BASE_DIR, "app", "config.json")
-
-def load_config():
-    with open(CONFIG_PATH, "r") as f:
-        return json.load(f)
     
 def update_equity(balance, pnl):
     equity = balance + pnl

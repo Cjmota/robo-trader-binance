@@ -1,7 +1,4 @@
-import json
+import os
 
-CONFIG_FILE = "config.json"
-
-def load_config():
-    with open(CONFIG_FILE, "r") as f:
-        return json.load(f)
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+CONFIG_FILE = os.path.join(BASE_DIR, "app", "config.json")
