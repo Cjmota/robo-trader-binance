@@ -24,24 +24,30 @@ class Indicators:
 
         actual_window = period if period is not None else window
 
-        # 🔥 GARANTE COLUNA CORRETA
+        # 🔥 remove duplicadas
+        data = data.loc[:, ~data.columns.duplicated()]
+
         if "close" not in data.columns:
             raise ValueError("RSI precisa da coluna 'close'")
 
-        series = pd.to_numeric(data["close"], errors="coerce")
+        close_data = data["close"]
+
+        # 🔥 garante 1D
+        if isinstance(close_data, pd.DataFrame):
+            close_data = close_data.iloc[:, 0]
+
+        series = pd.to_numeric(close_data, errors="coerce")
 
         delta = series.diff()
 
         gain = (delta.where(delta > 0, 0)).rolling(window=actual_window).mean()
         loss = (-delta.where(delta < 0, 0)).rolling(window=actual_window).mean()
 
-        # 🔥 evita divisão por zero
         loss = loss.replace(0, np.finfo(float).eps)
         rs = gain / loss
 
         rsi_values = 100 - (100 / (1 + rs))
 
-        # 🔥 GARANTE FORMATO SEGURO
         if isinstance(rsi_values, pd.DataFrame):
             rsi_values = rsi_values.iloc[:, 0]
 
