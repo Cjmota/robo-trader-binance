@@ -60,11 +60,11 @@ def scan_market_pro(client):
 
             # volume
             vol_ratio = current_volume / avg_volume
-            score += min(vol_ratio, 3)
+            score += min(vol_ratio, 1.5)
 
             # momentum
-            if price_change > 0:
-                score += 2
+            if abs(price_change) > 0:
+                score += 1.5
 
             # compressão (pré breakout)
             recent_range = (
@@ -72,41 +72,32 @@ def scan_market_pro(client):
             ) / closes.iloc[-20:].min()
 
             if recent_range < 0.03:
-                score += 2
+                score += 1.5
 
             # volatilidade saudável
             if volatility > 0.002:
-                score += 1.5
+                score += 1
                 
             # 🔥 DETECÇÃO DE SINAL (Smart Money)
             signal = None
 
-            if price_change > 0 and vol_ratio > 1.5:
+            if price_change > 0.002 and vol_ratio > 1.8:
                 signal = "BUY"
-            elif price_change < 0 and vol_ratio > 1.5:
+            elif price_change < -0.002 and vol_ratio > 1.8:
                 signal = "SELL"
 
-            # 🔥 SE TEM SINAL → PRIORIDADE TOTAL
-            if signal:
-
-                smart_money.append(f"{signal} {symbol}")
-
-                ranking.append({
-                    "symbol": symbol,
-                    "score": round(score * 10) if score else 50,
-                    "momentum": price_change > 0,
-                    "volume": int(current_volume)
-                })
-
-            # 🔥 SENÃO, entra por score
-            elif score >= 4.0:
-
+            # 🔥 SEMPRE ENTRA NO RANKING
+            if score >= 2:
                 ranking.append({
                     "symbol": symbol,
                     "score": round(score * 10),
-                    "momentum": price_change > 0,
-                    "volume": int(current_volume)
+                    "momentum": "UP" if price_change > 0 else "DOWN",
+                    "volume": int(avg_volume)
                 })
+
+            # 🔥 SMART MONEY (se houver sinal)
+            if signal:
+                smart_money.append(f"{signal} {symbol}")
 
         except Exception as e:
             print(f"Erro em {symbol}: {e}")

@@ -1177,14 +1177,7 @@
                     smart.innerHTML = ""
 
                     let ranking = data.ranking || []
-                    let smartMoney = data.smart_money || []
-
-                    if(ranking.length === 0){
-                        ranking = [
-                            {symbol:"BTCUSDT", score:0.95, momentum:"UP", volume:1200000000}
-                        ]
-                        smartMoney = ["BUY BTCUSDT"]
-                    }    
+                    let smartMoney = data.smart_money || []  
 
                     if(ranking.length === 0){
                         table.innerHTML = "<tr><td colspan='4'>⚠️ Scanner ativo, mas sem sinais</td></tr>"
