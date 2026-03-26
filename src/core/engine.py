@@ -584,8 +584,12 @@ class TradingEngine:
                 print(df.columns)
                 return    
 
+        if "close" not in df.columns:
+            print("❌ Sem preço disponível")
+            return
+
         # 🔥 PREÇO (CORRETO)
-        price = self.bot.get_price()
+        price = float(df["close"].iloc[-1])
 
         if price is None:
             print("⚠️ Preço None")
