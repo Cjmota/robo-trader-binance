@@ -312,7 +312,7 @@ class TradingEngine:
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
         
-         # ⏱️ cooldown bot
+        # ⏱️ cooldown bot (AGORA CORRETO)
         force_trade = False
 
         if decision and isinstance(decision, dict):
