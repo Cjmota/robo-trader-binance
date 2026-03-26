@@ -765,7 +765,19 @@ class TradingEngine:
         # -----------------------------------------
         # 🚫 CAPITAL MÍNIMO
 
-        capital = max(capital, min_notional * 1.1)
+        min_required = min_notional * 1.2  # margem maior
+
+        if capital < min_required:
+            capital = min_required
+
+        qty = capital / price
+        qty = adjust_qty_to_step(qty, step_size)
+
+        # 🔥 GARANTE APÓS AJUSTE
+        if qty * price < min_notional:
+            print("⚠️ Ajustando qty pós-step")
+            qty = (min_notional * 1.2) / price
+            qty = adjust_qty_to_step(qty, step_size)
 
         # -----------------------------------------
         # 🔢 CALCULA QTY
