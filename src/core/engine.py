@@ -313,10 +313,14 @@ class TradingEngine:
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
         
         # ⏱️ cooldown bot (AGORA CORRETO)
+        # ⏱️ cooldown bot (CORRETO)
         force_trade = False
 
         if decision and isinstance(decision, dict):
-            force_trade = decision.get("probability", 0) > 0.8
+            force_trade = (
+                decision.get("probability", 0) > 0.8 and
+                decision.get("signal") in ["BUY", "SELL"]
+            )
 
         if not self.bot.can_trade(force=force_trade):
             return
@@ -392,6 +396,9 @@ class TradingEngine:
         if decision["spread"] > 0.003:
             print("🚫 Spread alto")
             return
+
+        if decision["signal"] == "HOLD" and decision["probability"] > 0.8:
+            print("⚠️ HOLD com prob alta — ignorando força")
 
         if decision["signal"] == "HOLD":
             print("🧊 HOLD — sem trade")
@@ -480,9 +487,13 @@ class TradingEngine:
         # -----------------------------------------
         # 🔥 PROBABILIDADE INTELIGENTE
 
-        decision["probability"] = min(
-            decision["probability"] * 0.5 + decision["score"] * 0.5,
-            1.0
+        decision["probability"] = max(
+            0,
+            min(
+                decision["probability"] * 0.5 + decision["score"] * 0.5,
+                decision["score"],  # 🔥 LIMITA PELA QUALIDADE REAL
+                1.0
+            )
         )
         
         if market_condition == "SIDEWAYS":
