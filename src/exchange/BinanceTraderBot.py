@@ -43,7 +43,13 @@ class BinanceTraderBot:
     # -----------------------------------------
     # 💰 BUY
 
-    def buy(self, quantity):
+    def buy(self, quantity, price=None):
+
+        if price is None:
+            print("⚠️ Price não informado — usando fallback")
+            return
+
+        print(f"💰 Execução real: {price}")
 
         if self.position_open:
             print("⚠️ Já existe posição aberta")
@@ -104,14 +110,8 @@ class BinanceTraderBot:
         # -----------------------------------------
         # 📈 PREÇO (ANTES DE VALIDAR)
 
-        price = self.get_price()
-
         if not price or price <= 0:
             print("⚠️ Sem preço → cancelando BUY")
-            return None
-        
-        if quantity is None:
-            print("❌ quantity None antes da validação")
             return None
         
         # ----------------------------------------
