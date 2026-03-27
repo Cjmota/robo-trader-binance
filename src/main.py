@@ -23,6 +23,7 @@ from src.scanner.market_scanner_pro import scan_market_pro
 from src.core.risk_manager import RiskManager
 from src.exchange.price_stream import PriceStream
 from src.utils.report import generate_report
+from src.data.data_provider import get_klines
 
 # -----------------------------------------
 # 🔐 ENV
@@ -108,20 +109,77 @@ def get_best_symbol():
     if not data:
         return cached_symbol
 
-    ranking = data.get("ranking", [])
+    ranking = data.get("ranking", [])[:10]
 
-    if not ranking:
-        print("⚠️ Nenhum ativo encontrado")
-        return cached_symbol
+    best_symbol = None
+    best_score = 0
 
-    symbol = ranking[0].get("symbol")
+    for coin in ranking:
+        symbol = coin.get("symbol")
 
-    print(f"🎯 Melhor ativo: {symbol}")
+        try:
+            df = get_klines(client, symbol)
 
-    cached_symbol = symbol
-    last_scan = time.time()
+            if df is None or df.empty or len(df) < 50:
+                continue
 
-    return symbol
+            # -----------------------------------------
+            # 🧠 FILTROS PROFISSIONAIS
+
+            price = df["close"].iloc[-1]
+
+            # volatilidade
+            volatility = df["close"].pct_change().rolling(10).std().iloc[-1]
+
+            if volatility is None:
+                continue
+
+            if volatility < 0.002 or volatility > 0.03:
+                continue
+
+            # volume
+            volume = df["volume"].iloc[-1]
+            avg_volume = df["volume"].rolling(20).mean().iloc[-1]
+
+            volume_score = 1 if volume > avg_volume else 0
+
+            # tendência
+            ma20 = df["close"].rolling(20).mean().iloc[-1]
+            ma50 = df["close"].rolling(50).mean().iloc[-1]
+
+            trend_score = 1 if ma20 > ma50 else 0
+
+            # momentum
+            momentum = (df["close"].iloc[-1] - df["close"].iloc[-5]) / df["close"].iloc[-5]
+            momentum_score = 1 if momentum > 0 else 0
+
+            # -----------------------------------------
+            # 🔥 SCORE FINAL
+
+            score = (
+                (volatility * 10) +      # movimento
+                (volume_score * 0.5) +
+                (trend_score * 0.7) +
+                (momentum_score * 0.8)
+            )
+
+            print(f"📊 {symbol} | score={score:.3f}")
+
+            if score > best_score:
+                best_score = score
+                best_symbol = symbol
+
+        except Exception as e:
+            print(f"Erro no scanner {symbol}: {e}")
+            continue
+
+    if best_symbol:
+        print(f"🎯 Melhor ativo selecionado: {best_symbol} | score={best_score:.3f}")
+        cached_symbol = best_symbol
+        last_scan = time.time()
+        return best_symbol
+
+    return cached_symbol
 
 # -----------------------------------------
 # 🤖 BOT
