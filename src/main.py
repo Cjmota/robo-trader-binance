@@ -96,15 +96,17 @@ def get_client():
 # 🔍 SCANNER
 
 last_scan = 0
-cached_symbols = []
+cached_symbols = None
 
 def get_best_symbol():
     global last_scan, cached_symbol
 
+    client_local = get_client()
+
     if time.time() - last_scan < 60:
         return cached_symbol
 
-    data = scan_market_pro(client)
+    data = scan_market_pro(client_local)
 
     if not data:
         return cached_symbol
@@ -118,7 +120,7 @@ def get_best_symbol():
         symbol = coin.get("symbol")
 
         try:
-            df = get_klines(client, symbol)
+            df = get_klines(client_local, symbol)
 
             if df is None or df.empty or len(df) < 50:
                 continue
