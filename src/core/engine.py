@@ -300,14 +300,7 @@ class TradingEngine:
         # 🔥 CONFLITO CONTEXTUAL (PRO)
 
         if decision["signal"] != decision["orderflow"]:
-
-            if market_condition == "SIDEWAYS":
-                # mean reversion pode ir contra fluxo
-                print("⚠️ Conflito ignorado (mean reversion)")
-            
-            elif decision["score"] < 0.3:
-                print("🚫 Conflito fraco")
-                return
+            return
         
         # depois de normalizar
         if decision["signal"] != "HOLD":
@@ -322,15 +315,8 @@ class TradingEngine:
         
         # ⏱️ cooldown bot (AGORA CORRETO)
         # ⏱️ cooldown bot (CORRETO)
-        force_trade = False
-
-        if decision and isinstance(decision, dict):
-            force_trade = (
-                decision.get("probability", 0) > 0.8 and
-                decision.get("signal") in ["BUY", "SELL"]
-            )
-
-        if not self.bot.can_trade(force=force_trade):
+        
+        if not self.bot.can_trade():
             return
         
         # 🔥 BLOQUEIO INTELIGENTE (POR CONTEXTO)
@@ -367,12 +353,7 @@ class TradingEngine:
                 )
 
             if recovered_signal and recovered_signal != "HOLD":
-                decision["signal"] = recovered_signal
-                decision["probability"] = 0.4
-                decision["score"] = 0.4
-                decision["force_trade"] = True
-
-                print(f"♻️ Recuperando sinal da estratégia: {recovered_signal}")
+                print(f"♻️ Sinal ignorado (fraco): {recovered_signal}")
                 
         # 🚀 MOSTRA OPORTUNIDADE (ANTES DOS FILTROS)
         if decision["signal"] != "HOLD":
@@ -396,9 +377,8 @@ class TradingEngine:
         if market_condition == "SIDEWAYS":
             min_prob = 0.30
 
-        if decision["probability"] < min_prob and not decision.get("force_trade"):
-            print(f"⚠️ Prob baixa ({decision['probability']:.2f}) → reduzindo força")
-            decision["score"] *= 0.5
+        if decision["probability"] < min_prob:
+            return
 
         # 🚫 FILTRO DE SPREAD
         if decision["spread"] > 0.003:
@@ -435,6 +415,12 @@ class TradingEngine:
         if decision["momentum"]:
             confluence += 1
 
+        # 🚫 FILTRO DE CONFLUÊNCIA (CRÍTICO)
+
+        if confluence < 3:
+            print(f"🚫 Baixa confluência ({confluence})")
+            return
+
         # -----------------------------------------
         # 🔥 SCORE REAL
 
@@ -467,24 +453,18 @@ class TradingEngine:
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
         
         # 🔥 LIBERAÇÃO POR PROBABILIDADE (CRÍTICO)
-        if decision["probability"] > 0.65:
+        if decision["probability"] > 0.55:
             print("🚀 Alta probabilidade — liberando trade")
             decision["score"] = max(decision["score"], 0.2)
         
         # 🔥 FILTRO FINAL SIMPLES
 
-        if decision["score"] < 0.08 and not decision.get("force_trade"):
+        if decision["score"] < 0.25:
             print("⚠️ Entrada muito fraca")
             return
-        
-        # 🔒 Só força trade em caso MUITO forte
-        if decision["signal"] == "HOLD" and decision.get("force_trade"):
-            if decision["score"] > 0.65:
-                decision["signal"] = "BUY" if trend == "UP" else "SELL"
 
         if market_condition != "SIDEWAYS":
-            if not decision["momentum"] and decision["score"] < 0.1 and not decision.get("force_trade"):
-                print("⚠️ Momentum fraco")
+            if not decision["momentum"] and decision["score"] < 0.1:
                 return
         
         # 🚫 NÃO VENDE SEM POSIÇÃO (SPOT)
