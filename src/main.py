@@ -72,17 +72,10 @@ def update_equity(balance, pnl):
 def run_socket():
     asyncio.run(start_socket())
 
-threading.Thread(target=run_socket, daemon=True).start()
-
-config = load_config()
-
 # -----------------------------------------
 # 🔧 GLOBAIS IMPORTANTES
 
 risk_manager = RiskManager(config)
-
-price_stream = PriceStream(API_KEY, API_SECRET)
-price_stream.start("BTCUSDT")
 
 client = None
 engine = None
@@ -136,6 +129,9 @@ def get_best_symbol():
 def create_bot():
     client = get_client()
 
+    price_stream = PriceStream(API_KEY, API_SECRET)
+    price_stream.start("BTCUSDT")
+
     bot = BinanceTraderBot(
         symbol="BTCUSDT",
         client=client,
@@ -144,7 +140,7 @@ def create_bot():
     )
 
     bot.price_stream = price_stream
-    bot.is_running = True  # 🔥 ESSENCIAL
+    bot.is_running = True
 
     return bot
 
@@ -224,14 +220,14 @@ def start_bot():
             risk_manager=risk_manager
         )
 
-        BOT_RUNNING = True  # 🔥 SÓ AQUI
+        BOT_RUNNING = True
 
         print("✅ Bot iniciado com sucesso")
 
     except Exception as e:
         print("❌ ERRO:", e)
         BOT_RUNNING = False
-
+        
 # -----------------------------------------
 # ⛔ STOP
 
@@ -248,5 +244,9 @@ def stop_bot():
 # -----------------------------------------
 
 if __name__ == "__main__":
+    print("🧠 Loop do bot iniciado em background")
+    
+    threading.Thread(target=run_socket, daemon=True).start()
+    
     start_bot()
     safe_trader_master_loop()
