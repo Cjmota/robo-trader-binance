@@ -989,15 +989,49 @@ class TradingEngine:
             if asset_name == "USDT":
                 continue
 
-            if free > 0:
-                symbol = asset_name + "USDT"
+            if free <= 0:
+                continue
 
-                try:
-                    print(f"🧹 Limpando {asset_name}")
+            symbol = asset_name + "USDT"
 
-                    self.bot.set_symbol(symbol)
-                    self.bot.quantity = free  # 🔥 AJUSTE AQUI
-                    self.bot.sell()
+            try:
+                ticker = safe_api_call(
+                    self.bot.client.get_symbol_ticker,
+                    symbol=symbol
+                )
 
-                except Exception as e:
-                    print(f"Erro ao limpar {asset_name}: {e}")
+                price = float(ticker["price"])
+                notional = free * price
+
+            except:
+                continue
+
+            # 🔥 PROTEÇÃO
+            if notional > 5:
+                continue
+
+            print(f"🧹 Limpando poeira: {asset_name} (${notional:.2f})")
+
+            try:
+                lot = self.bot.get_lot_size(symbol)
+                if not lot:
+                    continue
+
+                step = float(lot.get("stepSize", 0.0001))
+                min_qty = float(lot.get("minQty", 0))
+
+                qty = adjust_qty_to_step(free, step)
+
+                if qty < min_qty:
+                    continue
+
+                safe_api_call(
+                    self.bot.client.create_order,
+                    symbol=symbol,
+                    side="SELL",
+                    type="MARKET",
+                    quantity=qty
+                )
+
+            except Exception as e:
+                print(f"Erro ao limpar {asset_name}: {e}")

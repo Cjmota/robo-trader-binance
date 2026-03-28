@@ -11,6 +11,8 @@ import time
 
 from src import main
 
+logger = logging.getLogger(__name__)
+
 class BinanceTraderBot:
 
     def __init__(self, symbol, client, config, risk_manager=None):
@@ -32,13 +34,11 @@ class BinanceTraderBot:
         self.is_running = False
         self.daily_profit = 0       
         
-
     # -----------------------------------------
     # 📊 DATA
 
     def get_data(self):
         return get_klines(self.client, self.symbol)
-
 
     # -----------------------------------------
     # 💰 BUY
@@ -46,13 +46,13 @@ class BinanceTraderBot:
     def buy(self, quantity, price=None):
 
         if price is None:
-            print("⚠️ Price não informado — usando fallback")
+            logger.warning("⚠️ Price não informado — usando fallback")
             return
 
-        print(f"💰 Execução real: {price}")
+        logger.info(f"💰 Execução real: {price}")
 
         if self.position_open:
-            print("⚠️ Já existe posição aberta")
+            logger.warning("⚠️ Já existe posição aberta")
             return None
 
         # -----------------------------------------
@@ -67,33 +67,33 @@ class BinanceTraderBot:
             balance = float(balance_data["free"])
 
             if balance < 5:
-                print("💸 Saldo insuficiente")
+                logger.info("💸 Saldo insuficiente")
                 return None
 
         except Exception as e:
-            print("❌ Erro ao verificar saldo:", e)
+            logger.exception("Erro ao verificar saldo")
             return None
 
         # -----------------------------------------
         # ⏱️ PROTEÇÃO SPAM
 
         if time.time() - self.last_trade_time < 2:
-            print("⚠️ Ordem muito rápida")
+            logger.warning("⚠️ Ordem muito rápida")
             return None
 
         # -----------------------------------------
         # 🔧 VALIDAÇÃO QTD
 
         if quantity is None:
-            print("❌ BUY cancelado: quantity None")
+            logger.error("❌ BUY cancelado: quantity None")
             return None
 
         if not isinstance(quantity, (int, float)):
-            print("❌ BUY cancelado: quantity inválido")
+            logger.error("❌ BUY cancelado: quantity inválido")
             return None
 
         if quantity <= 0:
-            print("❌ BUY cancelado: quantity <= 0")
+            logger.error("❌ BUY cancelado: quantity <= 0")
             return None
 
         quantity = float(quantity)
@@ -105,13 +105,13 @@ class BinanceTraderBot:
         quantity = self._adjust_quantity(quantity)
 
         if quantity <= 0:
-            print("❌ Quantity inválida após ajuste")
+            logger.error("❌ Quantity inválida após ajuste")
             return None
         # -----------------------------------------
         # 📈 PREÇO (ANTES DE VALIDAR)
 
         if not price or price <= 0:
-            print("⚠️ Sem preço → cancelando BUY")
+            logger.warning("⚠️ Sem preço → cancelando BUY")
             return None
         
         # ----------------------------------------
@@ -124,11 +124,11 @@ class BinanceTraderBot:
         )
 
         if error:
-            print(f"⚠️ Ordem inválida: {error}")
+            logger.error(f"⚠️ Ordem inválida: {error}")
             return None
 
         if quantity <= 0:
-            print("⚠️ Quantidade inválida")
+            logger.warning("⚠️ Quantidade inválida")
             return None
 
         # -----------------------------------------
@@ -144,7 +144,7 @@ class BinanceTraderBot:
             )
 
             if not order or order.get("status") not in ["FILLED", "PARTIALLY_FILLED"]:
-                print("⚠️ Ordem não executada")
+                logger.warning("⚠️ Ordem não executada")
                 return None
 
             executed_qty = float(order.get("executedQty", quantity))
@@ -162,7 +162,7 @@ class BinanceTraderBot:
             self.highest_price = price
             self.last_trade_time = time.time()
 
-            print(f"🚀 BUY {self.symbol} @ {price} | qty={executed_qty} | balance_used≈{executed_qty * price:.2f}")
+            logger.info(f"🚀 BUY {self.symbol} @ {price} | qty={executed_qty} | balance_used≈{executed_qty * price:.2f}")
 
             log_msg = f"""
             --------------------
@@ -186,7 +186,7 @@ class BinanceTraderBot:
             return order
 
         except Exception as e:
-            print("❌ Erro no BUY:", e)
+            logger.error("❌ Erro no BUY:", e)
             return None
         
     # -----------------------------------------
@@ -194,18 +194,18 @@ class BinanceTraderBot:
 
     def sell(self):
 
-        if not has_position and last_state != "NO_POSITION":
-            print("⚠️ Nenhuma posição para vender")
-            last_state = "NO_POSITION"
+        # ✅ CORREÇÃO CRÍTICA
+        if not self.position_open:
+            logger.debug(f"Sem posição aberta em {self.symbol}")
+            return None
 
         try:
-            
             price = self.get_price()
-            
+
             if price is None or price <= 0:
-                print("⚠️ Preço inválido no SELL")
+                logger.warning("⚠️ Preço inválido no SELL")
                 return None
-        
+
             quantity, _, error = validate_order(
                 self.client,
                 self.symbol,
@@ -214,7 +214,11 @@ class BinanceTraderBot:
             )
 
             if error:
-                print(f"⚠️ SELL inválido: {error}")
+                logger.error(f"⚠️ SELL inválido: {error}")
+                return None
+
+            if quantity <= 0:
+                logger.warning("⚠️ Quantidade inválida no SELL")
                 return None
 
             order = safe_api_call(
@@ -224,39 +228,28 @@ class BinanceTraderBot:
                 type="MARKET",
                 quantity=quantity
             )
-            
+
             if order and order.get("status") not in ["FILLED", "PARTIALLY_FILLED"]:
-                print("⚠️ Ordem não executada")
+                logger.warning("⚠️ Ordem não executada")
                 return None
 
-            # 🔥 PREÇO REAL DA EXECUÇÃO
-            exec_price = price  # preço inicial (fallback)
-
+            # 🔥 PREÇO REAL
+            exec_price = price
             fills = order.get("fills", [])
             if fills:
                 exec_price = float(fills[0]["price"])
 
             entry = float(self.entry_price)
 
-            # 🔥 CÁLCULO CORRETO
             profit = float((exec_price - entry) * quantity)
-            
-            log_trade(self.symbol, profit)
-            
-            print(f"💰 Execução real: {exec_price} | Entrada: {entry}")
-            
-            if price is None or price <= 0:
-                print("⚠️ Preço inválido no SELL")
-                return None
 
-            if quantity <= 0:
-                print("⚠️ Quantidade inválida no SELL")
-                return None
-            
-            # 🔥 ATUALIZA LUCRO DIÁRIO
+            log_trade(self.symbol, profit)
+
+            logger.info(f"💰 SELL {self.symbol} @ {exec_price} | PnL: {profit:.2f}")
+
+            # 🔥 ATUALIZA LUCRO
             self.daily_profit += profit
 
-            # 🔥 SALVAR TRADE AQUI
             trade = {
                 "time": str(datetime.datetime.now()),
                 "symbol": self.symbol,
@@ -268,52 +261,26 @@ class BinanceTraderBot:
 
             main.add_trade(trade)
 
-            print(f"✅ TRADE SALVO: {trade}")
-            
-            # 📊 GERAR RELATÓRIO AUTOMÁTICO
-
+            # 📊 relatório
             if len(main.TRADE_HISTORY) % 5 == 0:
                 generate_report(main.TRADE_HISTORY)
 
-            # 🔥 ATUALIZA RISK MANAGER
             if self.risk_manager:
                 self.risk_manager.register_trade(profit)
 
-            print(f"🔻 SELL {self.symbol} @ {price} | qty={quantity} | PnL: {profit:.2f}")
-
-            log_msg = f"""
-            --------------------
-            ORDEM ENVIADA:
-            Status: {order.get('status')}
-            Side: SELL
-            Ativo: {self.symbol}
-            Quantidade: {quantity}
-            Preço executado: {exec_price}
-            Valor total: {order.get('cummulativeQuoteQty')}
-            PnL: {profit}
-            Type: {order.get('type')}
-            Data/Hora: {datetime.datetime.now()}
-
-            Complete_order:
-            {order}
-            -----------------------------------------
-            """
-
-            logging.info(log_msg)
-
-            # reset posição
+            # 🔥 RESET POSIÇÃO
             self.position_open = False
             self.entry_price = 0
             self.quantity = 0
             self.highest_price = 0
-
             self.last_trade_time = time.time()
 
             return order
 
         except Exception as e:
-            print("❌ Erro no SELL:", e)
+            logger.exception(f"Erro no SELL: {e}")
             return None
+    
     # -----------------------------------------
     # 📈 PRICE
 
@@ -322,11 +289,11 @@ class BinanceTraderBot:
         cooldown = self.config.get("TEMPO_ENTRE_TRADES", 60)
 
         if force:
-            print("🚀 Ignorando cooldown (forçado)")
+            logger.warning("🚀 Ignorando cooldown (forçado)")
             return True
 
         if time.time() - self.last_trade_time < cooldown:
-            print("⏱️ Aguardando cooldown")
+            logger.warning("⏱️ Aguardando cooldown")
             return False
 
         return True
@@ -343,10 +310,10 @@ class BinanceTraderBot:
             return
 
         if self.position_open:
-            print("⚠️ Não pode trocar ativo com posição aberta")    
+            logger.warning("⚠️ Não pode trocar ativo com posição aberta")    
             return
         
-        print(f"🔄 Mudando ativo: {self.symbol} → {symbol}")        
+        logger.info(f"🔄 Mudando ativo: {self.symbol} → {symbol}")        
 
         self.symbol = symbol
         self.operation_code = symbol
@@ -367,16 +334,16 @@ class BinanceTraderBot:
 
         # 🚫 spread ruim (isso sim bloqueia)
         if spread > 0.003:
-            print("🚫 Spread ruim")
+            logger.warning("🚫 Spread ruim")
             return False
 
         # ⚠️ momentum fraco (não bloqueia mais)
         if not momentum:
-            print("⚠️ Sem momentum global")
+            logger.warning("⚠️ Sem momentum global")
 
         # ⚠️ volume fraco (não bloqueia)
         if not volume_spike:
-            print("⚠️ Volume fraco")
+            logger.warning("⚠️ Volume fraco")
 
         return True
 
@@ -394,13 +361,13 @@ class BinanceTraderBot:
             qty = adjust_to_step_size(qty, step)
 
             if qty < min_qty:
-                print(f"⚠️ Qty menor que minQty ({min_qty})")
+                logger.warning(f"⚠️ Qty menor que minQty ({min_qty})")
                 return 0
 
             return qty
 
         except Exception as e:
-            print("❌ Erro ao ajustar quantidade:", e)
+            logger.error(f"❌ Erro ao ajustar quantidade: {e}")
             return 0
 
     def get_lot_size(self, symbol):
@@ -428,5 +395,14 @@ class BinanceTraderBot:
             return lot
 
         except Exception as e:
-            print(f"❌ Erro ao obter LOT_SIZE: {e}")
+            logger.error(f"❌ Erro ao obter LOT_SIZE: {e}")
             return None
+    
+    def clean_position(self):
+        
+        if not self.position_open:
+            logger.debug(f"Sem posição para limpar em {self.symbol}")
+            return
+
+        logger.info(f"🧹 Limpando posição em {self.symbol}")
+        self.sell()
