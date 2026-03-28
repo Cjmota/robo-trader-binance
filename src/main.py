@@ -96,10 +96,11 @@ def get_client():
 # 🔍 SCANNER
 
 last_scan = 0
-cached_symbols = None
+cached_symbol = None
+LAST_SYMBOL = None
 
 def get_best_symbol():
-    global last_scan, cached_symbol
+    global last_scan, cached_symbol, LAST_SYMBOL
 
     client_local = get_client()
 
@@ -113,73 +114,14 @@ def get_best_symbol():
 
     ranking = data.get("ranking", [])[:10]
 
-    best_symbol = None
-    best_score = 0
+    best_symbol = ranking[0]["symbol"] if ranking else None
 
-    for coin in ranking:
-        symbol = coin.get("symbol")
+    if best_symbol and best_symbol != LAST_SYMBOL:
+        print(f"🔄 Mudando ativo: {LAST_SYMBOL} → {best_symbol}")
+        LAST_SYMBOL = best_symbol
 
-        try:
-            df = get_klines(client_local, symbol)
-
-            if df is None or df.empty or len(df) < 50:
-                continue
-
-            # -----------------------------------------
-            # 🧠 FILTROS PROFISSIONAIS
-
-            price = df["close"].iloc[-1]
-
-            # volatilidade
-            volatility = df["close"].pct_change().rolling(10).std().iloc[-1]
-
-            if volatility is None:
-                continue
-
-            if volatility < 0.002 or volatility > 0.03:
-                continue
-
-            # volume
-            volume = df["volume"].iloc[-1]
-            avg_volume = df["volume"].rolling(20).mean().iloc[-1]
-
-            volume_score = 1 if volume > avg_volume else 0
-
-            # tendência
-            ma20 = df["close"].rolling(20).mean().iloc[-1]
-            ma50 = df["close"].rolling(50).mean().iloc[-1]
-
-            trend_score = 1 if ma20 > ma50 else 0
-
-            # momentum
-            momentum = (df["close"].iloc[-1] - df["close"].iloc[-5]) / df["close"].iloc[-5]
-            momentum_score = 1 if momentum > 0 else 0
-
-            # -----------------------------------------
-            # 🔥 SCORE FINAL
-
-            score = (
-                (volatility * 10) +      # movimento
-                (volume_score * 0.5) +
-                (trend_score * 0.7) +
-                (momentum_score * 0.8)
-            )
-
-            print(f"📊 {symbol} | score={score:.3f}")
-
-            if score > best_score:
-                best_score = score
-                best_symbol = symbol
-
-        except Exception as e:
-            print(f"Erro no scanner {symbol}: {e}")
-            continue
-
-    if best_symbol:
-        print(f"🎯 Melhor ativo selecionado: {best_symbol} | score={best_score:.3f}")
-        cached_symbol = best_symbol
-        last_scan = time.time()
-        return best_symbol
+    cached_symbol = LAST_SYMBOL
+    last_scan = time.time()
 
     return cached_symbol
 
