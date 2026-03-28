@@ -194,9 +194,9 @@ class BinanceTraderBot:
 
     def sell(self):
 
-        if not self.position_open:
+        if not has_position and last_state != "NO_POSITION":
             print("⚠️ Nenhuma posição para vender")
-            return None
+            last_state = "NO_POSITION"
 
         try:
             

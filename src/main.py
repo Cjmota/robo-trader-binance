@@ -42,6 +42,8 @@ logging.basicConfig(
     format="%(asctime)s - %(levelname)s - %(message)s"
 )
 
+logger = logging.getLogger()
+
 load_dotenv()
 
 API_KEY = os.getenv("BINANCE_API_KEY")
@@ -104,7 +106,7 @@ def get_best_symbol():
 
     client_local = get_client()
 
-    if time.time() - last_scan < 60:
+    if time.time() - last_scan < 60 and cached_symbol:
         return cached_symbol
 
     data = scan_market_pro(client_local)
@@ -117,7 +119,7 @@ def get_best_symbol():
     best_symbol = ranking[0]["symbol"] if ranking else None
 
     if best_symbol and best_symbol != LAST_SYMBOL:
-        print(f"🔄 Mudando ativo: {LAST_SYMBOL} → {best_symbol}")
+        logger.info(f"🔄 Mudando ativo: {LAST_SYMBOL} → {best_symbol}")
         LAST_SYMBOL = best_symbol
 
     cached_symbol = LAST_SYMBOL
@@ -158,45 +160,53 @@ decision_engine = DecisionEngine(config)
 def safe_trader_master_loop():
     global BOT_RUNNING, CURRENT_TRADER, engine
 
-    print("🔥 LOOP ATIVO")
+    last_cycle_log = 0
 
     while True:
-
-        if not BOT_RUNNING or not engine or not CURRENT_TRADER or not CURRENT_TRADER.is_running:
-            time.sleep(5)
-            continue
-
         try:
-            print("🚀 Novo ciclo")
+            now = time.time()
+
+            # 🔥 LOG CONTROLADO
+            if now - last_cycle_log > 10:
+                logger.info("🚀 Novo ciclo")
+                last_cycle_log = now
+
+            # 🛑 VALIDAÇÕES IMPORTANTES
+            if not BOT_RUNNING or not engine or not CURRENT_TRADER or not CURRENT_TRADER.is_running:
+                time.sleep(5)
+                continue
 
             # 🔄 RESET DIÁRIO
             state.check_reset()
 
             # 🛑 LIMITE DE TRADES
             if not state.can_trade(MAX_TRADES_PER_DAY):
+                logger.warning("⚠️ Limite diário atingido")
                 time.sleep(10)
                 continue
 
             # 🧠 EXECUÇÃO
             engine.run_once()
+            time.sleep(2)
 
-            print(f"📊 Trades hoje: {state.trades_today}")
+            logger.info(f"📊 Trades hoje: {state.trades_today}")
 
+            # 💰 EQUITY
             try:
                 balance = CURRENT_TRADER.get_balance()
                 pnl = CURRENT_TRADER.get_pnl()
                 update_equity(balance, pnl)
-            except:
-                pass
+            except Exception as e:
+                logger.debug(f"Erro ao atualizar equity: {e}")
 
+            # ⏱️ DELAY ANTI-SPAM
             time.sleep(5 + random.uniform(1, 3))
 
         except Exception as e:
-            import traceback
-            print("❌ ERRO NO BOT:", e)
-            traceback.print_exc()
+            logger.exception("Erro detalhado:")
+            logger.error(f"❌ ERRO NO BOT: {e}")
             time.sleep(3)
-            
+                        
 # -----------------------------------------
 # ▶️ START
 
@@ -204,10 +214,10 @@ def start_bot():
     global BOT_RUNNING, CURRENT_TRADER, engine
 
     if BOT_RUNNING:
-        print("⚠️ Já está rodando")
+        logger.warning("⚠️ Já está rodando")
         return
 
-    print("🚀 Iniciando bot...")
+    logger.info("🚀 Iniciando bot...")
 
     try:
         bot = create_bot()
@@ -224,10 +234,10 @@ def start_bot():
 
         BOT_RUNNING = True
 
-        print("✅ Bot iniciado com sucesso")
+        logger.info("✅ Bot iniciado com sucesso")
 
     except Exception as e:
-        print("❌ ERRO:", e)
+        logger.error(f"❌ ERRO: {e}")
         BOT_RUNNING = False
         
 # -----------------------------------------
@@ -236,7 +246,7 @@ def start_bot():
 def stop_bot():
     global BOT_RUNNING, CURRENT_TRADER
 
-    print("🛑 Parando bot...")
+    logger.info("🛑 Parando bot...")
 
     BOT_RUNNING = False
 
