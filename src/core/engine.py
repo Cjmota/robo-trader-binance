@@ -301,12 +301,6 @@ class TradingEngine:
 
         if decision["signal"] != decision["orderflow"]:
             return
-        
-        # depois de normalizar
-        if decision["signal"] != "HOLD":
-            if decision["score"] == 0 and decision["probability"] > 0:
-                print("⚙️ Score ajustado pelo probability")
-                decision["score"] = decision["probability"]
 
         print(f"🧠 NORMALIZED: {decision}")
 
@@ -355,9 +349,7 @@ class TradingEngine:
             if recovered_signal and recovered_signal != "HOLD":
                 print(f"♻️ Sinal ignorado (fraco): {recovered_signal}")
                 
-        # 🚀 MOSTRA OPORTUNIDADE (ANTES DOS FILTROS)
-        if decision["signal"] != "HOLD":
-            print(f"🚀 POSSÍVEL TRADE → {decision}")
+        
 
         # 🚫 FILTRO DE VOLUME (MELHORIA 3)
         if market_condition == "TREND":
@@ -417,8 +409,9 @@ class TradingEngine:
 
         # 🚫 FILTRO DE CONFLUÊNCIA (CRÍTICO)
 
-        if confluence < 3:
-            print(f"🚫 Baixa confluência ({confluence})")
+        min_conf = 2 if market_condition == "SIDEWAYS" else 3
+
+        if confluence < min_conf:
             return
 
         # -----------------------------------------
@@ -428,6 +421,10 @@ class TradingEngine:
 
         if rsi is None:
             factors -= 1
+            
+        if decision["regime"] == "UNKNOWN":
+            print("🚫 Regime desconhecido")
+            return
 
         decision["score"] = max(decision["score"], 0)
         
@@ -438,11 +435,11 @@ class TradingEngine:
         score = 0
 
         score = (
-            decision["probability"] * 0.5 +
-            (0.2 if decision["momentum"] else 0) +
-            (0.2 if decision["volume_spike"] else 0) +
+            (0.25 if decision["momentum"] else 0) +
+            (0.25 if decision["volume_spike"] else 0) +
             (0.3 if decision["signal"] == "BUY" and trend == "UP" else 0) +
-            (0.3 if decision["signal"] == "SELL" and trend == "DOWN" else 0)
+            (0.3 if decision["signal"] == "SELL" and trend == "DOWN" else 0) +
+            (decision["probability"] * 0.2)
         )
             
         raw_score = (base_score * 0.3) + (score * 0.5) + (confluence_score * 0.2)
@@ -452,16 +449,28 @@ class TradingEngine:
         
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
         
-        # 🔥 LIBERAÇÃO POR PROBABILIDADE (CRÍTICO)
-        if decision["probability"] > 0.55:
-            print("🚀 Alta probabilidade — liberando trade")
-            decision["score"] = max(decision["score"], 0.2)
+        # ✅ REGRA PROFISSIONAL
+
+        MIN_SCORE = 0.4 if market_condition == "SIDEWAYS" else 0.5
+        MIN_PROB = 0.5
+
+        if decision["score"] < MIN_SCORE:
+            print("🚫 BLOQUEADO: score baixo")
+            return
+
+        if decision["probability"] < MIN_PROB:
+            print("🚫 BLOQUEADO: prob baixa")
+            return
+        
+        # 🔥 CONFIANÇA FINAL (DECISÃO REAL)
+        final_confidence = decision["probability"] * 0.6 + decision["score"] * 0.4
+
+        if final_confidence < 0.45:
+            print("🚫 Confiança final baixa")
+            return
+        
         
         # 🔥 FILTRO FINAL SIMPLES
-
-        if decision["score"] < 0.25:
-            print("⚠️ Entrada muito fraca")
-            return
 
         if market_condition != "SIDEWAYS":
             if not decision["momentum"] and decision["score"] < 0.1:
@@ -475,33 +484,23 @@ class TradingEngine:
         # -----------------------------------------
         # 🔥 PROBABILIDADE INTELIGENTE
 
-        decision["probability"] = max(
-            0,
-            min(
-                decision["probability"] * 0.5 + decision["score"] * 0.5,
-                decision["score"],  # 🔥 LIMITA PELA QUALIDADE REAL
-                1.0
-            )
-        )
-        
+        # 🔥 NÃO ALTERA PROBABILIDADE
+        final_confidence = (decision["probability"] * 0.6 + decision["score"] * 0.4)
+                
+        adjusted_probability = decision["probability"]
+
         if market_condition == "SIDEWAYS":
-            decision["probability"] *= 1.1
-            decision["probability"] = min(decision["probability"], 1.0)
+            adjusted_probability *= 1.1
+
+        adjusted_probability = min(adjusted_probability, 1.0)
 
         # -----------------------------------------
         # 🧠 PRIORIDADE DO TRADE
 
         priority = 0
 
-        priority += decision["probability"]
-        priority += decision["score"]
-
-        if decision["volume_spike"]:
-            priority += 0.3
-
-        decision["priority"] = priority
-
-    
+        decision["priority"] = final_confidence + (0.3 if decision["volume_spike"] else 0)
+  
 
         # -----------------------------------------
         # 🎯 DECISÃO FINAL
@@ -515,6 +514,12 @@ class TradingEngine:
         if action == "HOLD":
             return
 
+        # 🚫 EVITA REENTRADA NO MESMO ATIVO
+        if hasattr(self, "last_symbol"):
+            if self.last_symbol == symbol and not self.bot.position_open:
+                print("🔁 Reentrada evitada no mesmo ativo")
+                return
+
         perf = self.get_symbol_performance(symbol)
         
         print(
@@ -526,21 +531,28 @@ class TradingEngine:
             f"trades={len(perf['last_results'])}"
         )
 
-        if perf["winrate"] < 0.35 and len(perf["last_results"]) >= 10:
-            print(f"🚫 {symbol} fraco, reduzindo risco")
-            decision["score"] *= 0.7
+        if perf["winrate"] < 0.4 and len(perf["last_results"]) >= 8:
+            print(f"🚫 {symbol} ruim — bloqueado")
+            return
 
         # -----------------------------------------
         # 💰 EXECUÇÃO
         
-        if hasattr(self, "last_signal"):
-            if self.last_signal == decision["signal"] and self.bot.position_open:
-                print("🔁 Sinal repetido ignorado")
+        if hasattr(self, "last_trade_time"):
+            if time.time() - self.last_trade_time < 60:
+                print("🔁 Cooldown ativo")
                 return
 
         self.last_signal = decision["signal"]
-
+        
+        # 🚀 MOSTRA OPORTUNIDADE (ANTES DOS FILTROS)
+        if decision["signal"] != "HOLD":
+            print(f"🚀 TRADE VALIDADO → {decision}")
+            
         self.execute_trade(action, decision, df, symbol)
+        
+        self.last_trade_time = time.time()        
+        self.last_symbol = symbol
 
         print(f"🧠 decision raw: {decision}")
 
