@@ -1,19 +1,23 @@
 import time
 
 def safe_api_call(func, *args, **kwargs):
+    try:
+        return func(*args, **kwargs)
 
-    for i in range(5):
-        try:
-            return func(*args, **kwargs)
+    except Exception as e:
+        msg = str(e)
 
-        except Exception as e:
+        # 🚫 ERRO DE SÍMBOLO INVÁLIDO (BINANCE)
+        if "-1121" in msg:
+            print(f"🚫 Símbolo inválido ignorado")
+            return None
 
-            if "1003" in str(e):
-                wait = (i + 1) * 15
-                print(f"🚫 BAN detectado... aguardando {wait}s")
-                time.sleep(wait)
-            else:
-                print("❌ Erro API:", e)
-                return None
+        # 🔁 RATE LIMIT / TEMPORÁRIO
+        if "1003" in msg or "Too many requests" in msg:
+            print("⏳ Rate limit - aguardando...")
+            time.sleep(1)
+            return None
 
-    return None
+        # 🔥 OUTROS ERROS
+        print(f"❌ Erro API: {e}")
+        return None

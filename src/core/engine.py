@@ -35,6 +35,23 @@ class TradingEngine:
         self.market_detector = MarketConditionDetector()
 
         self.performance_by_symbol = {}
+        
+        self.valid_symbols_cache = None
+
+    def load_valid_symbols(self):
+        try:
+            info = self.bot.client.get_exchange_info()
+            symbols = {
+                s["symbol"]
+                for s in info["symbols"]
+                if s["status"] == "TRADING"
+                and s["quoteAsset"] == "USDT"
+                and s["isSpotTradingAllowed"]
+            }
+            return symbols
+        except Exception as e:
+            print(f"❌ Erro carregando símbolos válidos: {e}")
+            return set()
 
     # -----------------------------------------
     def run_once(self):
@@ -104,6 +121,10 @@ class TradingEngine:
 
         if not new_symbol:
             print("⚠️ Scanner não retornou ativo")
+            return
+        
+        if not self.is_valid_symbol(new_symbol):
+            print(f"🚫 Scanner retornou símbolo inválido: {new_symbol}")
             return
 
         # 🚫 evita repetir erro
@@ -1069,13 +1090,8 @@ class TradingEngine:
                 print(f"Erro ao limpar {asset_name}: {e}")
     
     def is_valid_symbol(self, symbol):
-        try:
-            info = self.bot.client.get_symbol_info(symbol)
-            return (
-                info is not None and
-                info.get("status") == "TRADING" and
-                symbol.endswith("USDT")
-            )
-        except Exception as e:
-            print(f"⚠️ Erro validando símbolo {symbol}: {e}")
-            return False
+
+        if self.valid_symbols_cache is None:
+            self.valid_symbols_cache = self.load_valid_symbols()
+
+        return symbol in self.valid_symbols_cache
