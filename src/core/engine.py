@@ -102,21 +102,45 @@ class TradingEngine:
 
         new_symbol = self.scanner()
 
-        if new_symbol and new_symbol != self.bot.symbol:
+        if not new_symbol:
+            print("⚠️ Scanner não retornou ativo")
+            return
 
-            if not self.bot.position_open:
+        # 🚫 evita repetir erro
+        if not hasattr(self, "invalid_symbols"):
+            self.invalid_symbols = set()
 
-                if not hasattr(self, "last_symbol_change"):
-                    self.last_symbol_change = 0
+        if new_symbol in self.invalid_symbols:
+            return
 
-                if time.time() - self.last_symbol_change > 120:
-                    print(f"🔄 Mudando ativo: {self.bot.symbol} → {new_symbol}")
+        # 🔥 valida antes de usar
+        if not self.is_valid_symbol(new_symbol):
+            print(f"🚫 Símbolo inválido: {new_symbol}")
+            self.invalid_symbols.add(new_symbol)
+            return
+
+        # 🔥 só agora troca
+        if new_symbol != self.bot.symbol and not self.bot.position_open:
+
+            if not hasattr(self, "last_symbol_change"):
+                self.last_symbol_change = 0
+
+            if time.time() - self.last_symbol_change > 120:
+                print(f"🔄 Mudando ativo: {self.bot.symbol} → {new_symbol}")
+                try:
                     self.bot.set_symbol(new_symbol)
-                    self.last_symbol_change = time.time()
-
-
+                except Exception as e:
+                    print(f"❌ Erro ao trocar símbolo: {new_symbol} | {e}")
+                    return
+                self.last_symbol_change = time.time()
+    
         symbol = self.bot.symbol
-        df = self.bot.get_data()
+
+        try:
+            df = self.bot.get_data()
+        except Exception:
+            print(f"❌ Erro ao buscar dados: {symbol}")
+            return
         
         if df is None or df.empty:
             print("⚠️ Sem dados")
@@ -303,6 +327,11 @@ class TradingEngine:
             return
 
         print(f"🧠 NORMALIZED: {decision}")
+        
+        # 🚫 BLOQUEIO REAL
+        if decision["regime"] == "UNKNOWN":
+            print("🚫 Regime desconhecido (bloqueado)")
+            return
 
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
@@ -480,19 +509,6 @@ class TradingEngine:
         if decision["signal"] == "SELL" and not self.bot.position_open:
             print("🔄 Convertendo SELL → BUY (modo spot)")
             decision["signal"] = "BUY"
-        
-        # -----------------------------------------
-        # 🔥 PROBABILIDADE INTELIGENTE
-
-        # 🔥 NÃO ALTERA PROBABILIDADE
-        final_confidence = (decision["probability"] * 0.6 + decision["score"] * 0.4)
-                
-        adjusted_probability = decision["probability"]
-
-        if market_condition == "SIDEWAYS":
-            adjusted_probability *= 1.1
-
-        adjusted_probability = min(adjusted_probability, 1.0)
 
         # -----------------------------------------
         # 🧠 PRIORIDADE DO TRADE
@@ -549,7 +565,11 @@ class TradingEngine:
         if decision["signal"] != "HOLD":
             print(f"🚀 TRADE VALIDADO → {decision}")
             
-        self.execute_trade(action, decision, df, symbol)
+        try:
+            self.execute_trade(action, decision, df, symbol)
+        except Exception as e:
+            print(f"❌ Erro na execução: {e}")
+            return
         
         self.last_trade_time = time.time()        
         self.last_symbol = symbol
@@ -1047,3 +1067,15 @@ class TradingEngine:
 
             except Exception as e:
                 print(f"Erro ao limpar {asset_name}: {e}")
+    
+    def is_valid_symbol(self, symbol):
+        try:
+            info = self.bot.client.get_symbol_info(symbol)
+            return (
+                info is not None and
+                info.get("status") == "TRADING" and
+                symbol.endswith("USDT")
+            )
+        except Exception as e:
+            print(f"⚠️ Erro validando símbolo {symbol}: {e}")
+            return False
