@@ -530,8 +530,8 @@ class TradingEngine:
         
         # 🚫 NÃO VENDE SEM POSIÇÃO (SPOT)
         if decision["signal"] == "SELL" and not self.bot.position_open:
-            print("🔄 Convertendo SELL → BUY (modo spot)")
-            decision["signal"] = "BUY"
+            print("🚫 SELL ignorado (sem posição)")
+            return
 
         # -----------------------------------------
         # 🧠 PRIORIDADE DO TRADE
