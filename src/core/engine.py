@@ -359,7 +359,7 @@ class TradingEngine:
         
         # 🔥 FALLBACK INTELIGENTE (ANTI-TRAVAMENTO)
 
-        if decision["signal"] == "HOLD" and decision["probability"] > 0.7:
+        if decision["signal"] == "HOLD" and decision["probability"] > min_prob:
             print("♻️ Convertendo HOLD → sinal leve")
             decision["signal"] = "BUY" if trend == "UP" else "SELL"
         
@@ -559,7 +559,7 @@ class TradingEngine:
             print(f"🚫 Confiança insuficiente: {final_confidence:.2f} < {min_conf}")
             return
 
-        if decision["priority"] < min_conf:
+        if decision["priority"] < (min_conf * 0.9):
             print("🚫 Prioridade baixa")
             return
 
