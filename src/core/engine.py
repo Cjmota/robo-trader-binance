@@ -399,9 +399,7 @@ class TradingEngine:
 
             if recovered_signal and recovered_signal != "HOLD":
                 print(f"♻️ Sinal ignorado (fraco): {recovered_signal}")
-                
-        
-
+            
         # 🚫 FILTRO DE VOLUME (MELHORIA 3)
         if market_condition == "TREND":
             if not decision["volume_spike"] and decision["probability"] < 0.4:
@@ -412,16 +410,18 @@ class TradingEngine:
             return
 
         # 🚫 filtro rápido
-        min_prob = 0.35
-
-        if market_condition == "TREND":
-            min_prob = 0.3
-
         if market_condition == "SIDEWAYS":
             min_prob = 0.30
-
+        elif market_condition == "TREND":
+            min_prob = 0.35
+        elif market_condition == "VOLATILE":
+            min_prob = 0.40
+        else:
+            min_prob = 0.35
+            
+        # filtro leve
         if decision["probability"] < min_prob:
-            return
+            return    
 
         # 🚫 FILTRO DE SPREAD
         if decision["spread"] > 0.003:
@@ -457,9 +457,9 @@ class TradingEngine:
 
         # 🚫 FILTRO DE CONFLUÊNCIA (CRÍTICO)
 
-        min_conf = 1 if market_condition == "SIDEWAYS" else 2
+        min_confluence = 1 if market_condition == "SIDEWAYS" else 2
 
-        if confluence < min_conf:
+        if confluence < min_confluence:
             return
 
         # -----------------------------------------
@@ -469,7 +469,6 @@ class TradingEngine:
 
         if rsi is None:
             factors -= 1
-
 
         decision["score"] = abs(decision["score"]) * (1 if decision["signal"] == "BUY" else 0.9)
         
@@ -495,6 +494,9 @@ class TradingEngine:
         # 🔥 CORREÇÃO CRÍTICA (ANTI-SCORE NEGATIVO)
         decision["score"] = max(min(raw_score, 1), 0)
         
+        if not decision["momentum"]:
+            decision["score"] *= 0.9
+        
         print(f"📊 DEBUG → signal={decision['signal']} | prob={decision['probability']:.2f} | score={decision['score']:.2f}")
         
         # ✅ REGRA PROFISSIONAL
@@ -503,8 +505,6 @@ class TradingEngine:
         MIN_PROB = 0.5
         
         # 🔥 CONFIANÇA FINAL (DECISÃO REAL)
-        if not decision["momentum"]:
-            decision["score"] *= 0.9
         
         final_confidence = decision["probability"] * 0.6 + decision["score"] * 0.4
 
@@ -519,6 +519,8 @@ class TradingEngine:
 
         else:
             min_conf = 0.45
+        
+        
         
         # 🔥 FILTRO FINAL SIMPLES
 
@@ -536,13 +538,26 @@ class TradingEngine:
 
         priority = 0
 
-        decision["priority"] = final_confidence + (0.3 if decision["volume_spike"] else 0)
+        decision["priority"] = final_confidence + (
+            0.3 if decision["volume_spike"] else 0
+        ) + (
+            0.2 if decision["momentum"] else 0
+        )
   
 
         # -----------------------------------------
         # 🎯 DECISÃO FINAL
 
         # 🚫 FILTRO FINAL DE QUALIDADE (CORRETO)
+
+        # 🔥 FILTRO PRINCIPAL (NOVO)
+        if final_confidence < min_conf:
+            print(f"🚫 Confiança insuficiente: {final_confidence:.2f} < {min_conf}")
+            return
+
+        if decision["priority"] < min_conf:
+            print("🚫 Prioridade baixa")
+            return
 
         action = decision["signal"]
 
