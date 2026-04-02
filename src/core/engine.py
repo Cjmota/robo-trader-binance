@@ -345,19 +345,23 @@ class TradingEngine:
             "orderflow": str(decision.get("orderflow", "BUY"))
         }
         
-        
-        
         # 🔥 CONFLITO CONTEXTUAL (PRO)
 
-        if decision["signal"] != decision["orderflow"]:
-            print("⚠️ Conflito forte — ignorando trade")
-            return
+        if decision["orderflow"] in ["BUY", "SELL"] and decision["signal"] != decision["orderflow"]:
+            print("⚠️ Conflito real — reduzindo confiança")
+            decision["probability"] *= 0.8
 
         print(f"🧠 NORMALIZED: {decision}")
         
 
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
+        
+        # 🔥 FALLBACK INTELIGENTE (ANTI-TRAVAMENTO)
+
+        if decision["signal"] == "HOLD" and decision["probability"] > 0.7:
+            print("♻️ Convertendo HOLD → sinal leve")
+            decision["signal"] = "BUY" if trend == "UP" else "SELL"
         
         # ⏱️ cooldown bot (AGORA CORRETO)
         # ⏱️ cooldown bot (CORRETO)
