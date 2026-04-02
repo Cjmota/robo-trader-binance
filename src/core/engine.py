@@ -287,7 +287,10 @@ class TradingEngine:
         
         # 🔥 limpa numpy na raiz
         try:
-            decision = self.decision_engine.evaluate(raw_decision)
+            decision = self.decision_engine.evaluate({
+                **raw_decision,
+                "regime": market_condition  # 🔥 injeta o regime correto
+            })
         except Exception as e:
             print(f"❌ ERRO decision_engine ({symbol}): {e}")
             decision = {"signal": "HOLD", "probability": 0, "score": 0}
@@ -335,24 +338,23 @@ class TradingEngine:
             "signal": signal,
             "score": float(decision.get("score", 0)),
             "probability": float(probability),
-            "regime": str(decision.get("regime", "UNKNOWN")),
+            "regime": str(decision.get("regime") or market_condition),
             "spread": float(decision.get("spread", 0)),
             "volume_spike": bool(decision.get("volume_spike", True)),
             "momentum": bool(decision.get("momentum", True)),
             "orderflow": str(decision.get("orderflow", "BUY"))
         }
         
+        
+        
         # 🔥 CONFLITO CONTEXTUAL (PRO)
 
         if decision["signal"] != decision["orderflow"]:
-            return
+            print("⚠️ Conflito sinal/orderflow — reduzindo confiança")
+            decision["probability"] *= 0.85
 
         print(f"🧠 NORMALIZED: {decision}")
         
-        # 🚫 BLOQUEIO REAL
-        if decision["regime"] == "UNKNOWN":
-            print("🚫 Regime desconhecido (bloqueado)")
-            return
 
         #print(f"🧠 NORMALIZED: {decision}")        
         print(f"🧠 FINAL → {decision['signal']} | prob={decision['probability']:.2f}")   
@@ -365,11 +367,10 @@ class TradingEngine:
         
         # 🔥 BLOQUEIO INTELIGENTE (POR CONTEXTO)
 
-        if market_condition != "SIDEWAYS":
+        if market_condition == "TREND":
 
             if decision["signal"] == "BUY" and trend == "DOWN":
                 if decision["score"] < 0.5:
-                    print("🚫 BUY contra tendência")
                     return
 
             if decision["signal"] == "SELL" and trend == "UP":
@@ -434,9 +435,6 @@ class TradingEngine:
             print("🧊 HOLD — sem trade")
             return
                 
-       
-                    
-      
         # -----------------------------------------
         # 🧠 CONFLUÊNCIA PROFISSIONAL
 
@@ -459,7 +457,7 @@ class TradingEngine:
 
         # 🚫 FILTRO DE CONFLUÊNCIA (CRÍTICO)
 
-        min_conf = 2 if market_condition == "SIDEWAYS" else 3
+        min_conf = 1 if market_condition == "SIDEWAYS" else 2
 
         if confluence < min_conf:
             return
@@ -471,12 +469,12 @@ class TradingEngine:
 
         if rsi is None:
             factors -= 1
-            
-        if decision["regime"] == "UNKNOWN":
-            print("🚫 Regime desconhecido")
-            return
 
-        decision["score"] = max(decision["score"], 0)
+
+        decision["score"] = abs(decision["score"]) * (1 if decision["signal"] == "BUY" else 0.9)
+        
+        if market_condition == "SIDEWAYS":
+            decision["score"] *= 1.15  
         
         base_score = decision["score"]
 
@@ -490,9 +488,9 @@ class TradingEngine:
             (0.3 if decision["signal"] == "BUY" and trend == "UP" else 0) +
             (0.3 if decision["signal"] == "SELL" and trend == "DOWN" else 0) +
             (decision["probability"] * 0.2)
-        )
-            
-        raw_score = (base_score * 0.3) + (score * 0.5) + (confluence_score * 0.2)
+        )  
+        
+        raw_score = (base_score * 0.5) + (score * 0.3) + (confluence_score * 0.2)
 
         # 🔥 CORREÇÃO CRÍTICA (ANTI-SCORE NEGATIVO)
         decision["score"] = max(min(raw_score, 1), 0)
@@ -503,22 +501,24 @@ class TradingEngine:
 
         MIN_SCORE = 0.4 if market_condition == "SIDEWAYS" else 0.5
         MIN_PROB = 0.5
-
-        if decision["score"] < MIN_SCORE:
-            print("🚫 BLOQUEADO: score baixo")
-            return
-
-        if decision["probability"] < MIN_PROB:
-            print("🚫 BLOQUEADO: prob baixa")
-            return
         
         # 🔥 CONFIANÇA FINAL (DECISÃO REAL)
+        if not decision["momentum"]:
+            decision["score"] *= 0.9
+        
         final_confidence = decision["probability"] * 0.6 + decision["score"] * 0.4
 
-        if final_confidence < 0.45:
-            print("🚫 Confiança final baixa")
-            return
-        
+        if market_condition == "SIDEWAYS":
+            min_conf = 0.40
+
+        elif market_condition == "TREND":
+            min_conf = 0.50
+
+        elif market_condition == "VOLATILE":
+            min_conf = 0.55
+
+        else:
+            min_conf = 0.45
         
         # 🔥 FILTRO FINAL SIMPLES
 

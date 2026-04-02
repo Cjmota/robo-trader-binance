@@ -11,7 +11,7 @@ class DecisionEngine:
     def evaluate(self, signal_data):
 
         if not signal_data:
-            return {"signal": HOLD, "score": 0, "probability": 0}
+            return {"signal": HOLD, "score": 0, "probability": 0, "regime": "UNKNOWN"}
 
         signal = signal_data.get("signal")
         score = float(signal_data.get("score", 0))
@@ -19,30 +19,27 @@ class DecisionEngine:
 
         volume = signal_data.get("volume_spike", False)
         momentum = signal_data.get("momentum", False)
+        regime = signal_data.get("regime", "UNKNOWN")
+
+        # 🔥 CONSISTÊNCIA SCORE vs SIGNAL
+        if score < 0 and signal == BUY:
+            score = abs(score)
+
+        if score > 0 and signal == SELL:
+            score = -abs(score)
 
         # -----------------------------------------
-        # 🧠 REGRA 1: sem sinal → HOLD
-
         if signal is None:
             print("⚠️ Sem sinal → HOLD leve")
-            return {"signal": HOLD, "score": 0.1, "probability": 0.3}
-
-        # -----------------------------------------
-        # 🧠 REGRA 2: se score zerado → NÃO matar sinal
+            return {"signal": HOLD, "score": 0.1, "probability": 0.3, "regime": regime}
 
         if score == 0:
             print("⚠️ Score zerado → ajustando")
             score = 0.4
 
-        # -----------------------------------------
-        # 🧠 REGRA 3: probabilidade baixa NÃO bloqueia totalmente
-
         if prob < self.min_prob:
             print(f"⚠️ Prob baixa ({prob:.2f}) → reduzindo força")
-            score *= 0.5  # enfraquece, mas não mata
-
-        # -----------------------------------------
-        # 🧠 REGRA 4: reforço por confluência
+            score *= 0.5
 
         if volume:
             score += 0.2
@@ -50,23 +47,22 @@ class DecisionEngine:
         if momentum:
             score += 0.2
 
-        # -----------------------------------------
-        # 🧠 REGRA 5: decisão final
-
         threshold = 0.25 if prob > 0.7 else 0.3
 
         if abs(score) >= threshold:
             return {
                 "signal": signal,
                 "score": round(score, 2),
-                "probability": round(prob, 2)
+                "probability": round(prob, 2),
+                "regime": regime
             }
 
         print("🚫 Score final muito baixo")
         return {
             "signal": signal if prob > 0.6 else HOLD,
             "score": round(score, 2),
-            "probability": prob
+            "probability": prob,
+            "regime": regime
         }
     
     # -----------------------------------------
