@@ -359,9 +359,13 @@ class TradingEngine:
         
         # 🔥 FALLBACK INTELIGENTE (ANTI-TRAVAMENTO)
 
-        if decision["signal"] == "HOLD" and decision["probability"] > min_prob:
-            print("♻️ Convertendo HOLD → sinal leve")
+        if decision["signal"] == "HOLD" and decision["score"] > 0.6:
+            print("♻️ HOLD forte → entrada leve")
+            
             decision["signal"] = "BUY" if trend == "UP" else "SELL"
+            
+            # 🔥 AJUSTE CRÍTICO
+            decision["probability"] = max(decision["probability"], 0.55)
         
         # ⏱️ cooldown bot (AGORA CORRETO)
         # ⏱️ cooldown bot (CORRETO)
