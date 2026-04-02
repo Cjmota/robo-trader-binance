@@ -367,6 +367,20 @@ class TradingEngine:
             # 🔥 AJUSTE CRÍTICO
             decision["probability"] = max(decision["probability"], 0.55)
         
+        # 🔥 FALLBACK LATERAL (NOVO)
+
+        if decision["signal"] == "HOLD" and market_condition == "SIDEWAYS":
+
+            if rsi and rsi < 45:
+                print("🟢 Lateral barato → BUY")
+                decision["signal"] = "BUY"
+                decision["probability"] = max(decision["probability"], 0.5)
+
+            elif rsi and rsi > 55:
+                print("🔴 Lateral caro → SELL")
+                decision["signal"] = "SELL"
+                decision["probability"] = max(decision["probability"], 0.5)
+        
         # ⏱️ cooldown bot (AGORA CORRETO)
         # ⏱️ cooldown bot (CORRETO)
         
