@@ -350,8 +350,8 @@ class TradingEngine:
         # 🔥 CONFLITO CONTEXTUAL (PRO)
 
         if decision["signal"] != decision["orderflow"]:
-            print("⚠️ Conflito sinal/orderflow — reduzindo confiança")
-            decision["probability"] *= 0.85
+            print("⚠️ Conflito forte — ignorando trade")
+            return
 
         print(f"🧠 NORMALIZED: {decision}")
         
