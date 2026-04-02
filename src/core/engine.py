@@ -360,11 +360,13 @@ class TradingEngine:
         # 🔥 FALLBACK INTELIGENTE (ANTI-TRAVAMENTO)
 
         if decision["signal"] == "HOLD" and decision["score"] > 0.6:
-            print("♻️ HOLD forte → entrada leve")
-            
+
+            # 🔥 trava topo
+            if rsi and rsi > 70:
+                print("🚫 Evitando BUY em topo (RSI alto)")
+                return
+
             decision["signal"] = "BUY" if trend == "UP" else "SELL"
-            
-            # 🔥 AJUSTE CRÍTICO
             decision["probability"] = max(decision["probability"], 0.55)
         
         # 🔥 FALLBACK LATERAL (NOVO)
