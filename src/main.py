@@ -1,6 +1,6 @@
 import threading
 import time
-from modules.BinanceTraderBot import BinanceTraderBot
+from src.modules.BinanceTraderBot import BinanceTraderBot
 from binance.client import Client
 from Models.StockStartModel import StockStartModel
 from dashboard import bot_control
