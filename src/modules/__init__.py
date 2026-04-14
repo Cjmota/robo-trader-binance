@@ -1,1 +1,1 @@
-from modules.BinanceTraderBot import BinanceTraderBot
+from src.modules.BinanceTraderBot import BinanceTraderBot
