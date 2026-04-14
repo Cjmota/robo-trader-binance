@@ -12,15 +12,15 @@ from binance.enums import *
 from binance.enums import SIDE_SELL, ORDER_TYPE_STOP_LOSS_LIMIT
 from binance.exceptions import BinanceAPIException
 
-from modules.BinanceClient import BinanceClient
-from modules.TraderOrder import TraderOrder
-from modules.Logger import *
+from src.modules.BinanceClient import BinanceClient
+from src.modules.TraderOrder import TraderOrder
+from src.modules.Logger import *
 
-from modules.StrategyRunner import StrategyRunner
+from src.modules.StrategyRunner import StrategyRunner
 
 
-from strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
-from strategies.moving_average import getMovingAverageTradeStrategy
+from src.strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
+from src.strategies.moving_average import getMovingAverageTradeStrategy
 
 from indicators import Indicators
 
