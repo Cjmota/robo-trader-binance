@@ -185,12 +185,6 @@ for asset in stocks_traded_list:
 
 print("Threads iniciadas para todos os ativos.")
 
-# O programa principal continua executando sem bloquear
-try:
-    while True:
-        time.sleep(1)  # Mantenha o programa rodando
-except KeyboardInterrupt:
-    print("\nPrograma encerrado pelo usuário.")
 
 # -----------------------------------------------------------------
 
