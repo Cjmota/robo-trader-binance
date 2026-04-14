@@ -7,8 +7,6 @@ import os
 
 app = Flask(__name__)
 
-
-
 bot_control = {
     "running": True
 }
