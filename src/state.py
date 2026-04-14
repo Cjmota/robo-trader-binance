@@ -1,3 +1,5 @@
+import threading
+
 bot_status = {
     "status": "running",
     "last_update": None,
@@ -12,3 +14,5 @@ bot_status = {
 bot_control = {
     "running": True
 }
+
+lock = threading.Lock()

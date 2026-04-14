@@ -28,9 +28,8 @@ from src.state import bot_status
 
 from src.telegram import send_telegram
 
-from src.dashboard import bot_control
-
-from src.dashboard import bot_control, lock
+from src.state import bot_control
+from src.state import bot_control, lock
 
 # fmt: on
 
