@@ -22,7 +22,7 @@ from src.modules.StrategyRunner import StrategyRunner
 from src.strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
 from src.strategies.moving_average import getMovingAverageTradeStrategy
 
-from indicators import Indicators
+from src.indicators import Indicators
 
 from dashboard import bot_status
 
