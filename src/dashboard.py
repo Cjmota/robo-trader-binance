@@ -264,7 +264,3 @@ def control():
     print("Estado atual:", bot_control["running"])
 
     return {"status": "ok", "running": bot_control["running"]}
-
-
-port = int(os.environ.get("PORT", 3000))
-app.run(host="0.0.0.0", port=port)

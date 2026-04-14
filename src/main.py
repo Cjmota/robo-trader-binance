@@ -6,6 +6,7 @@ from Models.StockStartModel import StockStartModel
 from dashboard import bot_control
 from dashboard import app
 import logging
+import os
 
 # Define o logger
 logging.basicConfig(
@@ -131,11 +132,6 @@ THREAD_LOCK = True # True = Executa 1 moeda por vez | False = Executa todas simu
 
 thread_lock = threading.Lock()
 
-def run_dashboard():
-    app.run(host="0.0.0.0", port=3000)
-
-threading.Thread(target=run_dashboard, daemon=True).start()
-
 def trader_loop(stockStart: StockStartModel):
     MaTrader = BinanceTraderBot(stock_code = stockStart.stockCode
                                 , operation_code = stockStart.operationCode
@@ -197,5 +193,10 @@ except KeyboardInterrupt:
     print("\nPrograma encerrado pelo usuário.")
 
 # -----------------------------------------------------------------
+
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8080))
+    app.run(host="0.0.0.0", port=port)
 
 # fmt: on
