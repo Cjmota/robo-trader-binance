@@ -24,13 +24,13 @@ from src.strategies.moving_average import getMovingAverageTradeStrategy
 
 from src.indicators import Indicators
 
-from dashboard import bot_status
+from src.dashboard import bot_status
 
-from telegram import send_telegram
+from src.telegram import send_telegram
 
-from dashboard import bot_control
+from src.dashboard import bot_control
 
-from dashboard import bot_control, lock
+from src.dashboard import bot_control, lock
 
 # fmt: on
 
