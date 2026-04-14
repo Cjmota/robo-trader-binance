@@ -1,4 +1,5 @@
 from flask import Flask, jsonify, render_template_string
+from main import trader_loop, stocks_traded_list
 from flask import request
 import threading
 import os
@@ -264,3 +265,12 @@ def control():
     print("Estado atual:", bot_control["running"])
 
     return {"status": "ok", "running": bot_control["running"]}
+
+def start_bot():
+    print("🧠 Iniciando bot...")
+    for asset in stocks_traded_list:
+        thread = threading.Thread(target=trader_loop, args=(asset,))
+        thread.daemon = True
+        thread.start()
+
+start_bot()

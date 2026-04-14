@@ -191,7 +191,16 @@ print("Threads iniciadas para todos os ativos.")
 
 if __name__ == "__main__":
     import os
+    import threading
 
+    # 🔥 inicia bot em background
+    def start_bot():
+        print("🧠 Bot iniciado")
+        # aqui não precisa loop extra, pois suas threads já iniciam acima
+
+    threading.Thread(target=start_bot, daemon=True).start()
+
+    # 🔥 Flask principal (Railway detecta aqui)
     port = int(os.environ.get("PORT", 8080))
 
     print(f"🚀 Flask iniciando na porta {port}")
@@ -201,5 +210,7 @@ if __name__ == "__main__":
         port=port,
         debug=False,
         use_reloader=False
+        
     )
+
 # fmt: on

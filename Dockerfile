@@ -16,4 +16,4 @@ COPY . .
 # Porta do dashboard (se usar Flask)
 EXPOSE 3000
 
-CMD ["python", "src/main.py"]
+CMD ["gunicorn", "-b", "0.0.0.0:8080", "src.dashboard:app"]
