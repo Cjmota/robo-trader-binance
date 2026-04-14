@@ -1,21 +1,13 @@
 from flask import Flask, jsonify, render_template_string
 from src.main import trader_loop, stocks_traded_list
+from src.state import bot_status, bot_control
 from flask import request
 import threading
 import os
 
 app = Flask(__name__)
 
-bot_status = {
-    "status": "running",
-    "last_update": None,
-    "balance": 0,
-    "positions": {},
-    "price_history": [],
-    "candles": [],
-    "pnl": 0,
-    "pnl_percent": 0
-}
+
 
 bot_control = {
     "running": True

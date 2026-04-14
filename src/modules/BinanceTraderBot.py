@@ -24,7 +24,7 @@ from src.strategies.moving_average import getMovingAverageTradeStrategy
 
 from src.indicators import Indicators
 
-from src.dashboard import bot_status
+from src.state import bot_status
 
 from src.telegram import send_telegram
 
