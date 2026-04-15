@@ -6,8 +6,6 @@ import os
 
 app = Flask(__name__)
 
-lock = threading.Lock()
-
 HTML = """
 <!DOCTYPE html>
 <html>
@@ -123,10 +121,12 @@ async function loadData() {
             " | Status: " + (data.manager.running ? "ON" : "OFF");
     }
     
-    if (data.manager) {
-        updateBotStatus(data.manager.running);
+    if (typeof data.bot_running !== "undefined") {
+        updateBotStatus(data.bot_running);
     }
-
+    
+    updateBotStatus(data.bot_running);
+    
     updateChart(data.candles);
 }
 
@@ -212,14 +212,21 @@ function updateBotStatus(running) {
         status.innerText = "🟢 Bot ATIVO";
         status.style.color = "#22c55e";
 
-        btnOn.classList.add("active");
-        btnOff.classList.remove("active");
+        btnOn.disabled = true;
+        btnOff.disabled = false;
+
+        btnOn.style.opacity = 0.5;
+        btnOff.style.opacity = 1;
+
     } else {
         status.innerText = "🔴 Bot PAUSADO";
         status.style.color = "#ef4444";
 
-        btnOn.classList.remove("active");
-        btnOff.classList.add("active");
+        btnOn.disabled = false;
+        btnOff.disabled = true;
+
+        btnOn.style.opacity = 1;
+        btnOff.style.opacity = 0.5;
     }
 }
 
@@ -237,7 +244,9 @@ def home():
 
 @app.route("/status")
 def status():
-    return jsonify(bot_status)
+    data = bot_status.copy()
+    data["bot_running"] = bot_control["running"]
+    return jsonify(data)
 
 @app.route("/control", methods=["POST"])
 def control():
