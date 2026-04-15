@@ -1223,9 +1223,18 @@ class BinanceTraderBot:
         else:
             bot_status["pnl_percent"] = 0       
         
-        if not self.isBought() and not self.can_open_new_position():
-            print("🚫 Exposição máxima atingida")
-            return
+        if not self.isBought():
+
+            if self.open_positions >= self.max_positions:
+                print("🚫 Limite máximo atingido")
+                return
+
+            if self.open_positions >= self.max_positions * 0.8:
+                if self.entry_score < 75:
+                    print("⚠️ Exposição alta, ignorando trade fraco")
+                    return
+                else:
+                    print("🔥 Trade forte permitido mesmo com exposição alta")
         
         if not self.isBought():
             score = self.calculate_entry_score()
