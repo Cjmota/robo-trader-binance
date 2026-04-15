@@ -260,3 +260,8 @@ def start_bot():
         thread = threading.Thread(target=trader_loop, args=(asset,))
         thread.daemon = True
         thread.start()
+        
+def run_background():
+    start_bot()
+
+threading.Thread(target=run_background, daemon=True).start()
