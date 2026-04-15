@@ -5,6 +5,7 @@ from binance.client import Client
 from src.Models.StockStartModel import StockStartModel
 from src.state import stocks_traded_list as global_list
 from src.state import bot_control
+from src.portfolio_manager import PortfolioManager
 from src.dashboard import app
 import logging
 import os
@@ -37,6 +38,8 @@ from src.strategies.ma_rsi_volume_strategy import getMovingAverageRSIVolumeStrat
 # MAIN_STRATEGY_ARGS = {"volatility_factor": 0.5, # Interfere na antecipação e nos lances de compra de venda limitados 
 #                       "fast_window": 9,
 #                       "slow_window": 21}
+
+portfolio = PortfolioManager(max_positions=3)
 
 MAIN_STRATEGY = getVortexTradeStrategy
 MAIN_STRATEGY_ARGS = {}
@@ -154,8 +157,10 @@ def trader_loop(stockStart: StockStartModel):
                                 , main_strategy = stockStart.mainStrategy
                                 , main_strategy_args =  stockStart.mainStrategyArgs
                                 , fallback_strategy = stockStart.fallbackStrategy
-                                , fallback_strategy_args = stockStart.fallbackStrategyArgs)
-    
+                                , fallback_strategy_args = stockStart.fallbackStrategyArgs
+                                , portfolio = portfolio
+                                )
+                                    
 
     total_executed:int = 1
 

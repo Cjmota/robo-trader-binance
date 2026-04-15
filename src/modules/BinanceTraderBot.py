@@ -43,6 +43,8 @@ GLOBAL_MANAGER = {
     "min_score": 3,
 }
 
+
+
 # ------------------------------------------------------------------
 
 
@@ -82,6 +84,7 @@ class BinanceTraderBot:
         main_strategy_args=None,
         fallback_strategy=None,
         fallback_strategy_args=None,
+        portfolio=None
     ):
 
         print("------------------------------------------------")
@@ -126,7 +129,9 @@ class BinanceTraderBot:
         self.daily_start_balance = 0
         
         self.last_reset_day = datetime.now().date()
-
+        
+        self.portfolio = portfolio
+        
         # fmt: on
 
     def isBought(self):
@@ -1126,6 +1131,13 @@ class BinanceTraderBot:
         
        # 🔥 PRIMEIRO ATUALIZA OS DADOS
         self.updateAllData()
+        
+        if self.portfolio:
+            count = sum(
+                1 for asset in self.account_data["balances"]
+                if float(asset["free"]) > 0 and asset["asset"] != "USDT"
+            )
+            self.portfolio.open_positions = count
 
         # 🔥 DEPOIS VERIFICA
         if not hasattr(self, "stock_data") or self.stock_data is None or len(self.stock_data) == 0:
@@ -1225,16 +1237,9 @@ class BinanceTraderBot:
         
         if not self.isBought():
 
-            if self.open_positions >= self.max_positions:
-                print("🚫 Limite máximo atingido")
+            if self.portfolio and not self.portfolio.can_open():
+                print("🚫 Máximo de posições global atingido")
                 return
-
-            if self.open_positions >= self.max_positions * 0.8:
-                if self.entry_score < 75:
-                    print("⚠️ Exposição alta, ignorando trade fraco")
-                    return
-                else:
-                    print("🔥 Trade forte permitido mesmo com exposição alta")
         
         if not self.isBought():
             score = self.calculate_entry_score()
@@ -1428,7 +1433,14 @@ class BinanceTraderBot:
             if self.isBought():
                 self.initial_balance_position = self.last_stock_account_balance
                 print("✅ Compra confirmada")
-                send_telegram(f"🟢 COMPRA {self.operation_code}\nPreço: {limit_price}")
+                price = self.stock_data["close_price"].iloc[-1]
+
+                send_telegram(f"🟢 COMPRA {self.operation_code}\nPreço: {price}")
+                
+                if self.portfolio:
+                    self.portfolio.register_open()
+                    current, maxp = self.portfolio.get_status()
+                    print(f"📊 Posições abertas: {current}/{maxp}")
             else:
                 print("⚠️ Ordem não executada ainda")
             print(f"Carteira em {self.stock_code} [DEPOIS]:")
@@ -1436,6 +1448,7 @@ class BinanceTraderBot:
             self.time_to_sleep = self.delay_after_order
 
         elif self.isBought() and self.last_trade_decision == False:
+            
             
             # 🚫 PROTEÇÃO CONTRA DUMP
             if self.detect_dump() and self.is_oversold() and not self.is_trend_up():
@@ -1456,6 +1469,16 @@ class BinanceTraderBot:
             print(f"\nCarteira em {self.stock_code} [DEPOIS]:")
             self.printStock()
             self.time_to_sleep = self.delay_after_order
+            
+            # depois do updateAllData()
+
+            if not self.isBought():
+                print("📉 Venda confirmada")
+
+                if self.portfolio:
+                    self.portfolio.register_close()
+                    current, maxp = self.portfolio.get_status()
+                    print(f"📊 Posições abertas: {current}/{maxp}")
 
         else:
             print(f'🏁 Ação final: Manter posição ({"Comprado" if self.actual_trade_position else "Vendido"})')
