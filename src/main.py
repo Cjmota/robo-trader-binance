@@ -3,6 +3,7 @@ import time
 from src.modules.BinanceTraderBot import BinanceTraderBot
 from binance.client import Client
 from src.Models.StockStartModel import StockStartModel
+from src.state import stocks_traded_list as global_list
 from src.state import bot_control
 from src.dashboard import app
 import logging
@@ -120,6 +121,11 @@ stocks_traded_list = [
     ADA_USDT,
     SOL_USDT
 ]
+
+from src.state import stocks_traded_list as global_list
+
+global_list.clear()
+global_list.extend(stocks_traded_list)
 
 THREAD_LOCK = True # True = Executa 1 moeda por vez | False = Executa todas simultânemaente
 

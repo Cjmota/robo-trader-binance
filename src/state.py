@@ -16,3 +16,5 @@ bot_control = {
 }
 
 lock = threading.Lock()
+
+stocks_traded_list = []
