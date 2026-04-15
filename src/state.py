@@ -1,4 +1,5 @@
 import threading
+lock = threading.Lock()
 
 bot_status = {
     "status": "running",
@@ -14,7 +15,5 @@ bot_status = {
 bot_control = {
     "running": True
 }
-
-lock = threading.Lock()
 
 stocks_traded_list = []

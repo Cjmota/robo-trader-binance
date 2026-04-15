@@ -1,14 +1,11 @@
 from flask import Flask, jsonify, render_template_string
-from src.state import bot_status, bot_control
+from src.main import trader_loop
+from src.state import stocks_traded_list, bot_status, bot_control, lock
 from flask import request
 import threading
 import os
 
 app = Flask(__name__)
-
-bot_control = {
-    "running": True
-}
 
 lock = threading.Lock()
 
