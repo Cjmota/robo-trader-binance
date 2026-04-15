@@ -1124,6 +1124,10 @@ class BinanceTraderBot:
         self,
     ):
         
+       # 🔥 PRIMEIRO ATUALIZA OS DADOS
+        self.updateAllData()
+
+        # 🔥 DEPOIS VERIFICA
         if not hasattr(self, "stock_data") or self.stock_data is None or len(self.stock_data) == 0:
             print("⚠️ Dados ainda não carregados")
             return
@@ -1146,7 +1150,6 @@ class BinanceTraderBot:
         print(f'🟢 Executado {datetime.now().strftime("(%H:%M:%S) %d-%m-%Y")}\n')  # Adiciona o horário atual formatado
 
         # Atualiza todos os dados
-        self.updateAllData(verbose=True)  
         
         if "candles" not in bot_status:
             bot_status["candles"] = []
