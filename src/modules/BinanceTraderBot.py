@@ -1123,6 +1123,10 @@ class BinanceTraderBot:
     def execute(
         self,
     ):
+        
+        if not hasattr(self, "stock_data") or self.stock_data is None or len(self.stock_data) == 0:
+            print("⚠️ Dados ainda não carregados")
+            return
 
         with lock:
             running = bot_control["running"]
