@@ -1,6 +1,6 @@
 import pandas as pd
 import numpy as np
-from indicators.vortex import vortex  # Importa a função vortex do arquivo vortex.py
+from src.indicators.vortex import vortex  # Importa a função vortex do arquivo vortex.py
 # Variável global para o modo custom (para imprimir sinais intercalados)
 last_custom_signal = None
 

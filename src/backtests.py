@@ -1,12 +1,12 @@
-from modules.BinanceTraderBot import BinanceTraderBot
+from src.modules.BinanceTraderBot import BinanceTraderBot
 from binance.client import Client
-from tests.backtestRunner import backtestRunner
-from strategies.ut_bot_alerts import *
-from strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
-from strategies.moving_average import getMovingAverageTradeStrategy
-from strategies.rsi_strategy import getRsiTradeStrategy
-from strategies.vortex_strategy import getVortexTradeStrategy
-from strategies.ma_rsi_volume_strategy import getMovingAverageRSIVolumeStrategy
+from src.tests.backtestRunner import backtestRunner
+from src.strategies.ut_bot_alerts import *
+from src.strategies.moving_average_antecipation import getMovingAverageAntecipationTradeStrategy
+from src.strategies.moving_average import getMovingAverageTradeStrategy
+from src.strategies.rsi_strategy import getRsiTradeStrategy
+from src.strategies.vortex_strategy import getVortexTradeStrategy
+from src.strategies.ma_rsi_volume_strategy import getMovingAverageRSIVolumeStrategy
 
 # ------------------------------------------------------------------------
 # 🔎 AJUSTES BACKTESTS 🔎
