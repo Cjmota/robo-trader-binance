@@ -1,5 +1,4 @@
 from flask import Flask, jsonify, render_template_string
-from src.main import trader_loop, stocks_traded_list
 from src.state import bot_status, bot_control
 from flask import request
 import threading
