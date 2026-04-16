@@ -1137,8 +1137,7 @@ class BinanceTraderBot:
                 1 for asset in self.account_data["balances"]
                 if float(asset["free"]) > 0 and asset["asset"] != "USDT"
             )
-            self.portfolio.open_positions = count
-
+        
         # 🔥 DEPOIS VERIFICA
         if not hasattr(self, "stock_data") or self.stock_data is None or len(self.stock_data) == 0:
             print("⚠️ Dados ainda não carregados")
@@ -1237,9 +1236,14 @@ class BinanceTraderBot:
         
         if not self.isBought():
 
-            if self.portfolio and not self.portfolio.can_open():
-                print("🚫 Máximo de posições global atingido")
-                return
+            if self.portfolio:
+                real_positions = self.get_real_open_positions()
+
+                print(f"📊 Posições reais: {real_positions}/{self.portfolio.max_positions}")
+
+                if real_positions >= self.portfolio.max_positions:
+                    print("🚫 Máximo de posições global atingido")
+                    return
         
         if not self.isBought():
             score = self.calculate_entry_score()
@@ -1437,8 +1441,7 @@ class BinanceTraderBot:
 
                 send_telegram(f"🟢 COMPRA {self.operation_code}\nPreço: {price}")
                 
-                if self.portfolio:
-                    self.portfolio.register_open()
+                if self.portfolio:                    
                     current, maxp = self.portfolio.get_status()
                     print(f"📊 Posições abertas: {current}/{maxp}")
             else:
@@ -1476,7 +1479,7 @@ class BinanceTraderBot:
                 print("📉 Venda confirmada")
 
                 if self.portfolio:
-                    self.portfolio.register_close()
+                    
                     current, maxp = self.portfolio.get_status()
                     print(f"📊 Posições abertas: {current}/{maxp}")
 
@@ -1800,3 +1803,36 @@ class BinanceTraderBot:
             score += 2
 
         return score
+    
+    def get_real_open_positions(self, min_usdt=10):
+        count = 0
+
+        try:
+            for asset in self.account_data["balances"]:
+                asset_name = asset["asset"]
+                free = float(asset["free"])
+
+                if asset_name == "USDT":
+                    continue
+
+                if free <= 0:
+                    continue
+
+                # tenta pegar preço do ativo
+                try:
+                    symbol = asset_name + "USDT"
+                    ticker = self.client_binance.get_symbol_ticker(symbol=symbol)
+                    price = float(ticker["price"])
+                except:
+                    continue
+
+                value = free * price
+
+                if value >= min_usdt:
+                    count += 1
+
+            return count
+
+        except Exception as e:
+            print(f"Erro ao contar posições reais: {e}")
+            return 0
