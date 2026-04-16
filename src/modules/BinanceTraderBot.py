@@ -1710,6 +1710,14 @@ class BinanceTraderBot:
         ma50 = self.stock_data["close_price"].rolling(50).mean().iloc[-1]
         price = self.stock_data["close_price"].iloc[-1]
 
+        # 🔥 LOG DETALHADO (AQUI!)
+        print(f"📊 RSI: {rsi:.2f}")
+        print(f"📊 Preço atual: {price:.4f}")
+        print(f"📊 MA50: {ma50:.4f}")
+        print(f"📊 Distância da média: {((price - ma50)/ma50)*100:.2f}%")
+        print(f"📊 Candle -1: {self.stock_data['close_price'].iloc[-1]:.4f}")
+        print(f"📊 Candle -3: {self.stock_data['close_price'].iloc[-3]:.4f}")
+
         # RSI
         if rsi < 30:
             score += 2
@@ -1724,7 +1732,7 @@ class BinanceTraderBot:
         if price > self.stock_data["close_price"].iloc[-3]:
             score += 1
 
-        print(f"🧠 Entry Score: {score}")
+        print(f"🧠 Entry Score final: {score}")
 
         return score
     
