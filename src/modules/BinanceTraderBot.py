@@ -1259,6 +1259,17 @@ class BinanceTraderBot:
             else:
                 min_score = 2
 
+            market = self.detect_market_condition()
+
+            if market == "TREND":
+                min_score = 2
+            elif market == "RANGE":
+                min_score = 1
+            else:
+                min_score = 2
+
+            print(f"📊 Min Score necessário: {min_score}")
+
             if score < min_score:
                 print("🚫 Score insuficiente")
                 return
@@ -1312,7 +1323,9 @@ class BinanceTraderBot:
         
         if not self.isBought() and self.last_trade_decision == True:
             
-            if not self.is_trend_up():
+            market = self.detect_market_condition()
+
+            if market == "TREND" and not self.is_trend_up():
                 print("🚫 Tendência maior é de baixa")
                 return
 
@@ -1720,34 +1733,43 @@ class BinanceTraderBot:
         rsi = Indicators.getRSI(series=self.stock_data["close_price"])
         ma50 = self.stock_data["close_price"].rolling(50).mean().iloc[-1]
         price = self.stock_data["close_price"].iloc[-1]
-        
-        distancia = ((price - ma50) / ma50) * 100
-        
-        if price > ma50:
-            score += 1
 
-        # 🔥 LOG DETALHADO (AQUI!)
-        print(f"📊 RSI: {rsi:.2f}")
-        print(f"📊 Preço atual: {price:.4f}")
-        print(f"📊 MA50: {ma50:.4f}")
-        print(f"📊 Distância da média: {((price - ma50)/ma50)*100:.2f}%")
-        print(f"📊 Candle -1: {self.stock_data['close_price'].iloc[-1]:.4f}")
-        print(f"📊 Candle -3: {self.stock_data['close_price'].iloc[-3]:.4f}")
-        print(f"📈 Score: {score} | RSI: {rsi:.2f} | Dist: {distancia:.2f}%")
+        market = self.detect_market_condition()
 
-        # RSI
-        if rsi < 30:
-            score += 2
-        elif rsi < 40:
-            score += 1
+        print(f"🧠 Market Mode: {market}")
 
-        # Preço abaixo da média
-        if price < ma50:
-            score += 2
+        # =========================
+        # 📈 TREND MODE
+        # =========================
+        if market == "TREND":
+            if price > ma50:
+                score += 2
 
-        # Tendência curta
-        if price > self.stock_data["close_price"].iloc[-3]:
-            score += 1
+            if rsi < 65:
+                score += 1
+
+            if price > self.stock_data["close_price"].iloc[-3]:
+                score += 1
+
+        # =========================
+        # 📊 RANGE MODE
+        # =========================
+        elif market == "RANGE":
+            if rsi < 35:
+                score += 2
+
+            if price < ma50:
+                score += 1
+
+        # =========================
+        # ⚖️ NEUTRAL
+        # =========================
+        else:
+            if rsi < 50:
+                score += 1
+
+            if price > ma50:
+                score += 1
 
         print(f"🧠 Entry Score final: {score}")
 
@@ -1814,18 +1836,23 @@ class BinanceTraderBot:
     def get_market_score(self):
         score = 0
 
+        market = self.detect_market_condition()
         rsi = Indicators.getRSI(series=self.stock_data["close_price"])
         price = self.stock_data["close_price"].iloc[-1]
         ma50 = self.stock_data["close_price"].rolling(50).mean().iloc[-1]
 
-        if rsi < 50:
-            score += 1
-
-        if price > ma50:
+        if market == "TREND":
             score += 2
+            if price > ma50:
+                score += 2
 
-        if self.is_trend_up():
-            score += 2
+        elif market == "RANGE":
+            if rsi < 40:
+                score += 2
+
+        else:
+            if rsi < 50:
+                score += 1
 
         return score
     
@@ -1861,3 +1888,26 @@ class BinanceTraderBot:
         except Exception as e:
             print(f"Erro ao contar posições reais: {e}")
             return 0
+        
+    def detect_market_condition(self):
+        try:
+            rsi = Indicators.getRSI(series=self.stock_data["close_price"])
+            ma50 = self.stock_data["close_price"].rolling(50).mean().iloc[-1]
+            ma200 = self.stock_data["close_price"].rolling(200).mean().iloc[-1]
+            vol = self.stock_data["close_price"].pct_change().rolling(20).std().iloc[-1]
+
+            print(f"📊 Market Check → RSI: {rsi:.2f} | Vol: {vol:.4f}")
+
+            # 🔥 tendência forte
+            if ma50 > ma200 and vol > 0.01:
+                return "TREND"
+
+            # 🔥 mercado lateral
+            if vol < 0.008:
+                return "RANGE"
+
+            return "NEUTRAL"
+
+        except Exception as e:
+            print(f"Erro detect_market_condition: {e}")
+            return "NEUTRAL"
