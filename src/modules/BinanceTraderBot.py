@@ -40,7 +40,7 @@ secret_key = os.getenv("BINANCE_SECRET_KEY")
 
 GLOBAL_MANAGER = {
     "max_positions": 2,
-    "min_score": 3,
+    "min_score": 2,
 }
 
 
@@ -1411,7 +1411,18 @@ class BinanceTraderBot:
         if not self.isBought():
             score = self.get_market_score()
 
-            if score < GLOBAL_MANAGER["min_score"]:
+            # 📊 volatilidade do mercado
+            vol = self.stock_data["close_price"].pct_change().rolling(20).std().iloc[-1]
+
+            # 🔥 score dinâmico
+            if vol > 0.01:
+                min_score = 3   # mercado forte → mais exigente
+            else:
+                min_score = 2   # mercado lateral → mais flexível
+
+            print(f"📊 Market Score: {score} | Min necessário: {min_score}")
+
+            if score < min_score:
                 print("🚫 Score global baixo - ignorando ativo")
                 return
 
