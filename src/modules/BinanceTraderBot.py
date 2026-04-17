@@ -1717,6 +1717,7 @@ class BinanceTraderBot:
         print(f"📊 Distância da média: {((price - ma50)/ma50)*100:.2f}%")
         print(f"📊 Candle -1: {self.stock_data['close_price'].iloc[-1]:.4f}")
         print(f"📊 Candle -3: {self.stock_data['close_price'].iloc[-3]:.4f}")
+        print(f"📈 Score: {score} | RSI: {rsi:.2f} | Dist: {distancia:.2f}%")
 
         # RSI
         if rsi < 30:
