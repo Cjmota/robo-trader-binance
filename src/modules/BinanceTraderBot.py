@@ -1255,9 +1255,9 @@ class BinanceTraderBot:
                 return
 
             if vol > 0.01:
-                min_score = 4
-            else:
                 min_score = 3
+            else:
+                min_score = 2
 
             if score < min_score:
                 print("🚫 Score insuficiente")
@@ -1711,6 +1711,9 @@ class BinanceTraderBot:
         price = self.stock_data["close_price"].iloc[-1]
         
         distancia = ((price - ma50) / ma50) * 100
+        
+        if price > ma50:
+            score += 1
 
         # 🔥 LOG DETALHADO (AQUI!)
         print(f"📊 RSI: {rsi:.2f}")
@@ -1804,8 +1807,8 @@ class BinanceTraderBot:
         price = self.stock_data["close_price"].iloc[-1]
         ma50 = self.stock_data["close_price"].rolling(50).mean().iloc[-1]
 
-        if rsi < 40:
-            score += 2
+        if rsi < 50:
+            score += 1
 
         if price > ma50:
             score += 2
