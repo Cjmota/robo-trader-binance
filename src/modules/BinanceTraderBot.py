@@ -1709,6 +1709,8 @@ class BinanceTraderBot:
         rsi = Indicators.getRSI(series=self.stock_data["close_price"])
         ma50 = self.stock_data["close_price"].rolling(50).mean().iloc[-1]
         price = self.stock_data["close_price"].iloc[-1]
+        
+        distancia = ((price - ma50) / ma50) * 100
 
         # 🔥 LOG DETALHADO (AQUI!)
         print(f"📊 RSI: {rsi:.2f}")
