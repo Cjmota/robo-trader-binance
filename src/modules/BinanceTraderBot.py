@@ -1289,7 +1289,7 @@ class BinanceTraderBot:
 
             # 🔒 trava global de compra
             with lock:
-                if bot_control.get("buying_now", False):
+                if bot_control.get("buying_now", False) or bot_control.get("selling_now", False):
                     print(f"⏳ Compra em andamento por outro ativo...")
                     return
 
@@ -1356,18 +1356,33 @@ class BinanceTraderBot:
         # ================================
         elif self.isBought() and decision == False:
 
-            print("🏁 VENDENDO...")
-            self.sellLimitedOrder()
+            # 🔒 trava global de venda
+            with lock:
+                if bot_control.get("selling_now", False):
+                    print("⏳ Venda em andamento por outro ativo...")
+                    return
 
-            time.sleep(2)
-            self.updateAllData()
+                bot_control["selling_now"] = True
 
-            if not self.isBought():
-                print("📉 Venda confirmada")
+            try:
+                print("🏁 VENDENDO...")
 
-        else:
-            print("⏸ Mantendo posição")
+                order = self.sellLimitedOrder()
 
+                if not order:
+                    print("❌ Falha na venda")
+                    return
+
+                time.sleep(2)
+                self.updateAllData()
+
+                if not self.isBought():
+                    print("📉 Venda confirmada")
+
+            finally:
+                # 🔓 libera trava sempre
+                with lock:
+                    bot_control["selling_now"] = False
         print("------------------------------------------------")
         
     # ================================
