@@ -31,6 +31,8 @@ from src.telegram import send_telegram
 from src.state import bot_control
 from src.state import bot_control, lock
 
+from src.state import best_asset
+
 # fmt: on
 
 
@@ -43,10 +45,7 @@ GLOBAL_MANAGER = {
     "min_score": 2,
 }
 
-
-
 # ------------------------------------------------------------------
-
 
 # Classe Principal
 class BinanceTraderBot:
@@ -1132,6 +1131,10 @@ class BinanceTraderBot:
        # 🔥 PRIMEIRO ATUALIZA OS DADOS
         self.updateAllData()
         
+        with lock:
+            best_asset["score"] = 0
+            best_asset["symbol"] = None
+        
         if self.portfolio:
             count = sum(
                 1 for asset in self.account_data["balances"]
@@ -1248,6 +1251,13 @@ class BinanceTraderBot:
         if not self.isBought():
             score = self.calculate_entry_score()
             
+            # 🧠 DEFINE O MELHOR ATIVO GLOBAL
+            with lock:
+                if score > best_asset["score"]:
+                    best_asset["score"] = score
+                    best_asset["symbol"] = self.operation_code
+                    print(f"🏆 Novo melhor ativo: {self.operation_code} | Score: {score}")
+            
             vol = self.stock_data["close_price"].pct_change().rolling(20).std().iloc[-1]
 
             if vol < 0.002:
@@ -1322,6 +1332,11 @@ class BinanceTraderBot:
         self.last_trade_decision = decision
         
         if not self.isBought() and self.last_trade_decision == True:
+            
+            with lock:
+                if best_asset["symbol"] != self.operation_code:
+                    print(f"🚫 Ignorado ({self.operation_code}) - não é o melhor ativo")
+                    return
             
             market = self.detect_market_condition()
 
