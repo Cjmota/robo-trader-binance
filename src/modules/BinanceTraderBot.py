@@ -33,6 +33,9 @@ from src.state import bot_control, lock
 
 from src.state import best_asset
 
+from src.strategies.vortex_strategy import getVortexTradeStrategy
+from src.strategies.rsi_strategy import getRsiTradeStrategy
+
 # fmt: on
 
 
@@ -1128,6 +1131,11 @@ class BinanceTraderBot:
 
         # 🔥 ATUALIZA DADOS
         self.updateAllData()
+        
+        # 🔒 Variáveis seguras
+        score = 0
+        min_score = 0
+        market = self.detect_market_condition()
 
         from src.state import best_asset
 
@@ -1167,8 +1175,7 @@ class BinanceTraderBot:
         # ================================
         if not self.isBought():
             score = self.calculate_entry_score()
-            market = self.detect_market_condition()
-
+            
             if market == "TREND":
                 min_score = 2
             elif market == "RANGE":
@@ -1188,6 +1195,7 @@ class BinanceTraderBot:
             # filtro só para entrada
             if score < min_score:
                 print(f"🚫 Score insuficiente ({score})")
+                return
 
         # ================================
         # 📊 DASHBOARD
@@ -1217,8 +1225,54 @@ class BinanceTraderBot:
         # ================================
         # 🎯 DECISÃO
         # ================================
-        decision = self.getFinalDecisionStrategy()
+    
+        print(f"🧠 Estratégia Híbrida | Mercado: {market} | Score: {score}")
 
+        # ===================================
+        # 📈 TREND = VORTEX
+        # ===================================
+        if market == "TREND":
+
+            decision = getVortexTradeStrategy(
+                self.stock_data,
+                verbose=True
+            )
+
+        # ===================================
+        # 📊 RANGE = RSI
+        # ===================================
+        elif market == "RANGE":
+
+            decision = getRsiTradeStrategy(
+                self.stock_data,
+                low=30,
+                high=70,
+                verbose=True
+            )
+
+        # ===================================
+        # ⚖️ NEUTRAL = CONSENSO
+        # ===================================
+        else:
+
+            vortex = getVortexTradeStrategy(
+                self.stock_data,
+                verbose=True
+            )
+
+            rsi = getRsiTradeStrategy(
+                self.stock_data,
+                low=35,
+                high=65,
+                verbose=True
+            )
+
+            if vortex == True or rsi == True:
+                decision = True
+            elif vortex == False and rsi == False:
+                decision = False
+            else:
+                decision = None
         if decision is None:
             print("⚠️ Estratégia inconclusiva")
             return
@@ -1240,7 +1294,7 @@ class BinanceTraderBot:
                     return
             
             # 🚫 e só se score for bom
-            if score < 2:
+            if score < min_score:
                 print("🚫 Melhor ativo não tem score suficiente")
                 return
 
@@ -1297,6 +1351,7 @@ class BinanceTraderBot:
             print("⏸ Mantendo posição")
 
         print("------------------------------------------------")
+        
     # ================================
     # 📊 CACHE DE FILTROS (PROFISSIONAL)
     # ================================
@@ -1676,12 +1731,12 @@ class BinanceTraderBot:
 
             print(f"📊 Market Check → RSI: {rsi:.2f} | Vol: {vol:.4f}")
 
-            # 🔥 tendência forte
-            if ma50 > ma200 and vol > 0.01:
+            # 📈 Tendência
+            if ma50 > ma200 and vol > 0.006:
                 return "TREND"
 
-            # 🔥 mercado lateral
-            if vol < 0.008:
+            # 📊 Lateral
+            if vol < 0.0045:
                 return "RANGE"
 
             return "NEUTRAL"
