@@ -135,6 +135,8 @@ class BinanceTraderBot:
         self.last_reset_day = datetime.now().date()
 
         self.portfolio = portfolio
+        
+        self.stuck_counter = 0
 
         # fmt: on
 
@@ -513,26 +515,105 @@ class BinanceTraderBot:
 
     def sellMarketOrder(self, quantity=None):
         try:
+            # =====================================
+            # 🚀 SELL ENGINE PROFISSIONAL
+            # =====================================
             if self.actual_trade_position:
-                if quantity == None:
-                    quantity = self.adjust_to_step(self.last_stock_account_balance, self.step_size, as_string=True)
+
+                current_price = self.stock_data["close_price"].iloc[-1]
+                avg_price = self.getPriceBought()
+                qty = self.last_stock_account_balance
+
+                if avg_price <= 0 or qty <= 0:
+                    return
+
+                pnl = ((current_price - avg_price) / avg_price) * 100
+
+                rsi = Indicators.getRSI(series=self.stock_data["close_price"])
+
+                position_value = qty * current_price
+
+                print(f"[{self.operation_code}] 💰 PnL: {pnl:.2f}% | RSI: {rsi:.2f}")
+
+                # ===============================
+                # 🎯 TARGETS DINÂMICOS
+                # ===============================
+                if position_value < 10:
+                    tp1 = 1.0
+                    tp2 = 1.8
+                elif position_value < 30:
+                    tp1 = 1.5
+                    tp2 = 2.5
                 else:
-                    quantity = self.adjust_to_step(quantity, self.step_size, as_string=True)
+                    tp1 = 2.0
+                    tp2 = 3.5
 
-                order_sell = self.client_binance.create_order(
-                    symbol=self.operation_code,
-                    side=SIDE_SELL,
-                    type=ORDER_TYPE_MARKET,
-                    quantity=quantity,
-                )
-                createLogOrder(order_sell)
-                print(f"\nOrdem de VENDA a mercado enviada com sucesso:")
-                return order_sell
-            else:
-                logging.warning("Erro ao vender: Posição já vendida.")
-                print("\nErro ao vender: Posição já vendida.")
-                return False
+                # ===============================
+                # 🟢 PARCIAL
+                # ===============================
+                if pnl >= tp1 and qty > self.step_size * 2:
 
+                    print(f"[{self.operation_code}] 🟢 Parcial 50%")
+
+                    self.sellPartial(0.50)
+                    return
+
+                # ===============================
+                # 🚀 TAKE PROFIT TOTAL
+                # ===============================
+                if pnl >= tp2:
+
+                    print(f"[{self.operation_code}] 🚀 TP total")
+
+                    self.sellLimitedOrder()
+                    return
+
+                # ===============================
+                # 🛡 BREAK EVEN
+                # ===============================
+                if pnl > 0.7 and pnl < 0.15:
+
+                    print(f"[{self.operation_code}] 🛡 Break-even")
+
+                    self.sellLimitedOrder()
+                    return
+
+                # ===============================
+                # 🚪 POSIÇÃO TRAVADA EM RANGE
+                # ===============================
+                if market == "RANGE":
+
+                    if -0.4 <= pnl <= 0.3:
+                        self.stuck_counter += 1
+                    else:
+                        self.stuck_counter = 0
+
+                    if self.stuck_counter >= 8:
+                        print(f"[{self.operation_code}] 🚪 Saída posição travada")
+
+                        self.sellLimitedOrder()
+                        self.stuck_counter = 0
+                        return
+
+                # ===============================
+                # 📉 RSI PERDEU FORÇA
+                # ===============================
+                if pnl > 0.2 and rsi > 68:
+
+                    print(f"[{self.operation_code}] 📉 RSI esticado")
+
+                    self.sellLimitedOrder()
+                    return
+
+                # ===============================
+                # 🛑 STOP LOSS
+                # ===============================
+                if pnl <= -3.5:
+
+                    print(f"[{self.operation_code}] 🛑 Stop Loss")
+
+                    self.sellLimitedOrder()
+                    return
         except Exception as e:
             logging.error(f"Erro ao executar ordem de venda a mercado: {e}")
             print(f"\nErro ao executar ordem de venda a mercado: {e}")
