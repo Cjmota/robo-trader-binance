@@ -1561,52 +1561,106 @@ class BinanceTraderBot:
         return rsi > limit
     
     def calculate_entry_score(self):
-        score = 0
+        try:
+            score = 0
 
-        rsi = Indicators.getRSI(series=self.stock_data["close_price"])
-        ma50 = self.stock_data["close_price"].rolling(50).mean().iloc[-1]
-        price = self.stock_data["close_price"].iloc[-1]
+            close = self.stock_data["close_price"]
+            volume = self.stock_data["volume"]
 
-        market = self.detect_market_condition()
+            price = close.iloc[-1]
+            prev_price = close.iloc[-2]
 
-        print(f"🧠 Market Mode: {market}")
+            ma20 = close.rolling(20).mean().iloc[-1]
+            ma50 = close.rolling(50).mean().iloc[-1]
+            ma200 = close.rolling(200).mean().iloc[-1]
 
-        # =========================
-        # 📈 TREND MODE
-        # =========================
-        if market == "TREND":
-            if price > ma50:
-                score += 2
+            avg_vol = volume.rolling(20).mean().iloc[-1]
+            current_vol = volume.iloc[-1]
 
-            if rsi < 65:
-                score += 1
+            rsi = Indicators.getRSI(series=close)
 
-            if price > self.stock_data["close_price"].iloc[-3]:
-                score += 1
+            market = self.detect_market_condition()
 
-        # =========================
-        # 📊 RANGE MODE
-        # =========================
-        elif market == "RANGE":
-            if rsi < 35:
-                score += 2
+            print(f"🧠 Market Mode: {market}")
 
-            if price < ma50:
-                score += 1
+            # ==================================
+            # 📈 TREND MODE
+            # ==================================
+            if market == "TREND":
 
-        # =========================
-        # ⚖️ NEUTRAL
-        # =========================
-        else:
-            if rsi < 50:
-                score += 1
+                if price > ma50:
+                    score += 2
 
-            if price > ma50:
-                score += 1
+                if ma50 > ma200:
+                    score += 2
 
-        print(f"🧠 Entry Score final: {score}")
+                if price > prev_price:
+                    score += 1
 
-        return score
+                if rsi < 68:
+                    score += 1
+
+                if current_vol > avg_vol:
+                    score += 1
+
+            # ==================================
+            # 📊 RANGE MODE
+            # ==================================
+            elif market == "RANGE":
+
+                if rsi < 35:
+                    score += 3
+
+                if price < ma20:
+                    score += 1
+
+                if price < ma50:
+                    score += 1
+
+                if current_vol > avg_vol:
+                    score += 1
+
+            # ==================================
+            # ⚖️ NEUTRAL MODE
+            # ==================================
+            else:
+
+                if price > ma50:
+                    score += 1
+
+                if rsi < 45:
+                    score += 1
+
+                if current_vol > avg_vol:
+                    score += 1
+
+            # ==================================
+            # 🚫 ANTI PUMP
+            # ==================================
+            recent_move = (price - close.iloc[-4]) / close.iloc[-4]
+
+            if recent_move > 0.03:
+                score -= 2
+                print("🚫 Pump detectado (-2 score)")
+
+            # ==================================
+            # 🚫 SOBRECOMPRA
+            # ==================================
+            if rsi > 75:
+                score -= 2
+
+            # ==================================
+            # 🔒 SCORE LIMITADO
+            # ==================================
+            score = max(score, 0)
+
+            print(f"🧠 Entry Score PROF final: {score}")
+
+            return score
+
+        except Exception as e:
+            print(f"Erro calculate_entry_score: {e}")
+            return 0
     
     def can_open_new_position(self):
         try:
