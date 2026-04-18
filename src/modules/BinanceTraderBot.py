@@ -513,7 +513,7 @@ class BinanceTraderBot:
         if self.actual_trade_position:
 
             current_price = self.stock_data["close_price"].iloc[-1]
-            avg_price = self.getPriceBought()
+            avg_price = self.last_buy_price
             qty = self.last_stock_account_balance
 
             if avg_price <= 0 or qty <= 0:
@@ -616,7 +616,7 @@ class BinanceTraderBot:
      
     def sellPartial(self, pct):
         qty = self.last_stock_account_balance * pct
-        return self.sellMarketOrder(qty)   
+        return self.safe_sell_market(qty)   
     
     def acquire_sell_lock(self):
         with lock:
