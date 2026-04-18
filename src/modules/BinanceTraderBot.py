@@ -94,59 +94,72 @@ class BinanceTraderBot:
 
         # fmt: off
 
-        self.stock_code = stock_code  # Código princial da stock negociada (ex: 'BTC')
-        self.operation_code = operation_code  # Código negociado/moeda (ex:'BTCBRL')
-        self.traded_quantity = traded_quantity  # Quantidade incial que será operada
-        self.traded_percentage = traded_percentage  # Porcentagem do total da carteira, que será negociada        
-        self.candle_period = candle_period  # Período levado em consideração para operação (ex: 15min)        
+        self.stock_code = stock_code
+        self.operation_code = operation_code
+        self.traded_quantity = traded_quantity
+        self.traded_percentage = traded_percentage
+        self.candle_period = candle_period
 
-        self.fallback_activated = fallback_activated  # Define se a estratégia de Fallback será usada (ela pode entrar comprada em mercados subindo)
-        self.acceptable_loss_percentage = acceptable_loss_percentage / 100 # % Máxima que o bot aceita perder quando vender
-        self.stop_loss_percentage = stop_loss_percentage / 100 # % Máxima de loss que ele aceita, em caso de não vender na ordem limitada
+        self.fallback_activated = fallback_activated
+        self.acceptable_loss_percentage = acceptable_loss_percentage / 100
+        self.stop_loss_percentage = stop_loss_percentage / 100
 
-        self.take_profit_at_percentage = take_profit_at_percentage # Quanto de valorização para pegar lucro. (Array exemplo: [2, 5, 10])
-        self.take_profit_amount_percentage = take_profit_amount_percentage # Quanto da quantidade tira de lucro. (Array exemplo: [25, 25, 40])
+        # ✅ BUG 3 — Salva o stop loss original para poder restaurar depois
+        self.initial_stop_loss_percentage = stop_loss_percentage / 100
 
-        self.main_strategy = main_strategy # Estratégia principal
-        self.main_strategy_args = main_strategy_args # (opcional) Argumentos da estratégia principal
-        self.fallback_strategy = fallback_strategy # (opcional) Estratégia de Fallback
-        self.fallback_strategy_args = fallback_strategy_args # (opcional) Argumentos da estratégia de fallback
+        self.take_profit_at_percentage = take_profit_at_percentage
+        self.take_profit_amount_percentage = take_profit_amount_percentage
 
-        # Configurações de tempos de espera
+        self.main_strategy = main_strategy
+        self.main_strategy_args = main_strategy_args
+        self.fallback_strategy = fallback_strategy
+        self.fallback_strategy_args = fallback_strategy_args
+
         self.time_to_trade = time_to_trade
         self.delay_after_order = delay_after_order
         self.time_to_sleep = time_to_trade
 
         self.client_binance = BinanceClient(
             api_key, secret_key, sync=True, sync_interval=30000, verbose=False
-        )  # Inicia o client da Binance
+        )
 
-        self.setStepSizeAndTickSize() # Seta o time_step e step_size da classe (só precisa executar 1x)
-        
+        self.setStepSizeAndTickSize()
+
         self.initial_balance_position = 0
-        
+
         self.min_trade_usdt = 10
-        
+
         self.daily_loss = 0
         self.daily_start_balance = 0
-        
+
         self.last_reset_day = datetime.now().date()
-        
+
         self.portfolio = portfolio
-        
+
         # fmt: on
 
     def isBought(self):
         return self.actual_trade_position
 
-    # Atualiza todos os dados da conta
-    # Função importante, sempre incrementar ela, em caso de novos gets
-    def updateAllData(
-        self,
-        verbose=False,
-    ):
+    # ✅ BUG 2 + BUG 3 — Função central de reset ao confirmar posição vendida
+    def _reset_position_state(self):
+        """
+        Chamada sempre que a posição é confirmada como VENDIDA.
+        Reseta take_profit_index e restaura stop_loss_percentage ao valor original.
+        """
+        if self.take_profit_index != 0:
+            print(f"🔄 Resetando take_profit_index: {self.take_profit_index} → 0")
+            self.take_profit_index = 0
+
+        if self.stop_loss_percentage != self.initial_stop_loss_percentage:
+            print(f"🔄 Restaurando stop_loss: {self.stop_loss_percentage:.4f} → {self.initial_stop_loss_percentage:.4f}")
+            self.stop_loss_percentage = self.initial_stop_loss_percentage
+
+        self.initial_balance_position = 0
+
+    def updateAllData(self, verbose=False):
         try:
-            
+
             today = datetime.now().date()
 
             if today != self.last_reset_day:
@@ -154,24 +167,16 @@ class BinanceTraderBot:
                 self.daily_start_balance = self.getUSDTBalance()
                 self.daily_loss = 0
                 self.last_reset_day = today
-            
-            # Dados atualizados do usuário e sua carteira
+
             self.account_data = self.getUpdatedAccountData()
-            # Balanço atual do ativo na carteira
             self.last_stock_account_balance = self.getLastStockAccountBalance()
-            # Posição atual (False = Vendido | True = Comprado)
             self.actual_trade_position = self.getActualTradePosition()
-            # Atualiza dados usados nos modelos
             self.stock_data = self.getStockData()
-            # Retorna uma lista com todas as ordens abertas
             self.open_orders = self.getOpenOrders()
-            # Salva o último valor de compra executado com sucesso
             self.last_buy_price = self.getLastBuyPrice(verbose)
-            # Salva o último valor de venda executado com sucesso
             self.last_sell_price = self.getLastSellPrice(verbose)
-            # Se a posição atual for vendida, ele reseta o index do take profit
             self.actual_trade_position = self.getActualTradePosition()
-            
+
             if self.daily_start_balance == 0:
                 self.daily_start_balance = self.getUSDTBalance()
 
@@ -189,47 +194,38 @@ class BinanceTraderBot:
             time.sleep(5)
             return
 
-    # ------------------------------------------------------------------
-    # GETS Principais
-
-    # Busca infos atualizada da conta Binance
     def getUpdatedAccountData(self):
-        return self.client_binance.get_account()  # Busca infos da conta
+        return self.client_binance.get_account()
 
-    # Busca o último balanço da conta, na stock escolhida.
     def getLastStockAccountBalance(self):
         for stock in self.account_data["balances"]:
             if stock["asset"] == self.stock_code:
                 free = float(stock["free"])
                 locked = float(stock["locked"])
                 return free + locked
-
         return 0.0
 
-    # Checa se a posição atual é comprado ou vendido
-    # Checa se a posição atual é comprado ou vendido
-    
     def should_update_order(self, new_price, old_price, threshold=0.003):
-        """
-        Decide se deve atualizar a ordem baseado na diferença de preço
-        """
         try:
             return abs(new_price - old_price) / old_price > threshold
         except Exception as e:
             print(f"Erro should_update_order: {e}")
-            return True  # em dúvida, atualiza
-    
+            return True
+
     def getActualTradePosition(self):
         """
-        Considera comprado apenas se posição tiver valor real em USDT
+        Considera comprado apenas se posição tiver valor real em USDT.
+        ✅ BUG 2 — Ao detectar posição VENDIDA, chama _reset_position_state()
         """
         try:
             if not hasattr(self, "stock_data") or self.stock_data is None:
                 return False
-            
+
             qty = self.last_stock_account_balance
 
             if qty <= 0:
+                # ✅ BUG 2 + BUG 3 — Posição confirmada como vendida: reseta estado
+                self._reset_position_state()
                 return False
 
             price = self.stock_data["close_price"].iloc[-1]
@@ -237,29 +233,28 @@ class BinanceTraderBot:
 
             print(f"📦 {self.operation_code} posição: {qty} | Valor: {value_usdt:.2f} USDT")
 
-            # só considera posição real acima de 5 USDT
-            return value_usdt >= 5 #ou return value_usdt >= self.get_min_notional(self.operation_code)
+            is_bought = value_usdt >= 5
+
+            if not is_bought:
+                # ✅ BUG 2 + BUG 3 — Valor abaixo do mínimo: também considera vendido
+                self._reset_position_state()
+
+            return is_bought
 
         except Exception as e:
             print(f"Erro posição atual {self.operation_code}: {e}")
             return False
-        
-    # Busca os dados do ativo no periodo
-    def getStockData(
-        self,
-    ):
 
-        # Busca dados na binance dos últimos 1000 períodos
+    def getStockData(self):
+
         candles = self.client_binance.get_klines(
             symbol=self.operation_code,
             interval=self.candle_period,
             limit=1000,
         )
 
-        # Transforma um um DataFrame Pandas
         prices = pd.DataFrame(candles)
 
-        # Renomea as colunas baseada na Documentação da Binance
         prices.columns = [
             "open_time",
             "open_price",
@@ -275,7 +270,6 @@ class BinanceTraderBot:
             "-",
         ]
 
-        # Pega apenas os indicadores que queremos para esse modelo
         prices = prices[
             [
                 "close_price",
@@ -287,77 +281,29 @@ class BinanceTraderBot:
             ]
         ]
 
-        # Converte as colunas para o tipo numérico
-        prices["close_price"] = pd.to_numeric(
-            prices["close_price"],
-            errors="coerce",
-        )
-        prices["open_price"] = pd.to_numeric(
-            prices["open_price"],
-            errors="coerce",
-        )
-        prices["high_price"] = pd.to_numeric(
-            prices["high_price"],
-            errors="coerce",
-        )
-        prices["low_price"] = pd.to_numeric(
-            prices["low_price"],
-            errors="coerce",
-        )
-        prices["volume"] = pd.to_numeric(
-            prices["volume"],
-            errors="coerce",
-        )
+        prices["close_price"] = pd.to_numeric(prices["close_price"], errors="coerce")
+        prices["open_price"] = pd.to_numeric(prices["open_price"], errors="coerce")
+        prices["high_price"] = pd.to_numeric(prices["high_price"], errors="coerce")
+        prices["low_price"] = pd.to_numeric(prices["low_price"], errors="coerce")
+        prices["volume"] = pd.to_numeric(prices["volume"], errors="coerce")
 
-        # Corrige o tempo de fechamento
-        prices["open_time"] = pd.to_datetime(
-            prices["open_time"],
-            unit="ms",
-        ).dt.tz_localize("UTC")
-
-        # Converte para o fuso horário UTC -3
+        prices["open_time"] = pd.to_datetime(prices["open_time"], unit="ms").dt.tz_localize("UTC")
         prices["open_time"] = prices["open_time"].dt.tz_convert("America/Sao_Paulo")
-
-        # CÁLCULOS PRÉVIOS...
 
         return prices
 
-    # Retorna o preço da última ordem de compra executada para o ativo configurado.
-    # Retorna 0.0 se nenhuma ordem de compra foi encontrada.
-    def getLastBuyPrice(
-        self,
-        verbose=False,
-    ):
+    def getLastBuyPrice(self, verbose=False):
         try:
-            # Obtém o histórico de ordens do par configurado
-            all_orders = self.client_binance.get_all_orders(
-                symbol=self.operation_code,
-                limit=100,
-            )
-
-            # Filtra apenas as ordens de compra executadas (FILLED)
-            executed_buy_orders = [order for order in all_orders if order["side"] == "BUY" and order["status"] == "FILLED"]
+            all_orders = self.client_binance.get_all_orders(symbol=self.operation_code, limit=100)
+            executed_buy_orders = [o for o in all_orders if o["side"] == "BUY" and o["status"] == "FILLED"]
 
             if executed_buy_orders:
-                # Ordena as ordens por tempo (timestamp) para obter a mais recente
-                last_executed_order = sorted(
-                    executed_buy_orders,
-                    key=lambda x: x["time"],
-                    reverse=True,
-                )[0]
-
-                # print(f'ÚLTIMA EXECUTADA: {last_executed_order}')
-
-                # Retorna o preço da última ordem de compra executada
+                last_executed_order = sorted(executed_buy_orders, key=lambda x: x["time"], reverse=True)[0]
                 last_buy_price = float(last_executed_order["cummulativeQuoteQty"]) / float(last_executed_order["executedQty"])
-                # Corrige o timestamp para a chave correta
                 datetime_transact = datetime.utcfromtimestamp(last_executed_order["time"] / 1000).strftime("(%H:%M:%S) %d-%m-%Y")
                 if verbose:
                     print(f"\nÚltima ordem de COMPRA executada para {self.operation_code}:")
-                    print(
-                        f" - Data: {datetime_transact} | Preço: {self.adjust_to_step(last_buy_price,self.tick_size, as_string=True)} | Qnt.: {self.adjust_to_step(float(last_executed_order['origQty']), self.step_size, as_string=True)}"
-                    )
-
+                    print(f" - Data: {datetime_transact} | Preço: {self.adjust_to_step(last_buy_price, self.tick_size, as_string=True)}")
                 return last_buy_price
             else:
                 if verbose:
@@ -366,44 +312,21 @@ class BinanceTraderBot:
 
         except Exception as e:
             if verbose:
-                print(f"Erro ao verificar a última ordem de COMPRA executada para {self.operation_code}: {e}")
+                print(f"Erro ao verificar a última ordem de COMPRA: {e}")
             return 0.0
 
-    # Retorna o preço da última ordem de venda executada para o ativo configurado.
-    # Retorna 0.0 se nenhuma ordem de venda foi encontrada.
-    def getLastSellPrice(
-        self,
-        verbose=False,
-    ):
+    def getLastSellPrice(self, verbose=False):
         try:
-            # Obtém o histórico de ordens do par configurado
-            all_orders = self.client_binance.get_all_orders(
-                symbol=self.operation_code,
-                limit=100,
-            )
-
-            # Filtra apenas as ordens de venda executadas (FILLED)
-            executed_sell_orders = [order for order in all_orders if order["side"] == "SELL" and order["status"] == "FILLED"]
+            all_orders = self.client_binance.get_all_orders(symbol=self.operation_code, limit=100)
+            executed_sell_orders = [o for o in all_orders if o["side"] == "SELL" and o["status"] == "FILLED"]
 
             if executed_sell_orders:
-                # Ordena as ordens por tempo (timestamp) para obter a mais recente
-                last_executed_order = sorted(
-                    executed_sell_orders,
-                    key=lambda x: x["time"],
-                    reverse=True,
-                )[0]
-
-                # Retorna o preço da última ordem de venda executada
+                last_executed_order = sorted(executed_sell_orders, key=lambda x: x["time"], reverse=True)[0]
                 last_sell_price = float(last_executed_order["cummulativeQuoteQty"]) / float(last_executed_order["executedQty"])
-
-                # Corrige o timestamp para a chave correta
                 datetime_transact = datetime.utcfromtimestamp(last_executed_order["time"] / 1000).strftime("(%H:%M:%S) %d-%m-%Y")
-
                 if verbose:
                     print(f"Última ordem de VENDA executada para {self.operation_code}:")
-                    print(
-                        f" - Data: {datetime_transact} | Preço: {self.adjust_to_step(last_sell_price,self.tick_size, as_string=True)} | Qnt.: {self.adjust_to_step(float(last_executed_order['origQty']), self.step_size, as_string=True)}"
-                    )
+                    print(f" - Data: {datetime_transact} | Preço: {self.adjust_to_step(last_sell_price, self.tick_size, as_string=True)}")
                 return last_sell_price
             else:
                 if verbose:
@@ -412,106 +335,44 @@ class BinanceTraderBot:
 
         except Exception as e:
             if verbose:
-                print(f"Erro ao verificar a última ordem de VENDA executada para {self.operation_code}: {e}")
+                print(f"Erro ao verificar a última ordem de VENDA: {e}")
             return 0.0
 
     def getTimestamp(self):
-        """
-        Retorna o timestamp ajustado com base no desvio de tempo entre o sistema local e o servidor da Binance.
-        """
         try:
-            # Obtém o tempo do servidor da Binance e calcula o desvio apenas uma vez
-            if (
-                not hasattr(
-                    self,
-                    "time_offset",
-                )
-                or self.time_offset is None
-            ):
+            if not hasattr(self, "time_offset") or self.time_offset is None:
                 server_time = self.client_binance.get_server_time()["serverTime"]
                 local_time = int(time.time() * 1000)
                 self.time_offset = server_time - local_time
-
-            # Retorna o timestamp ajustado
             adjusted_timestamp = int(time.time() * 1000) + self.time_offset
             return adjusted_timestamp
-
         except Exception as e:
             print(f"Erro ao ajustar o timestamp: {e}")
-            # Retorna o timestamp local em caso de falha, mas não é recomendado para chamadas críticas
             return int(time.time() * 1000)
 
-    # --------------------------------------------------------------
-    # SETs
-
-    # Seta o step_size (para quantidade) e tick_size (para preço) do ativo operado, só precisa ser executado 1x
     def setStepSizeAndTickSize(self):
-        # Obter informações do símbolo para respeitar os filtros
         symbol_info = self.client_binance.get_symbol_info(self.operation_code)
         price_filter = next(f for f in symbol_info["filters"] if f["filterType"] == "PRICE_FILTER")
         self.tick_size = float(price_filter["tickSize"])
-
         lot_size_filter = next(f for f in symbol_info["filters"] if f["filterType"] == "LOT_SIZE")
         self.step_size = float(lot_size_filter["stepSize"])
 
-    """
-    Ajusta o valor para o múltiplo mais próximo do passo definido, lidando com problemas de precisão
-    e garantindo que o resultado não seja retornado em notação científica.
-
-    Parameters:
-        value (float): O valor a ser ajustado.
-        step (float): O incremento mínimo permitido.
-        as_string (bool): Define se o valor ajustado será retornado como string. Padrão é True.
-
-    Returns:
-        str|float: O valor ajustado no formato especificado.
-    """
-
-    def adjust_to_step(
-        self,
-        value,
-        step,
-        as_string=False,
-    ):
-
+    def adjust_to_step(self, value, step, as_string=False):
         if step <= 0:
             raise ValueError("O valor de 'step' deve ser maior que zero.")
-
-        # Descobrir o número de casas decimais do step
-        decimal_places = (
-            max(
-                0,
-                abs(int(math.floor(math.log10(step)))),
-            )
-            if step < 1
-            else 0
-        )
-
-        # Ajustar o valor ao step usando floor
+        decimal_places = (max(0, abs(int(math.floor(math.log10(step))))) if step < 1 else 0)
         adjusted_value = math.floor(value / step) * step
-
-        # Garantir que o resultado tenha a mesma precisão do step
-        adjusted_value = round(
-            adjusted_value,
-            decimal_places,
-        )
-
-        # Retornar no formato especificado
+        adjusted_value = round(adjusted_value, decimal_places)
         if as_string:
             return f"{adjusted_value:.{decimal_places}f}"
         else:
             return adjusted_value
 
-    # --------------------------------------------------------------
-    # PRINTS
-
-    # Printa toda a carteira
     def printWallet(self):
         for stock in self.account_data["balances"]:
             if float(stock["free"]) > 0:
                 print(stock)
 
-    # Printa o ativo definido na classe
     def printStock(self):
         for stock in self.account_data["balances"]:
             if stock["asset"] == self.stock_code:
@@ -522,9 +383,7 @@ class BinanceTraderBot:
             if stock["asset"] == "BRL":
                 print(stock)
 
-    # Printa todas ordens abertas
     def printOpenOrders(self):
-        # Log das ordens abertas
         if self.open_orders:
             print("-------------------------")
             print(f"Ordens abertas para {self.operation_code}:")
@@ -542,20 +401,14 @@ class BinanceTraderBot:
                 )
                 print(to_print)
             print("-------------------------")
-
         else:
             print(f"Não há ordens abertas para {self.operation_code}.")
 
-    # --------------------------------------------------------------
-    # GETs auxiliares
-
-    # Retorna toda a carteira
     def getWallet(self):
         for stock in self.account_data["balances"]:
             if float(stock["free"]) > 0:
                 return stock
 
-    # Retorna todo o ativo definido na classe
     def getStock(self):
         for stock in self.account_data["balances"]:
             if stock["asset"] == self.stock_code:
@@ -564,45 +417,28 @@ class BinanceTraderBot:
     def getPriceChangePercentage(self, initial_price, close_price):
         if initial_price == 0:
             raise ValueError("O initial_price não pode ser zero.")
-
         percentual_change = ((close_price - initial_price) / initial_price) * 100
         return percentual_change
 
-    # --------------------------------------------------------------
-    # FUNÇÕES DE COMPRA
-
-    # Compra a ação a MERCADO
     def buyMarketOrder(self, quantity=None):
         try:
-            if not self.actual_trade_position:  # Se a posição for vendida
-
-                if quantity == None:  # Se não definida, ele vende tudo na carteira
-                    quantity = self.adjust_to_step(
-                        self.last_stock_account_balance,
-                        self.step_size,
-                        as_string=True,
-                    )
-                else:  # Se não, ele ajusta o valor passado
-                    quantity = self.adjust_to_step(
-                        quantity,
-                        self.step_size,
-                        as_string=True,
-                    )
+            if not self.actual_trade_position:
+                if quantity == None:
+                    quantity = self.adjust_to_step(self.last_stock_account_balance, self.step_size, as_string=True)
+                else:
+                    quantity = self.adjust_to_step(quantity, self.step_size, as_string=True)
 
                 order_buy = self.client_binance.create_order(
                     symbol=self.operation_code,
-                    side=SIDE_BUY,  # Compra
-                    type=ORDER_TYPE_MARKET,  # Ordem de Mercado
+                    side=SIDE_BUY,
+                    type=ORDER_TYPE_MARKET,
                     quantity=quantity,
                 )
-
-                #self.actual_trade_position = True  # Define posição como comprada
-                createLogOrder(order_buy)  # Cria um log
+                createLogOrder(order_buy)
                 print(f"\nOrdem de COMPRA a mercado enviada com sucesso:")
                 print(order_buy)
-                return order_buy  # Retorna a ordem
-
-            else:  # Se a posição já está comprada
+                return order_buy
+            else:
                 logging.warning("Erro ao comprar: Posição já comprada.")
                 print("\nErro ao comprar: Posição já comprada.")
                 return False
@@ -612,8 +448,6 @@ class BinanceTraderBot:
             print(f"\nErro ao executar ordem de compra a mercado: {e}")
             return False
 
-    # Compra por um preço máximo (Ordem Limitada)
-    # [NOVA] Define o valor usando RSI e Volume Médio
     def buyLimitedOrder(self, price=0):
 
         close_price = self.stock_data["close_price"].iloc[-1]
@@ -621,9 +455,6 @@ class BinanceTraderBot:
         avg_volume = self.stock_data["volume"].rolling(window=20).mean().iloc[-1]
         rsi = Indicators.getRSI(series=self.stock_data["close_price"])
 
-        # =========================
-        # 🎯 DEFINIÇÃO DO PREÇO
-        # =========================
         if price == 0:
             if rsi < 30:
                 limit_price = close_price - (0.002 * close_price)
@@ -635,28 +466,16 @@ class BinanceTraderBot:
             limit_price = price
 
         symbol = self.operation_code
-
-        # =========================
-        # 💰 QUANTIDADE INTELIGENTE (CORREÇÃO AQUI)
-        # =========================
         min_usdt = getattr(self, "min_trade_usdt", 10)
         quantity = self.get_position_size()
 
         if quantity <= 0:
             print("🚫 Quantidade inválida")
             return False
-        
-        # =========================
-        # 🚀 PREPARE ORDER (AJUSTE BINANCE)
-        # =========================
+
         print(f"🔎 Antes prepare_order → price: {limit_price}, qty: {quantity}")
 
-        limit_price, quantity = self.prepare_order(
-            symbol,
-            float(limit_price),
-            float(quantity),
-            side="BUY"
-        )
+        limit_price, quantity = self.prepare_order(symbol, float(limit_price), float(quantity), side="BUY")
 
         print(f"🔎 Depois prepare_order → price: {limit_price}, qty: {quantity}")
 
@@ -664,24 +483,15 @@ class BinanceTraderBot:
             print("🚫 Ordem inválida após prepare_order")
             return False
 
-        # =========================
-        # 🔧 FORMATAR
-        # =========================
         limit_price = f"{limit_price:.8f}"
         quantity = f"{quantity:.8f}"
 
-        # =========================
-        # 📊 LOG
-        # =========================
         print(f"\nEnviando ordem limitada de COMPRA para {self.operation_code}:")
         print(f" - RSI: {rsi}")
         print(f" - Quantidade: {quantity}")
         print(f" - Close Price: {close_price}")
         print(f" - Preço Limite: {limit_price}")
 
-        # =========================
-        # 📤 EXECUÇÃO
-        # =========================
         try:
             order_buy = self.client_binance.create_order(
                 symbol=self.operation_code,
@@ -691,53 +501,34 @@ class BinanceTraderBot:
                 quantity=quantity,
                 price=limit_price,
             )
-
             print("\n✅ Ordem COMPRA limitada enviada com sucesso")
-
             if order_buy:
                 createLogOrder(order_buy)
-
             return order_buy
 
         except Exception as e:
             logging.error(f"Erro ao enviar ordem limitada de COMPRA: {e}")
             print(f"\n❌ Erro ao enviar ordem limitada de COMPRA: {e}")
             return False
-    # --------------------------------------------------------------
-    # FUNÇÕES DE VENDA
 
-    # Vende a ação a MERCADO
     def sellMarketOrder(self, quantity=None):
         try:
-            if self.actual_trade_position:  # Se a posição for comprada
-
-                if quantity == None:  # Se não definida, ele vende tudo na carteira
-                    quantity = self.adjust_to_step(
-                        self.last_stock_account_balance,
-                        self.step_size,
-                        as_string=True,
-                    )
-                else:  # Se não, ele ajusta o valor passado
-                    quantity = self.adjust_to_step(
-                        quantity,
-                        self.step_size,
-                        as_string=True,
-                    )
+            if self.actual_trade_position:
+                if quantity == None:
+                    quantity = self.adjust_to_step(self.last_stock_account_balance, self.step_size, as_string=True)
+                else:
+                    quantity = self.adjust_to_step(quantity, self.step_size, as_string=True)
 
                 order_sell = self.client_binance.create_order(
                     symbol=self.operation_code,
-                    side=SIDE_SELL,  # Venda
-                    type=ORDER_TYPE_MARKET,  # Ordem de Mercado
+                    side=SIDE_SELL,
+                    type=ORDER_TYPE_MARKET,
                     quantity=quantity,
                 )
-
-                #self.actual_trade_position = False  # Define posição como vendida
-                createLogOrder(order_sell)  # Cria um log
+                createLogOrder(order_sell)
                 print(f"\nOrdem de VENDA a mercado enviada com sucesso:")
-                # print(order_sell)
-                return order_sell  # Retorna a ordem
-
-            else:  # Se a posição já está vendida
+                return order_sell
+            else:
                 logging.warning("Erro ao vender: Posição já vendida.")
                 print("\nErro ao vender: Posição já vendida.")
                 return False
@@ -747,211 +538,126 @@ class BinanceTraderBot:
             print(f"\nErro ao executar ordem de venda a mercado: {e}")
             return False
 
-    # Venda por um preço mínimo (Ordem Limitada)
-    # [NOVA] Define o valor usando RSI e Volume Médio
-    def sellLimitedOrder(
-        self,
-        price=None
-    ):
+    def sellLimitedOrder(self, price=None):
         close_price = self.stock_data["close_price"].iloc[-1]
-        volume = self.stock_data["volume"].iloc[-1]  # Volume atual do mercado
-        avg_volume = self.stock_data["volume"].rolling(window=20).mean().iloc[-1]  # Média de volume
+        volume = self.stock_data["volume"].iloc[-1]
+        avg_volume = self.stock_data["volume"].rolling(window=20).mean().iloc[-1]
         rsi = Indicators.getRSI(series=self.stock_data["close_price"])
 
         if price is None:
-            if rsi > 70:  # Mercado sobrecomprado
-                limit_price = close_price + (0.002 * close_price)  # Tenta vender um pouco acima
-            elif volume < avg_volume:  # Volume baixo (mercado lateral)
-                limit_price = close_price - (0.002 * close_price)  # Ajuste pequeno abaixo
-            else:  # Volume alto (mercado volátil)
-                limit_price = close_price - (0.005 * close_price)  # Ajuste maior abaixo (caso caia muito rápido)
+            if rsi > 70:
+                limit_price = close_price + (0.002 * close_price)
+            elif volume < avg_volume:
+                limit_price = close_price - (0.002 * close_price)
+            else:
+                limit_price = close_price - (0.005 * close_price)
 
-            # Garantir que o preço limite seja maior que o mínimo aceitável
-            # limit_price = max(limit_price, self.getMinimumPriceToSell())
             if limit_price < (self.last_buy_price * (1 - self.acceptable_loss_percentage)):
                 print(f"\nAjuste de venda aceitável ({self.acceptable_loss_percentage*100}%):")
                 print(f" - De: {limit_price:.4f}")
-                # limit_price = (self.last_buy_price*(1-self.acceptable_loss_percentage))
                 limit_price = self.getMinimumPriceToSell()
                 print(f" - Para: {limit_price}")
         else:
             limit_price = price
 
-        # 🚀 PREPARAÇÃO INTELIGENTE DA ORDEM
-
         symbol = self.operation_code
 
         limit_price, quantity = self.prepare_order(
-            symbol,
-            float(limit_price),
-            float(self.last_stock_account_balance),
-            side="SELL"
+            symbol, float(limit_price), float(self.last_stock_account_balance), side="SELL"
         )
 
-        # 🚫 proteção
         if not limit_price or not quantity:
             print("🚫 Ordem inválida após prepare_order")
             return False
 
-        # converter para string
         limit_price = f"{limit_price:.8f}"
         quantity = f"{quantity:.8f}"
 
-        # Log de informações
         print(f"\nEnviando ordem limitada de VENDA para {self.operation_code}:")
         print(f" - RSI: {rsi}")
         print(f" - Quantidade: {quantity}")
         print(f" - Close Price: {close_price}")
         print(f" - Preço Limite: {limit_price}")
 
-        # Enviar ordem limitada de VENDA
         try:
-            # Por algum motivo, fazer direto por aqui resolveu um bug de mudança de preço
-            # Depois vou testar novamente.
             order_sell = self.client_binance.create_order(
                 symbol=self.operation_code,
-                side=SIDE_SELL,  # Venda
-                type=ORDER_TYPE_LIMIT,  # Ordem Limitada
-                timeInForce="GTC",  # Good 'Til Canceled (Ordem válida até ser cancelada)
+                side=SIDE_SELL,
+                type=ORDER_TYPE_LIMIT,
+                timeInForce="GTC",
                 quantity=quantity,
                 price=limit_price,
             )
-
-            #self.actual_trade_position = False  # Atualiza a posição para vendida
             print(f"\nOrdem VENDA limitada enviada com sucesso:")
-            # print(order_sell)
-            createLogOrder(order_sell)  # Cria um log
-            return order_sell  # Retorna a ordem enviada
+            createLogOrder(order_sell)
+            return order_sell
         except Exception as e:
             logging.error(f"Erro ao enviar ordem limitada de VENDA: {e}")
             print(f"\nErro ao enviar ordem limitada de VENDA: {e}")
             return False
 
-    # --------------------------------------------------------------
-    # ORDENS E SUAS ATUALIZAÇÕES
-
-    # Verifica as ordens ativas do ativo atual configurado
     def getOpenOrders(self):
-        open_orders = self.client_binance.get_open_orders(symbol=self.operation_code)
+        return self.client_binance.get_open_orders(symbol=self.operation_code)
 
-        return open_orders
+    def cancelOrderById(self, order_id):
+        self.client_binance.cancel_order(symbol=self.operation_code, orderId=order_id)
 
-    # Cancela uma ordem a partir do seu ID
-    def cancelOrderById(
-        self,
-        order_id,
-    ):
-        self.client_binance.cancel_order(
-            symbol=self.operation_code,
-            orderId=order_id,
-        )
-
-    # Cancela todas ordens abertas
     def cancelAllOrders(self):
         if self.open_orders:
             for order in self.open_orders:
                 try:
-                    self.client_binance.cancel_order(
-                        symbol=self.operation_code,
-                        orderId=order["orderId"],
-                    )
+                    self.client_binance.cancel_order(symbol=self.operation_code, orderId=order["orderId"])
                     print(f"❌ Ordem {order['orderId']} cancelada.")
                 except Exception as e:
                     print(f"Erro ao cancelar ordem {order['orderId']}: {e}")
 
-    # Verifica se há alguma ordem de COMPRA aberta
-    # Se a ordem foi parcialmente executada, ele salva o valor
-    # executado na variável self.partial_quantity_discount, para que
-    # este valor seja descontado nas execuções seguintes.
-    # Se foi parcialmente executado, ela também salva o valor que foi executado
-    # na variável self.last_buy_price
     def hasOpenBuyOrder(self):
-        """
-        Verifica se há uma ordem de compra aberta para o ativo configurado.
-        Se houver:
-            - Salva a quantidade já executada em self.partial_quantity_discount.
-            - Salva o maior preço parcialmente executado em self.last_buy_price.
-        """
-        # Inicializa as variáveis de desconto e maior preço como 0
         self.partial_quantity_discount = 0.0
         try:
-
-            # Obtém todas as ordens abertas para o par
             open_orders = self.client_binance.get_open_orders(symbol=self.operation_code)
-
-            # Filtra as ordens de compra (SIDE_BUY)
             buy_orders = [order for order in open_orders if order["side"] == "BUY"]
 
             if buy_orders:
                 self.last_buy_price = 0.0
-
                 print(f"\nOrdens de compra abertas para {self.operation_code}:")
                 for order in buy_orders:
-                    executed_qty = float(order["executedQty"])  # Quantidade já executada
-                    price = float(order["price"])  # Preço da ordem
-
-                    print(
-                        f" - ID da Ordem: {order['orderId']}, Preço: {price}, Qnt.: {order['origQty']}, Qnt. Executada: {executed_qty}"
-                    )
-
-                    # Atualiza a quantidade parcial executada
+                    executed_qty = float(order["executedQty"])
+                    price = float(order["price"])
+                    print(f" - ID: {order['orderId']}, Preço: {price}, Executada: {executed_qty}")
                     self.partial_quantity_discount += executed_qty
-
-                    # Atualiza o maior preço parcialmente executado
                     if executed_qty > 0 and price > self.last_buy_price:
                         self.last_buy_price = price
-
-                print(f" - Quantidade parcial executada no total: {self.partial_quantity_discount}")
-                print(f" - Maior preço parcialmente executado: {self.last_buy_price}")
                 return True
             else:
                 print(f" - Não há ordens de compra abertas para {self.operation_code}.")
                 return False
 
         except Exception as e:
-            print(f"Erro ao verificar ordens abertas para {self.operation_code}: {e}")
+            print(f"Erro ao verificar ordens abertas: {e}")
             return False
 
-    # Verifica se há uma ordem de VENDA aberta para o ativo configurado.
-    # Se houver, salva a quantidade já executada na variável self.partial_quantity_discount.
     def hasOpenSellOrder(self):
-        # Inicializa a variável de desconto como 0
         self.partial_quantity_discount = 0.0
         try:
-
-            # Obtém todas as ordens abertas para o par
             open_orders = self.client_binance.get_open_orders(symbol=self.operation_code)
-
-            # Filtra as ordens de venda (SIDE_SELL)
             sell_orders = [order for order in open_orders if order["side"] == "SELL"]
 
             if sell_orders:
                 print(f"\nOrdens de venda abertas para {self.operation_code}:")
                 for order in sell_orders:
-                    executed_qty = float(order["executedQty"])  # Quantidade já executada
-                    print(
-                        f" - ID da Ordem: {order['orderId']}, Preço: {order['price']}, Qnt.: {order['origQty']}, Qnt. Executada: {executed_qty}"
-                    )
-
-                    # Atualiza a quantidade parcial executada
+                    executed_qty = float(order["executedQty"])
+                    print(f" - ID: {order['orderId']}, Preço: {order['price']}, Executada: {executed_qty}")
                     self.partial_quantity_discount += executed_qty
-
-                print(f" - Quantidade parcial executada no total: {self.partial_quantity_discount}")
                 return True
             else:
                 print(f" - Não há ordens de venda abertas para {self.operation_code}.")
                 return False
 
         except Exception as e:
-            print(f"Erro ao verificar ordens abertas para {self.operation_code}: {e}")
+            print(f"Erro ao verificar ordens abertas: {e}")
             return False
 
-    # --------------------------------------------------------------
-    # ESTRATÉGIAS DE DECISÃO
-
-    # Função que executa estratégias implementadas e retorna a decisão final
     def getFinalDecisionStrategy(self):
-
         final_decision = StrategyRunner.execute(
             self,
             stock_data=self.stock_data,
@@ -960,17 +666,13 @@ class BinanceTraderBot:
             fallback_strategy=self.fallback_strategy,
             fallback_strategy_args=self.fallback_strategy_args,
         )
-
         return final_decision
 
-    # Define o valor mínimo para vender, baseado no acceptable_loss_percentage
     def getMinimumPriceToSell(self):
         return self.last_buy_price * (1 - self.acceptable_loss_percentage)
 
-    # Estratégia de venda por "Stop Loss"
     def stopLossTrigger(self):
         close_price = self.stock_data["close_price"].iloc[-1]
-        weighted_price = self.stock_data["close_price"].iloc[-2]  # Preço ponderado pelo candle anterior
         stop_loss_price = self.last_buy_price * (1 - self.stop_loss_percentage)
 
         print(f'\n - Preço atual: {self.stock_data["close_price"].iloc[-1]}')
@@ -983,60 +685,42 @@ class BinanceTraderBot:
             time.sleep(2)
             self.sellMarketOrder()
             return True
-        
-    # Estratégia de venda por "Take Profit"
+
     def takeProfitTrigger(self):
         """
-        Verifica se o preço atual atingiu uma meta de take profit e, se sim,
-        realiza uma venda parcial da carteira de acordo com os percentuais definidos.
-        Retorna True se a venda for executada, caso contrário, retorna False.
+        Verifica se o preço atingiu uma meta de take profit e realiza venda parcial.
+        ✅ BUG 3 — stop_loss_percentage ajustado apenas para trailing; restaurado pelo _reset_position_state() ao vender.
         """
-
         try:
-            
-            # Obtém o preço de fechamento mais recente
             close_price = self.stock_data["close_price"].iloc[-1]
-
-            # Calcula a variação percentual do preço
-            price_percentage_variation = self.getPriceChangePercentage(initial_price=self.last_buy_price, close_price=close_price)
+            price_percentage_variation = self.getPriceChangePercentage(
+                initial_price=self.last_buy_price, close_price=close_price
+            )
 
             print(f" - Variação atual: {price_percentage_variation:.2f}%")
 
-            # Verifica se o índice atual está dentro do tamanho da lista de take profit
             if self.take_profit_index < len(self.take_profit_at_percentage):
                 tp_percentage = self.take_profit_at_percentage[self.take_profit_index]
                 tp_amount = self.take_profit_amount_percentage[self.take_profit_index]
 
                 print(f" - Próxima meta Take Profit: {tp_percentage}% (Venda de: {tp_amount}%)\n")
 
-                # Condição para ativação do take profit
                 if (
-                    self.actual_trade_position  # Só executa se estiver comprado
-                    and tp_percentage > 0  # Apenas se o TP for maior que 0
-                    and round(price_percentage_variation, 2) >= round(tp_percentage, 2)  # Se atingiu a meta de lucro
+                    self.actual_trade_position
+                    and tp_percentage > 0
+                    and round(price_percentage_variation, 2) >= round(tp_percentage, 2)
                 ):
-                    # Define quantidade com base na posição inicial
-                    
                     if self.take_profit_index >= len(self.take_profit_at_percentage):
                         return False
-                    
+
                     if self.initial_balance_position == 0:
                         print("⚠️ Posição inicial não definida")
                         return False
-                    
+
                     quantity_to_sell = self.initial_balance_position * (tp_amount / 100)
-
-                    # Ajusta para step da Binance
-                    quantity_to_sell = self.adjust_to_step(
-                        quantity_to_sell,
-                        self.step_size,
-                        as_string=False
-                    )
-
-                    # Proteção
+                    quantity_to_sell = self.adjust_to_step(quantity_to_sell, self.step_size, as_string=False)
                     quantity_to_sell = min(quantity_to_sell, self.last_stock_account_balance)
 
-                    # Verifica se há uma quantidade válida para vender
                     if quantity_to_sell > 0:
                         log = (
                             f"🎯 Meta de Take Profit atingida! ({tp_percentage}% lucro)\n"
@@ -1044,50 +728,46 @@ class BinanceTraderBot:
                             f" - Preço atual: {close_price:.4f}\n"
                             f" - Quantidade vendida: {quantity_to_sell:.6f} {self.stock_code}"
                         )
-
                         print(log)
                         logging.info(log)
 
-                        # Tenta executar a venda
                         order_result = self.sellMarketOrder(quantity=quantity_to_sell)
-                        
                         send_telegram(f"🎯 TAKE PROFIT {self.operation_code}\nLucro: {price_percentage_variation:.2f}%")
 
-                        # Verifica se a ordem foi executada com sucesso
                         if order_result and "status" in order_result and order_result["status"] == "FILLED":
                             self.take_profit_index += 1
-                            
-                            if self.take_profit_index > 0:
-                                gain = self.getPriceChangePercentage(self.last_buy_price, close_price)
 
-                                if gain > 2:
-                                    self.stop_loss_percentage = 0.002
-                                elif gain > 4:
-                                    self.stop_loss_percentage = 0.005
-                            
+                            # ✅ BUG 3 — Trailing stop: aperta o stop apenas se o ganho justifica
+                            # O valor original é restaurado pelo _reset_position_state() quando vender de vez
+                            gain = self.getPriceChangePercentage(self.last_buy_price, close_price)
+                            if gain > 4:
+                                new_sl = 0.005
+                            elif gain > 2:
+                                new_sl = 0.002
+                            else:
+                                new_sl = self.initial_stop_loss_percentage
+
+                            # Só aperta se for menor que o stop atual (nunca alarga)
+                            if new_sl < self.stop_loss_percentage:
+                                print(f"🔒 Trailing stop: {self.stop_loss_percentage:.4f} → {new_sl:.4f}")
+                                self.stop_loss_percentage = new_sl
+
                             print(f"✅ Take Profit {tp_percentage}% realizado com sucesso!")
-                            return True  # 🚀 Retorna True indicando que o take profit foi executado
-
+                            return True
                         else:
-                            print(f"❌ Falha ao executar a ordem de venda. Tentando novamente na próxima rodada.")
-                            return False  # Falhou na venda, retorna False
-                        
-                        
-
+                            print(f"❌ Falha ao executar a ordem de venda.")
+                            return False
                     else:
-                        print("⚠️ Quantidade de venda inválida. Take profit não executado.")
-                        return False  # Retorna False pois não conseguiu executar a venda
-
+                        print("⚠️ Quantidade de venda inválida.")
+                        return False
             else:
                 print("ℹ️ Todas as metas de take profit já foram atingidas.")
-                return False  # Retorna False se todas as metas já foram atingidas
+                return False
 
         except Exception as e:
             logging.error(f"Erro no take profit: {e}")
             print(f"❌ Erro no take profit: {e}")
-            return False  # Retorna False se houver erro
-
-    # --------------------------------------------------------------
+            return False
 
     def update_trailing_stop(self):
         if not self.isBought():
@@ -1096,69 +776,46 @@ class BinanceTraderBot:
         current_price = self.stock_data["close_price"].iloc[-1]
         gain = self.getPriceChangePercentage(self.last_buy_price, current_price)
 
-        if gain > 1:
+        if gain > 5:
+            self.stop_loss_percentage = max(self.stop_loss_percentage, 0.03)
+        elif gain > 3:
+            self.stop_loss_percentage = max(self.stop_loss_percentage, 0.02)
+        elif gain > 1:
             self.stop_loss_percentage = max(self.stop_loss_percentage, 0.01)
 
-        if gain > 3:
-            self.stop_loss_percentage = max(self.stop_loss_percentage, 0.02)
-
-        if gain > 5:
-            self.stop_loss_percentage = max(self.stop_loss_percentage, 0.03)    
-
-    # Não usada por enquanto
-    def create_order(
-        self,
-        _symbol,
-        _side,
-        _type,
-        _quantity,
-        _timeInForce=None,
-        _limit_price=None,
-        _stop_price=None,
-    ):
+    def create_order(self, _symbol, _side, _type, _quantity, _timeInForce=None, _limit_price=None, _stop_price=None):
         order_buy = TraderOrder.create_order(
             self.client_binance,
             _symbol=_symbol,
-            _side=_side,  # Compra
-            _type=_type,  # Ordem Limitada
-            _timeInForce=_timeInForce,  # Good 'Til Canceled (Ordem válida até ser cancelada)
+            _side=_side,
+            _type=_type,
+            _timeInForce=_timeInForce,
             _quantity=_quantity,
             _limit_price=_limit_price,
             _stop_price=_stop_price,
         )
-
         return order_buy
 
-    # --------------------------------------------------------------
-    # EXECUTE
-
-    # Função principal e a única que deve ser execuda em loop, quando o
-    # robô estiver funcionando normalmente
     def execute(self):
 
-        # 🔥 ATUALIZA DADOS
         self.updateAllData()
-        
-        # 🔒 Variáveis seguras
+
         score = 0
         min_score = 0
         market = self.detect_market_condition()
 
         from src.state import best_asset
 
-        # 🔄 RESET GLOBAL (apenas 1x por ciclo real)
         with lock:
             if "last_reset" not in best_asset:
                 best_asset["last_reset"] = time.time()
 
-            # reset a cada 30s (ajuste se quiser)
             if time.time() - best_asset["last_reset"] > 60:
                 best_asset["score"] = 0
                 best_asset["symbol"] = None
                 best_asset["last_reset"] = time.time()
                 print("🔄 Resetando melhor ativo")
 
-        # 🔒 BOT PAUSADO
         with lock:
             running = bot_control["running"]
 
@@ -1169,7 +826,6 @@ class BinanceTraderBot:
         if not self.can_trade():
             return
 
-        # ⚠️ DADOS
         if not hasattr(self, "stock_data") or self.stock_data is None or len(self.stock_data) == 0:
             print("⚠️ Dados ainda não carregados")
             return
@@ -1177,12 +833,9 @@ class BinanceTraderBot:
         print("------------------------------------------------")
         print(f'🟢 Executado {datetime.now().strftime("(%H:%M:%S) %d-%m-%Y")}\n')
 
-        # ================================
-        # 🧠 SCORE GLOBAL (ANTES DE TUDO)
-        # ================================
         if not self.isBought():
             score = self.calculate_entry_score()
-            
+
             if market == "TREND":
                 min_score = 2
             elif market == "RANGE":
@@ -1192,21 +845,16 @@ class BinanceTraderBot:
 
             print(f"📊 Min Score necessário: {min_score}")
 
-            # ranking continua normal
             with lock:
                 if score > best_asset.get("score", 0):
                     best_asset["score"] = score
                     best_asset["symbol"] = self.operation_code
                     print(f"🏆 Melhor ativo atualizado: {self.operation_code} | Score: {score}")
 
-            # filtro só para entrada
             if score < min_score:
                 print(f"🚫 Score insuficiente ({score})")
                 return
 
-        # ================================
-        # 📊 DASHBOARD
-        # ================================
         last = self.stock_data.iloc[-1]
 
         candle = {
@@ -1223,58 +871,23 @@ class BinanceTraderBot:
         self.update_trailing_stop()
 
         bot_status["balance"] = self.getUSDTBalance()
-
         bot_status["positions"][self.operation_code] = {
             "position": "LONG" if self.actual_trade_position else "OUT",
             "price": float(last["close_price"])
         }
 
-        # ================================
-        # 🎯 DECISÃO
-        # ================================
-    
         score_label = score if not self.isBought() else "LOCKED"
-
         print(f"🧠 Estratégia Híbrida | Mercado: {market} | Score: {score_label}")
 
-        # ===================================
-        # 📈 TREND = VORTEX
-        # ===================================
         if market == "TREND":
+            decision = getVortexTradeStrategy(self.stock_data, verbose=True)
 
-            decision = getVortexTradeStrategy(
-                self.stock_data,
-                verbose=True
-            )
-
-        # ===================================
-        # 📊 RANGE = RSI
-        # ===================================
         elif market == "RANGE":
+            decision = getRsiTradeStrategy(self.stock_data, low=30, high=70, verbose=True)
 
-            decision = getRsiTradeStrategy(
-                self.stock_data,
-                low=30,
-                high=70,
-                verbose=True
-            )
-
-        # ===================================
-        # ⚖️ NEUTRAL = CONSENSO
-        # ===================================
         else:
-
-            vortex = getVortexTradeStrategy(
-                self.stock_data,
-                verbose=True
-            )
-
-            rsi = getRsiTradeStrategy(
-                self.stock_data,
-                low=35,
-                high=65,
-                verbose=True
-            )
+            vortex = getVortexTradeStrategy(self.stock_data, verbose=True)
+            rsi = getRsiTradeStrategy(self.stock_data, low=35, high=65, verbose=True)
 
             if vortex == True or rsi == True:
                 decision = True
@@ -1282,6 +895,7 @@ class BinanceTraderBot:
                 decision = False
             else:
                 decision = None
+
         if decision is None:
             print("⚠️ Estratégia inconclusiva")
             return
@@ -1291,35 +905,28 @@ class BinanceTraderBot:
         print("\n--------------")
         print(f'🔎 Decisão Final: {"Comprar" if decision else "Vender"}')
 
-        # ================================
-        # 🚫 FILTRO GLOBAL (TOP 1)
-        # ================================
         if not self.isBought() and score <= 0:
             print("🚫 Score zerado")
             return
-        
-        
+
         # ================================
-        # 🟢 COMPRA (BUY)
+        # 🟢 COMPRA
         # ================================
         if not self.isBought() and decision == True:
 
-            # 🏆 Só o melhor ativo pode comprar
             with lock:
                 if best_asset.get("symbol") != self.operation_code:
                     print(f"🚫 {self.operation_code} ignorado (não é o melhor)")
                     return
-                
-                # 🔒 trava global de compra           
+
                 if bot_control.get("buying_now", False) or bot_control.get("selling_now", False):
                     print(f"⏳ Compra em andamento por outro ativo...")
                     return
-            
+
                 bot_control["buying_now"] = True
 
             try:
                 print("🏁 COMPRANDO...")
-
                 order = self.buyLimitedOrder()
 
                 if not order:
@@ -1334,7 +941,6 @@ class BinanceTraderBot:
                     print("✅ Compra confirmada")
 
             finally:
-                # 🔓 libera trava sempre
                 with lock:
                     bot_control["buying_now"] = False
 
@@ -1354,24 +960,19 @@ class BinanceTraderBot:
                 print("🔴 STOP LOSS executado")
                 return
 
-
-
         # ================================
-        # 🔴 VENDA
+        # 🔴 VENDA POR SINAL
         # ================================
-        elif self.isBought() and decision == False:
+        if self.isBought() and decision == False:
 
-            # 🔒 trava global de venda
             with lock:
                 if bot_control.get("selling_now", False):
                     print("⏳ Venda em andamento por outro ativo...")
                     return
-
                 bot_control["selling_now"] = True
 
             try:
                 print("🏁 VENDENDO...")
-
                 order = self.sellLimitedOrder()
 
                 if not order:
@@ -1382,39 +983,33 @@ class BinanceTraderBot:
                 self.updateAllData()
 
                 if not self.isBought():
-                    print("📉 Venda confirmada")
+                    # ✅ BUG 2 + BUG 3 — updateAllData → getActualTradePosition → _reset_position_state()
+                    # O reset já acontece automaticamente dentro de getActualTradePosition()
+                    print("📉 Venda confirmada | take_profit_index e stop_loss resetados ✅")
 
             finally:
-                # 🔓 libera trava sempre
                 with lock:
                     bot_control["selling_now"] = False
+
         print("------------------------------------------------")
-        
-    # ================================
-    # 📊 CACHE DE FILTROS (PROFISSIONAL)
-    # ================================
+
     def load_exchange_info(self):
         if not hasattr(self, "_exchange_cache"):
             print("📡 Carregando filtros da Binance...")
             info = self.client_binance.get_exchange_info()
-
             self._exchange_cache = {
                 s['symbol']: {f['filterType']: f for f in s['filters']}
                 for s in info['symbols']
             }
 
-
     def get_symbol_filters(self, symbol):
         self.load_exchange_info()
-
         if symbol not in self._exchange_cache:
             raise Exception(f"❌ Símbolo não encontrado: {symbol}")
-
         return self._exchange_cache[symbol]
-    
+
     def get_min_notional(self, symbol):
         filters = self.get_symbol_filters(symbol)
-
         if 'MIN_NOTIONAL' in filters:
             return float(filters['MIN_NOTIONAL']['minNotional'])
         elif 'NOTIONAL' in filters:
@@ -1422,21 +1017,16 @@ class BinanceTraderBot:
         else:
             print(f"⚠️ MIN_NOTIONAL não encontrado para {symbol}")
             return 5.0
-        
+
     def prepare_order(self, symbol, price, quantity, side="BUY"):
         try:
             print("\n🧠 Preparando ordem inteligente...")
-
             filters = self.get_symbol_filters(symbol)
 
-            # =========================
-            # 📊 FILTROS
-            # =========================
             tick_size = float(filters['PRICE_FILTER']['tickSize'])
             step_size = float(filters['LOT_SIZE']['stepSize'])
             min_qty = float(filters['LOT_SIZE']['minQty'])
 
-            # NOTIONAL pode variar
             if 'MIN_NOTIONAL' in filters:
                 min_notional = float(filters['MIN_NOTIONAL']['minNotional'])
             elif 'NOTIONAL' in filters:
@@ -1444,54 +1034,35 @@ class BinanceTraderBot:
             else:
                 min_notional = 5.20
 
-            # =========================
-            # 🔧 AJUSTE DE PREÇO
-            # =========================
             price = math.floor(price / tick_size) * tick_size
             price = float(f"{price:.8f}")
 
-            # =========================
-            # 🔧 AJUSTE DE QUANTIDADE
-            # =========================
             quantity = math.ceil(quantity / step_size) * step_size
 
             if quantity < min_qty:
                 quantity = min_qty
 
-            # =========================
-            # 🔥 AJUSTE DE NOTIONAL
-            # =========================
             notional = price * quantity
 
             if notional < min_notional:
                 print(f"⚠️ NOTIONAL baixo: {notional:.2f} < {min_notional}")
-
                 quantity = min_notional / price
-
-                # reajusta no step
                 quantity = math.ceil(quantity / step_size) * step_size
-
                 print(f"🔧 Nova quantidade ajustada: {quantity}")
 
-            # =========================
-            # 🔒 PROTEÇÃO FINAL
-            # =========================
             notional = price * quantity
 
             if notional < min_notional:
                 print(f"🚫 Ordem abortada: NOTIONAL final ainda inválido ({notional:.2f})")
                 return None, None
 
-            # =========================
-            # 📊 LOG PROFISSIONAL
-            # =========================
             print(f"""
-    📊 ORDEM AJUSTADA:
-    - Side: {side}
-    - Preço: {price}
-    - Quantidade: {quantity}
-    - Notional: {notional:.2f} USDT
-    - Min Notional: {min_notional}
+📊 ORDEM AJUSTADA:
+- Side: {side}
+- Preço: {price}
+- Quantidade: {quantity}
+- Notional: {notional:.2f} USDT
+- Min Notional: {min_notional}
             """)
 
             return float(f"{price:.8f}"), float(f"{quantity:.8f}")
@@ -1499,261 +1070,156 @@ class BinanceTraderBot:
         except Exception as e:
             print(f"❌ Erro no prepare_order: {e}")
             return None, None
-    
+
     def detect_dump(self, threshold=-0.025, candles=3):
-        """
-        Detecta dump recente baseado em queda acumulada
-        """
         try:
             prices = self.stock_data["close_price"]
-
             if len(prices) < candles + 1:
                 return False
-
             recent = prices.iloc[-candles:]
-            prev = prices.iloc[-candles - 1]
-
-            #drop = (recent.iloc[-1] - prev) / prev
             drop = (recent.iloc[-1] - recent.iloc[0]) / recent.iloc[0]
-
             print(f"📉 Variação últimos {candles} candles: {drop*100:.2f}%")
-
             if drop <= threshold:
                 print("🚫 DUMP DETECTADO")
                 return True
-
             return False
-
         except Exception as e:
             print(f"Erro detect_dump: {e}")
             return False
-        
+
     def is_oversold(self, rsi_limit=30):
         rsi = Indicators.getRSI(series=self.stock_data["close_price"])
         print(f"📊 RSI atual: {rsi:.2f}")
         return rsi < rsi_limit
-    
+
     def is_price_stretched(self, symbol, price, threshold=None):
-        """
-        Evita comprar quando preço está muito acima da média
-        (versão dinâmica baseada em volatilidade)
-        """
         try:
             ma50 = self.stock_data["close_price"].rolling(window=50).mean().iloc[-1]
-
             if ma50 == 0:
                 return False
-
-            # 📊 VOLATILIDADE DO MERCADO
             vol = self.stock_data["close_price"].pct_change().rolling(20).std().iloc[-1]
-
-            # 🔥 THRESHOLD DINÂMICO
             if threshold is None:
-                #threshold = 0.02 if vol < 0.01 else 0.04
-                #threshold = max(0.02, vol * 3)
                 threshold = min(max(0.02, vol * 3), 0.08)
-
             distance = (price - ma50) / ma50
-
             print(f"📏 Distância da MA50: {distance*100:.2f}% | Threshold: {threshold*100:.2f}%")
-
             return distance > threshold
-
         except Exception as e:
             print(f"Erro is_price_stretched: {e}")
             return False
-    
+
     def detect_pump(self, candles=3, threshold=None):
-        """
-        Detecta alta rápida (pump) de forma dinâmica baseada na volatilidade
-        """
         try:
             prices = self.stock_data["close_price"]
-
             if len(prices) < candles + 1:
                 return False
-
             start = prices.iloc[-candles - 1]
             end = prices.iloc[-1]
-
             change = (end - start) / start
-
-            # 📊 VOLATILIDADE
             vol = self.stock_data["close_price"].pct_change().rolling(20).std().iloc[-1]
-
-            # 🔥 THRESHOLD DINÂMICO
             if threshold is None:
                 threshold = min(max(0.02, vol * 2), 0.08)
-
             print(f"🚀 Pump check: {change*100:.2f}% | Threshold: {threshold*100:.2f}%")
-
             return change >= threshold
-
         except Exception as e:
             print(f"Erro detect_pump: {e}")
             return False
-    
+
     def is_overbought(self, limit=70):
         rsi = Indicators.getRSI(series=self.stock_data["close_price"])
         print(f"📊 RSI atual: {rsi:.2f}")
         return rsi > limit
-    
+
     def calculate_entry_score(self):
         try:
             score = 0
-
             close = self.stock_data["close_price"]
             volume = self.stock_data["volume"]
-
             price = close.iloc[-1]
             prev_price = close.iloc[-2]
-
             ma20 = close.rolling(20).mean().iloc[-1]
             ma50 = close.rolling(50).mean().iloc[-1]
             ma200 = close.rolling(200).mean().iloc[-1]
-
             avg_vol = volume.rolling(20).mean().iloc[-1]
             current_vol = volume.iloc[-1]
-
             rsi = Indicators.getRSI(series=close)
-
             market = self.detect_market_condition()
 
             print(f"🧠 Market Mode: {market}")
 
-            # ==================================
-            # 📈 TREND MODE
-            # ==================================
             if market == "TREND":
+                if price > ma50: score += 2
+                if ma50 > ma200: score += 2
+                if price > prev_price: score += 1
+                if rsi < 68: score += 1
+                if current_vol > avg_vol: score += 1
 
-                if price > ma50:
-                    score += 2
-
-                if ma50 > ma200:
-                    score += 2
-
-                if price > prev_price:
-                    score += 1
-
-                if rsi < 68:
-                    score += 1
-
-                if current_vol > avg_vol:
-                    score += 1
-
-            # ==================================
-            # 📊 RANGE MODE
-            # ==================================
             elif market == "RANGE":
+                if rsi < 45: score += 2
+                if rsi < 38: score += 1
+                if price < ma20: score += 1
+                if price < ma50: score += 1
+                if current_vol > avg_vol: score += 1
 
-                if rsi < 45:
-                    score += 2
-
-                if rsi < 38:
-                    score += 1
-
-                if price < ma20:
-                    score += 1
-
-                if price < ma50:
-                    score += 1
-
-                if current_vol > avg_vol:
-                    score += 1
-
-            # ==================================
-            # ⚖️ NEUTRAL MODE
-            # ==================================
             else:
+                if price > ma50: score += 1
+                if rsi < 45: score += 1
+                if current_vol > avg_vol: score += 1
 
-                if price > ma50:
-                    score += 1
-
-                if rsi < 45:
-                    score += 1
-
-                if current_vol > avg_vol:
-                    score += 1
-
-            # ==================================
-            # 🚫 ANTI PUMP
-            # ==================================
             recent_move = (price - close.iloc[-4]) / close.iloc[-4]
-
             if recent_move > 0.03:
                 score -= 2
                 print("🚫 Pump detectado (-2 score)")
 
-            # ==================================
-            # 🚫 SOBRECOMPRA
-            # ==================================
             if rsi > 75:
                 score -= 2
 
-            # ==================================
-            # 🔒 SCORE LIMITADO
-            # ==================================
             score = max(score, 0)
-
-            print(f"🧠 Entry Score PROF final: {score}")
-
+            print(f"🧠 Entry Score final: {score}")
             return score
 
         except Exception as e:
             print(f"Erro calculate_entry_score: {e}")
             return 0
-    
+
     def can_open_new_position(self):
         try:
             count = 0
-
             for asset in self.account_data["balances"]:
                 if float(asset["free"]) > 0 and asset["asset"] != "USDT":
                     count += 1
-
             print(f"📊 Posições abertas: {count}")
-
             return count < GLOBAL_MANAGER["max_positions"]
-
         except Exception as e:
             print(f"Erro exposição: {e}")
             return False
-    
+
     def get_position_size(self, risk_percent=0.02):
         balance_usdt = self.getUSDTBalance()
-
         volatility = self.stock_data["close_price"].pct_change().rolling(20).std().iloc[-1]
-
         if volatility > 0:
             volatility = max(volatility, 0.002)
             risk_adjusted = risk_percent / (volatility * 100)
         else:
             risk_adjusted = risk_percent
-
         risk_value = balance_usdt * min(risk_adjusted, 0.02)
-
         price = self.stock_data["close_price"].iloc[-1]
-
         quantity = risk_value / price
-
         print(f"💰 Position size: {quantity}")
-
         min_usdt = 6.0
         quantity = max(quantity, min_usdt / price)
         return quantity
-    
+
     def is_trend_up(self):
         ma50 = self.stock_data["close_price"].rolling(50).mean().iloc[-1]
         ma200 = self.stock_data["close_price"].rolling(200).mean().iloc[-1]
-
         return ma50 > ma200
-    
+
     def can_trade(self):
-        if self.daily_loss > 0.05:  # 5% perda diária
+        if self.daily_loss > 0.05:
             print("🚫 Limite diário atingido")
             return False
         return True
-    
+
     def getUSDTBalance(self):
         try:
             for asset in self.account_data["balances"]:
@@ -1762,63 +1228,46 @@ class BinanceTraderBot:
             return 0.0
         except:
             return 0.0
-        
+
     def get_market_score(self):
         score = 0
-
         market = self.detect_market_condition()
         rsi = Indicators.getRSI(series=self.stock_data["close_price"])
         price = self.stock_data["close_price"].iloc[-1]
         ma50 = self.stock_data["close_price"].rolling(50).mean().iloc[-1]
-
         if market == "TREND":
             score += 2
-            if price > ma50:
-                score += 2
-
+            if price > ma50: score += 2
         elif market == "RANGE":
-            if rsi < 40:
-                score += 2
-
+            if rsi < 40: score += 2
         else:
-            if rsi < 50:
-                score += 1
-
+            if rsi < 50: score += 1
         return score
-    
+
     def get_real_open_positions(self, min_usdt=10):
         count = 0
-
         try:
             for asset in self.account_data["balances"]:
                 asset_name = asset["asset"]
                 free = float(asset["free"])
-
                 if asset_name == "USDT":
                     continue
-
                 if free <= 0:
                     continue
-
-                # tenta pegar preço do ativo
                 try:
                     symbol = asset_name + "USDT"
                     ticker = self.client_binance.get_symbol_ticker(symbol=symbol)
                     price = float(ticker["price"])
                 except:
                     continue
-
                 value = free * price
-
                 if value >= min_usdt:
                     count += 1
-
             return count
-
         except Exception as e:
             print(f"Erro ao contar posições reais: {e}")
             return 0
-        
+
     def detect_market_condition(self):
         try:
             rsi = Indicators.getRSI(series=self.stock_data["close_price"])
@@ -1828,14 +1277,10 @@ class BinanceTraderBot:
 
             print(f"📊 Market Check → RSI: {rsi:.2f} | Vol: {vol:.4f}")
 
-            # 📈 Tendência
             if ma50 > ma200 and vol > 0.006:
                 return "TREND"
-
-            # 📊 Lateral
             if vol < 0.0045:
                 return "RANGE"
-
             return "NEUTRAL"
 
         except Exception as e:
