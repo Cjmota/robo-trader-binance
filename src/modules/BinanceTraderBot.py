@@ -1167,18 +1167,27 @@ class BinanceTraderBot:
         # ================================
         if not self.isBought():
             score = self.calculate_entry_score()
+            market = self.detect_market_condition()
 
+            if market == "TREND":
+                min_score = 2
+            elif market == "RANGE":
+                min_score = 1
+            else:
+                min_score = 2
+
+            print(f"📊 Min Score necessário: {min_score}")
+
+            # ranking continua normal
             with lock:
                 if score > best_asset.get("score", 0):
                     best_asset["score"] = score
                     best_asset["symbol"] = self.operation_code
                     print(f"🏆 Melhor ativo atualizado: {self.operation_code} | Score: {score}")
-                    
-            MIN_SCORE_TO_TRADE = 2
 
-            if score < MIN_SCORE_TO_TRADE:
-                print(f"🚫 Score muito baixo ({score}) - ignorando ativo")
-                return
+            # filtro só para entrada
+            if score < min_score:
+                print(f"🚫 Score insuficiente ({score})")
 
         # ================================
         # 📊 DASHBOARD
