@@ -137,27 +137,20 @@ class BinanceTraderBot:
         self.portfolio = portfolio
         
         self.stuck_counter = 0
+        
+        self.partial_done = False
 
         # fmt: on
 
     def isBought(self):
         return self.actual_trade_position
 
-    # ✅ BUG 2 + BUG 3 — Função central de reset ao confirmar posição vendida
     def _reset_position_state(self):
-        """
-        Chamada sempre que a posição é confirmada como VENDIDA.
-        Reseta take_profit_index e restaura stop_loss_percentage ao valor original.
-        """
-        if self.take_profit_index != 0:
-            print(f"🔄 Resetando take_profit_index: {self.take_profit_index} → 0")
-            self.take_profit_index = 0
-
-        if self.stop_loss_percentage != self.initial_stop_loss_percentage:
-            print(f"🔄 Restaurando stop_loss: {self.stop_loss_percentage:.4f} → {self.initial_stop_loss_percentage:.4f}")
-            self.stop_loss_percentage = self.initial_stop_loss_percentage
-
+        self.take_profit_index = 0
+        self.partial_done = False
+        self.stuck_counter = 0
         self.initial_balance_position = 0
+        self.stop_loss_percentage = self.initial_stop_loss_percentage
 
     def updateAllData(self, verbose=False):
         try:
@@ -512,113 +505,162 @@ class BinanceTraderBot:
             logging.error(f"Erro ao enviar ordem limitada de COMPRA: {e}")
             print(f"\n❌ Erro ao enviar ordem limitada de COMPRA: {e}")
             return False
+        
+    def manage_open_position(self, market, decision):
+        # =====================================
+        # 🚀 SELL ENGINE PROFISSIONAL
+        # =====================================
+        if self.actual_trade_position:
+
+            current_price = self.stock_data["close_price"].iloc[-1]
+            avg_price = self.getPriceBought()
+            qty = self.last_stock_account_balance
+
+            if avg_price <= 0 or qty <= 0:
+                return
+
+            pnl = ((current_price - avg_price) / avg_price) * 100
+
+            rsi = Indicators.getRSI(series=self.stock_data["close_price"])
+
+            position_value = qty * current_price
+
+            print(f"[{self.operation_code}] 💰 PnL: {pnl:.2f}% | RSI: {rsi:.2f}")
+
+            # ===============================
+            # 🎯 TARGETS DINÂMICOS
+            # ===============================
+            if position_value < 10:
+                tp1 = 1.0
+                tp2 = 1.8
+            elif position_value < 30:
+                tp1 = 1.5
+                tp2 = 2.5
+            else:
+                tp1 = 2.0
+                tp2 = 3.5
+
+            # ===============================
+            # 🟢 PARCIAL
+            # ===============================
+            if not self.partial_done and pnl >= tp1 and qty > self.step_size * 2:
+
+                print(f"[{self.operation_code}] 🟢 Parcial 50%")
+
+                self.sellPartial(0.50)
+
+                self.partial_done = True
+                return
+
+            # ===============================
+            # 🚀 TAKE PROFIT TOTAL
+            # ===============================
+            if pnl >= tp2:
+
+                print(f"[{self.operation_code}] 🚀 TP total")
+
+                self.safe_sell_market()
+                return
+
+            # ===============================
+            # 🛡 BREAK EVEN
+            # ===============================
+            if self.partial_done and 0.30 <= pnl <= 0.70:
+
+                print(f"[{self.operation_code}] 🛡 Break-even")
+
+                self.sellLimitedOrder()
+                return
+
+            # ===============================
+            # 🚪 POSIÇÃO TRAVADA EM RANGE
+            # ===============================
+            if market == "RANGE":
+
+                if -0.4 <= pnl <= 0.3:
+                    self.stuck_counter += 1
+                else:
+                    self.stuck_counter = 0
+
+                if self.stuck_counter >= 8:
+                    print(f"[{self.operation_code}] 🚪 Saída posição travada")
+
+                    self.sellLimitedOrder()
+                    self.stuck_counter = 0
+                    return
+
+            # ===============================
+            # 📉 RSI PERDEU FORÇA
+            # ===============================
+            if pnl > 0.2 and rsi > 68:
+
+                print(f"[{self.operation_code}] 📉 RSI esticado")
+
+                self.sellLimitedOrder()
+                return
+
+            # ===============================
+            # 🛑 STOP LOSS
+            # ===============================
+            if pnl <= -3.5:
+
+                print(f"[{self.operation_code}] 🛑 Stop Loss")
+
+                self.safe_sell_market()
+                return
+            
+            if decision == False and pnl > 0:
+                print("🔻 Sinal de venda")
+                self.sellLimitedOrder()
+                return
+     
+    def sellPartial(self, pct):
+        qty = self.last_stock_account_balance * pct
+        return self.sellMarketOrder(qty)   
+    
+    def acquire_sell_lock(self):
+        with lock:
+            if bot_control.get("selling_now", False):
+                return False
+
+            bot_control["selling_now"] = True
+            return True
+
+    def release_sell_lock(self):
+        with lock:
+            bot_control["selling_now"] = False
+
+
+    def safe_sell_market(self, quantity=None):
+
+        if not self.acquire_sell_lock():
+            print("⏳ Venda já em andamento...")
+            return False
+
+        try:
+            return self.sellMarketOrder(quantity)
+
+        finally:
+            self.release_sell_lock()
 
     def sellMarketOrder(self, quantity=None):
         try:
-            # =====================================
-            # 🚀 SELL ENGINE PROFISSIONAL
-            # =====================================
-            if self.actual_trade_position:
+            if quantity is None:
+                quantity = self.last_stock_account_balance
 
-                current_price = self.stock_data["close_price"].iloc[-1]
-                avg_price = self.getPriceBought()
-                qty = self.last_stock_account_balance
+            quantity = self.adjust_to_step(quantity, self.step_size, as_string=True)
 
-                if avg_price <= 0 or qty <= 0:
-                    return
+            return self.client_binance.create_order(
+                symbol=self.operation_code,
+                side=SIDE_SELL,
+                type=ORDER_TYPE_MARKET,
+                quantity=quantity
+            )
 
-                pnl = ((current_price - avg_price) / avg_price) * 100
-
-                rsi = Indicators.getRSI(series=self.stock_data["close_price"])
-
-                position_value = qty * current_price
-
-                print(f"[{self.operation_code}] 💰 PnL: {pnl:.2f}% | RSI: {rsi:.2f}")
-
-                # ===============================
-                # 🎯 TARGETS DINÂMICOS
-                # ===============================
-                if position_value < 10:
-                    tp1 = 1.0
-                    tp2 = 1.8
-                elif position_value < 30:
-                    tp1 = 1.5
-                    tp2 = 2.5
-                else:
-                    tp1 = 2.0
-                    tp2 = 3.5
-
-                # ===============================
-                # 🟢 PARCIAL
-                # ===============================
-                if pnl >= tp1 and qty > self.step_size * 2:
-
-                    print(f"[{self.operation_code}] 🟢 Parcial 50%")
-
-                    self.sellPartial(0.50)
-                    return
-
-                # ===============================
-                # 🚀 TAKE PROFIT TOTAL
-                # ===============================
-                if pnl >= tp2:
-
-                    print(f"[{self.operation_code}] 🚀 TP total")
-
-                    self.sellLimitedOrder()
-                    return
-
-                # ===============================
-                # 🛡 BREAK EVEN
-                # ===============================
-                if pnl > 0.7 and pnl < 0.15:
-
-                    print(f"[{self.operation_code}] 🛡 Break-even")
-
-                    self.sellLimitedOrder()
-                    return
-
-                # ===============================
-                # 🚪 POSIÇÃO TRAVADA EM RANGE
-                # ===============================
-                if market == "RANGE":
-
-                    if -0.4 <= pnl <= 0.3:
-                        self.stuck_counter += 1
-                    else:
-                        self.stuck_counter = 0
-
-                    if self.stuck_counter >= 8:
-                        print(f"[{self.operation_code}] 🚪 Saída posição travada")
-
-                        self.sellLimitedOrder()
-                        self.stuck_counter = 0
-                        return
-
-                # ===============================
-                # 📉 RSI PERDEU FORÇA
-                # ===============================
-                if pnl > 0.2 and rsi > 68:
-
-                    print(f"[{self.operation_code}] 📉 RSI esticado")
-
-                    self.sellLimitedOrder()
-                    return
-
-                # ===============================
-                # 🛑 STOP LOSS
-                # ===============================
-                if pnl <= -3.5:
-
-                    print(f"[{self.operation_code}] 🛑 Stop Loss")
-
-                    self.sellLimitedOrder()
-                    return
         except Exception as e:
-            logging.error(f"Erro ao executar ordem de venda a mercado: {e}")
-            print(f"\nErro ao executar ordem de venda a mercado: {e}")
+            print(e)
             return False
-
+    
     def sellLimitedOrder(self, price=None):
         close_price = self.stock_data["close_price"].iloc[-1]
         volume = self.stock_data["volume"].iloc[-1]
@@ -764,8 +806,8 @@ class BinanceTraderBot:
             print("🔴 Ativando STOP LOSS...")
             self.cancelAllOrders()
             time.sleep(2)
-            self.sellMarketOrder()
-            return True
+            self.safe_sell_market()
+            return True   
 
     def takeProfitTrigger(self):
         """
@@ -858,11 +900,11 @@ class BinanceTraderBot:
         gain = self.getPriceChangePercentage(self.last_buy_price, current_price)
 
         if gain > 5:
-            self.stop_loss_percentage = max(self.stop_loss_percentage, 0.03)
+            self.stop_loss_percentage = min(self.stop_loss_percentage, 0.03)
         elif gain > 3:
-            self.stop_loss_percentage = max(self.stop_loss_percentage, 0.02)
+            self.stop_loss_percentage = min(self.stop_loss_percentage, 0.02)
         elif gain > 1:
-            self.stop_loss_percentage = max(self.stop_loss_percentage, 0.01)
+            self.stop_loss_percentage = min(self.stop_loss_percentage, 0.01)
 
     def create_order(self, _symbol, _side, _type, _quantity, _timeInForce=None, _limit_price=None, _stop_price=None):
         order_buy = TraderOrder.create_order(
@@ -1024,22 +1066,10 @@ class BinanceTraderBot:
             finally:
                 with lock:
                     bot_control["buying_now"] = False
-
-        # ================================
-        # 💰 TAKE PROFIT
-        # ================================
+                    
         if self.isBought():
-            if self.takeProfitTrigger():
-                print("🟢 TAKE PROFIT executado")
-                return
-
-        # ================================
-        # 🔴 STOP LOSS
-        # ================================
-        if self.isBought():
-            if self.stopLossTrigger():
-                print("🔴 STOP LOSS executado")
-                return
+            self.manage_open_position(market, decision)
+            return
 
         # ================================
         # 🔴 VENDA POR SINAL
