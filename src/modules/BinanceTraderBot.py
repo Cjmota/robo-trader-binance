@@ -1124,28 +1124,26 @@ class BinanceTraderBot:
 
     # Função principal e a única que deve ser execuda em loop, quando o
     # robô estiver funcionando normalmente
-    def execute(
-        self,
-    ):
-        
-       # 🔥 PRIMEIRO ATUALIZA OS DADOS
-        self.updateAllData()
-        
-        with lock:
-            best_asset["score"] = 0
-            best_asset["symbol"] = None
-        
-        if self.portfolio:
-            count = sum(
-                1 for asset in self.account_data["balances"]
-                if float(asset["free"]) > 0 and asset["asset"] != "USDT"
-            )
-        
-        # 🔥 DEPOIS VERIFICA
-        if not hasattr(self, "stock_data") or self.stock_data is None or len(self.stock_data) == 0:
-            print("⚠️ Dados ainda não carregados")
-            return
+    def execute(self):
 
+        # 🔥 ATUALIZA DADOS
+        self.updateAllData()
+
+        from src.state import best_asset
+
+        # 🔄 RESET GLOBAL (apenas 1x por ciclo real)
+        with lock:
+            if "last_reset" not in best_asset:
+                best_asset["last_reset"] = time.time()
+
+            # reset a cada 30s (ajuste se quiser)
+            if time.time() - best_asset["last_reset"] > 30:
+                best_asset["score"] = 0
+                best_asset["symbol"] = None
+                best_asset["last_reset"] = time.time()
+                print("🔄 Resetando melhor ativo")
+
+        # 🔒 BOT PAUSADO
         with lock:
             running = bot_control["running"]
 
@@ -1153,21 +1151,32 @@ class BinanceTraderBot:
             print("⏸ Bot pausado via painel")
             return
 
-        if not bot_control["running"]:
-            print("⏸ Bot pausado via painel")
-            return
-        
         if not self.can_trade():
             return
-        
+
+        # ⚠️ DADOS
+        if not hasattr(self, "stock_data") or self.stock_data is None or len(self.stock_data) == 0:
+            print("⚠️ Dados ainda não carregados")
+            return
+
         print("------------------------------------------------")
-        print(f'🟢 Executado {datetime.now().strftime("(%H:%M:%S) %d-%m-%Y")}\n')  # Adiciona o horário atual formatado
+        print(f'🟢 Executado {datetime.now().strftime("(%H:%M:%S) %d-%m-%Y")}\n')
 
-        # Atualiza todos os dados
-        
-        if "candles" not in bot_status:
-            bot_status["candles"] = []
+        # ================================
+        # 🧠 SCORE GLOBAL (ANTES DE TUDO)
+        # ================================
+        if not self.isBought():
+            score = self.calculate_entry_score()
 
+            with lock:
+                if score > best_asset.get("score", 0):
+                    best_asset["score"] = score
+                    best_asset["symbol"] = self.operation_code
+                    print(f"🏆 Melhor ativo atualizado: {self.operation_code} | Score: {score}")
+
+        # ================================
+        # 📊 DASHBOARD
+        # ================================
         last = self.stock_data.iloc[-1]
 
         candle = {
@@ -1178,362 +1187,94 @@ class BinanceTraderBot:
             "c": float(last["close_price"]),
         }
 
-        bot_status["candles"].append(candle)
-        bot_status["candles"] = bot_status["candles"][-100:]    
-        
+        bot_status.setdefault("candles", []).append(candle)
+        bot_status["candles"] = bot_status["candles"][-100:]
+
         self.update_trailing_stop()
 
-        # ================================
-        # 📊 DASHBOARD UPDATE
-        # ================================
-
-        # Atualiza horário
-        bot_status["last_update"] = datetime.now().strftime("%H:%M:%S")
-
-        # Atualiza saldo
         bot_status["balance"] = self.getUSDTBalance()
 
-        # Atualiza posição
         bot_status["positions"][self.operation_code] = {
             "position": "LONG" if self.actual_trade_position else "OUT",
-            "price": float(self.stock_data["close_price"].iloc[-1])
-        }
-        
-        bot_status["manager"] = {
-            "running": bot_control["running"],
-            "max_positions": 2
+            "price": float(last["close_price"])
         }
 
         # ================================
-        # 📈 HISTÓRICO DE PREÇO
+        # 🎯 DECISÃO
         # ================================
-
-        if "price_history" not in bot_status:
-            bot_status["price_history"] = []
-
-        price = float(self.stock_data["close_price"].iloc[-1])
-        bot_status["price_history"].append(price)
-
-        # limita histórico
-        bot_status["price_history"] = bot_status["price_history"][-100:]
-        
-        
-        # ================================
-        # 💰 PnL (LUCRO / PREJUÍZO)
-        # ================================
-
-        if "initial_balance" not in bot_status:
-            bot_status["initial_balance"] = self.getUSDTBalance()
-
-        current_balance = self.getUSDTBalance()
-        initial_balance = bot_status["initial_balance"]
-
-        bot_status["pnl"] = round(current_balance - initial_balance, 2)
-
-        if initial_balance > 0:
-            bot_status["pnl_percent"] = round(
-                (current_balance - initial_balance) / initial_balance * 100, 2
-            )
-        else:
-            bot_status["pnl_percent"] = 0       
-        
-        if not self.isBought():
-
-            if self.portfolio:
-                real_positions = self.get_real_open_positions()
-
-                print(f"📊 Posições reais: {real_positions}/{self.portfolio.max_positions}")
-
-                if real_positions >= self.portfolio.max_positions:
-                    print("🚫 Máximo de posições global atingido")
-                    return
-        
-        if not self.isBought():
-            score = self.calculate_entry_score()
-            
-            # 🧠 DEFINE O MELHOR ATIVO GLOBAL
-            with lock:
-                if score > best_asset["score"]:
-                    best_asset["score"] = score
-                    best_asset["symbol"] = self.operation_code
-                    print(f"🏆 Novo melhor ativo: {self.operation_code} | Score: {score}")
-            
-            vol = self.stock_data["close_price"].pct_change().rolling(20).std().iloc[-1]
-
-            if vol < 0.002:
-                print("🚫 Mercado lateral fraco - ignorando")
-                return
-
-            if vol > 0.01:
-                min_score = 3
-            else:
-                min_score = 2
-
-            market = self.detect_market_condition()
-
-            if market == "TREND":
-                min_score = 2
-            elif market == "RANGE":
-                min_score = 1
-            else:
-                min_score = 2
-
-            print(f"📊 Min Score necessário: {min_score}")
-
-            if score < min_score:
-                print("🚫 Score insuficiente")
-                return
-        
-        # 🔥 RESTAURA ESTADO APÓS RESTART
-        if self.isBought() and self.initial_balance_position == 0:
-            self.initial_balance_position = self.last_stock_account_balance
-            print("♻️ Restaurando posição inicial após restart")
-            print(f"📦 Posição restaurada: {self.initial_balance_position:.6f} {self.stock_code}") 
-
-        print("\n-------")
-        print("Detalhes:")
-        print(f' - Posição atual: {"Comprado" if self.actual_trade_position else "Vendido"}')
-        print(f" - Balanço atual: {self.last_stock_account_balance:.4f} ({self.stock_code})")
-
-        # ---------
-        # Estratégias sentinelas de saída
-
-        # Stop Loss
-        # Se perder mais que o stop loss aceitável, ele sai à mercado, independente.
-        # Stop Loss (somente se comprado)
-        if self.isBought() and self.stopLossTrigger():
-            print("\n🟢 STOP LOSS finalizado.\n")
-            return
-        
-        if self.isBought() and self.stopLossTrigger():
-            send_telegram(f"🚨 STOP LOSS {self.operation_code}")
-            return
-
-        if len(self.stock_data) < 3:
-            print("⚠️ Dados insuficientes")
-            return
-
-        last_price = self.stock_data["close_price"].iloc[-1]
-        prev_price = self.stock_data["close_price"].iloc[-2]
-
-        queda = (last_price - prev_price) / prev_price
-
-        bloquear_compra = queda < -0.02
-        
-        # ---------
-        # Calcula a melhor estratégia para a decisão final
         decision = self.getFinalDecisionStrategy()
 
         if decision is None:
             print("⚠️ Estratégia inconclusiva")
-            self.time_to_sleep = self.time_to_trade
             return
 
         self.last_trade_decision = decision
-        
-        if not self.isBought() and self.last_trade_decision == True:
-            
-            with lock:
-                if best_asset["symbol"] != self.operation_code:
-                    print(f"🚫 Ignorado ({self.operation_code}) - não é o melhor ativo")
-                    return
-            
-            market = self.detect_market_condition()
 
-            if market == "TREND" and not self.is_trend_up():
-                print("🚫 Tendência maior é de baixa")
-                return
-
-            # 🚫 ANTI-DUMP (já existia)
-            if bloquear_compra:
-                print("🚫 Queda forte detectada - bloqueando compra")
-                return
-
-            # 🚫 ANTI-FOMO PROFISSIONAL
-            current_price = self.stock_data["close_price"].iloc[-1]
-
-            if self.is_price_stretched(self.operation_code, current_price):
-                print("🚫 Compra bloqueada: preço esticado acima da média")
-                return
-
-            if self.detect_pump():
-                print("🚫 Compra bloqueada: pump detectado")
-                return
-
-            if self.is_overbought():
-                print("🚫 Compra bloqueada: RSI alto (topo)")
-                return
-        
-        if not self.isBought() and self.last_trade_decision == True:
-            volume = self.stock_data["volume"].iloc[-1]
-            avg_volume = self.stock_data["volume"].rolling(20).mean().iloc[-1]
-
-            if volume < avg_volume:
-                print("🚫 Volume fraco - evitando entrada")
-                return
-
-
-        # Take Profit
-        if self.isBought() and self.last_stock_account_balance > 0:
-            tp_executed = self.takeProfitTrigger()
-
-            if tp_executed:
-                print("\n🟢 TAKE PROFIT finalizado.\n")
-                self.time_to_sleep = self.delay_after_order
-                return
-
-        # ---------
-        # Verifica ordens anteriores abertas
-        if self.last_trade_decision == True:  # Se a decisão for COMPRA
-            # Existem ordens de compra abertas?
-            if self.hasOpenBuyOrder():  # Sim e salva possíveis quantidades executadas incompletas.
-                self.cancelAllOrders()  # Cancela todas ordens
-                time.sleep(2)
-
-        if self.last_trade_decision == False:  # Se a decisão for VENDA
-            # Existem ordens de venda abertas?
-            if self.hasOpenSellOrder():
-                order = self.open_orders[0]
-                old_price = float(order["price"])
-
-                # 🔧 calcular preço novo (igual ao sellLimitedOrder)
-                close_price = self.stock_data["close_price"].iloc[-1]
-                volume = self.stock_data["volume"].iloc[-1]
-                avg_volume = self.stock_data["volume"].rolling(window=20).mean().iloc[-1]
-                rsi = Indicators.getRSI(series=self.stock_data["close_price"])
-
-                if rsi > 70:
-                    limit_price = close_price + (0.002 * close_price)
-                elif volume < avg_volume:
-                    limit_price = close_price - (0.002 * close_price)
-                else:
-                    limit_price = close_price - (0.005 * close_price)
-
-                # 🔥 usa o mesmo ajuste da Binance (correto)
-                limit_price_adj, _ = self.prepare_order(
-                    self.operation_code,
-                    float(limit_price),
-                    float(self.last_stock_account_balance),
-                    side="SELL"
-                )
-
-                if not limit_price_adj:
-                    return
-
-                # 🔍 comparação REAL
-                if not self.should_update_order(limit_price_adj, old_price):
-                    print("🟡 Ordem ainda válida, não atualizar")
-                    return
-
-                limit_price = limit_price_adj
-
-                print("🔄 Atualizando ordem (preço mudou)")
-                self.cancelAllOrders()
-                time.sleep(2)
-        # ---------
         print("\n--------------")
-        print(
-            f'🔎 Decisão Final: {"Comprar" if self.last_trade_decision == True else "Vender" if self.last_trade_decision == False else "Inconclusiva"}'
-        )
+        print(f'🔎 Decisão Final: {"Comprar" if decision else "Vender"}')
 
-        if not self.isBought():
-            score = self.get_market_score()
+        # ================================
+        # 🚫 FILTRO GLOBAL (TOP 1)
+        # ================================
+        if not self.isBought() and decision == True:
+            with lock:
+                if best_asset.get("symbol") != self.operation_code:
+                    print(f"🚫 {self.operation_code} ignorado (não é o melhor)")
+                    return
 
-            # 📊 volatilidade do mercado
-            vol = self.stock_data["close_price"].pct_change().rolling(20).std().iloc[-1]
-
-            # 🔥 score dinâmico
-            if vol > 0.01:
-                min_score = 3   # mercado forte → mais exigente
-            else:
-                min_score = 2   # mercado lateral → mais flexível
-
-            print(f"📊 Market Score: {score} | Min necessário: {min_score}")
-
-            if score < min_score:
-                print("🚫 Score global baixo - ignorando ativo")
+        # ================================
+        # 💰 TAKE PROFIT
+        # ================================
+        if self.isBought():
+            if self.takeProfitTrigger():
+                print("🟢 TAKE PROFIT executado")
                 return
 
-        # ---------
-        # Se a posição for vendida (false) e a decisão for de compra (true), compra o ativo
-        # Se a posição for comprada (true) e a decisão for de venda (false), vende o ativo
-        if not self.isBought() and self.last_trade_decision == True:
-            print("🏁 Ação final: Comprar")
-            print("--------------")
-            print(f"\nCarteira em {self.stock_code} [ANTES]:")
-            self.printStock()
+        # ================================
+        # 🔴 STOP LOSS
+        # ================================
+        if self.isBought():
+            if self.stopLossTrigger():
+                print("🔴 STOP LOSS executado")
+                return
+
+        # ================================
+        # 🟢 COMPRA
+        # ================================
+        if not self.isBought() and decision == True:
+
+            print("🏁 COMPRANDO...")
             order = self.buyLimitedOrder()
 
             if not order:
-                print("❌ Ordem de compra falhou")
+                print("❌ Falha na compra")
                 return
 
             time.sleep(2)
             self.updateAllData()
-            
-            bot_status["balance"] = self.getUSDTBalance()
 
             if self.isBought():
                 self.initial_balance_position = self.last_stock_account_balance
                 print("✅ Compra confirmada")
-                price = self.stock_data["close_price"].iloc[-1]
 
-                send_telegram(f"🟢 COMPRA {self.operation_code}\nPreço: {price}")
-                
-                if self.portfolio:                    
-                    current, maxp = self.portfolio.get_status()
-                    print(f"📊 Posições abertas: {current}/{maxp}")
-            else:
-                print("⚠️ Ordem não executada ainda")
-            print(f"Carteira em {self.stock_code} [DEPOIS]:")
-            self.printStock()
-            self.time_to_sleep = self.delay_after_order
+        # ================================
+        # 🔴 VENDA
+        # ================================
+        elif self.isBought() and decision == False:
 
-        elif self.isBought() and self.last_trade_decision == False:
-            
-            
-            # 🚫 PROTEÇÃO CONTRA DUMP
-            if self.detect_dump() and self.is_oversold() and not self.is_trend_up():
-                print("🛑 Venda bloqueada: possível fundo (dump + RSI baixo)")
-                return
-            
-            if 'limit_price' not in locals():
-                limit_price = None
-            
-            
-            print("🏁 Ação final: Vender")
-            print("--------------")
-            print(f"\nCarteira em {self.stock_code} [ANTES]:")
-            self.printStock()
-            self.sellLimitedOrder(price=limit_price)
+            print("🏁 VENDENDO...")
+            self.sellLimitedOrder()
+
             time.sleep(2)
             self.updateAllData()
-            print(f"\nCarteira em {self.stock_code} [DEPOIS]:")
-            self.printStock()
-            self.time_to_sleep = self.delay_after_order
-            
-            # depois do updateAllData()
 
             if not self.isBought():
                 print("📉 Venda confirmada")
 
-                if self.portfolio:
-                    
-                    current, maxp = self.portfolio.get_status()
-                    print(f"📊 Posições abertas: {current}/{maxp}")
-
         else:
-            print(f'🏁 Ação final: Manter posição ({"Comprado" if self.actual_trade_position else "Vendido"})')
-            print("--------------")
-            vol = self.stock_data["close_price"].pct_change().rolling(10).std().iloc[-1]
+            print("⏸ Mantendo posição")
 
-            if vol > 0.01:
-                self.time_to_sleep = 60  # mercado agitado
-            else:
-                self.time_to_sleep = self.time_to_trade
-            
         print("------------------------------------------------")
-
     # ================================
     # 📊 CACHE DE FILTROS (PROFISSIONAL)
     # ================================
