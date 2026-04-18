@@ -224,6 +224,9 @@ class BinanceTraderBot:
         Considera comprado apenas se posição tiver valor real em USDT
         """
         try:
+            if not hasattr(self, "stock_data") or self.stock_data is None:
+                return False
+            
             qty = self.last_stock_account_balance
 
             if qty <= 0:
@@ -1289,7 +1292,7 @@ class BinanceTraderBot:
         # ================================
         # 🚫 FILTRO GLOBAL (TOP 1)
         # ================================
-        if score <= 0:
+        if not self.isBought() and score <= 0:
             print("🚫 Score zerado")
             return
         
