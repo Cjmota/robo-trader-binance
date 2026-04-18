@@ -1285,14 +1285,27 @@ class BinanceTraderBot:
         # ================================
         # 🚫 FILTRO GLOBAL (TOP 1)
         # ================================
+        if score <= 0:
+            print("🚫 Score zerado")
+            return
+        
+        
+        # ================================
+        # 🟢 COMPRA (BUY)
+        # ================================
         if not self.isBought() and decision == True:
 
-            # 🔒 trava global de compra
+            # 🏆 Só o melhor ativo pode comprar
             with lock:
+                if best_asset.get("symbol") != self.operation_code:
+                    print(f"🚫 {self.operation_code} ignorado (não é o melhor)")
+                    return
+                
+                # 🔒 trava global de compra           
                 if bot_control.get("buying_now", False) or bot_control.get("selling_now", False):
                     print(f"⏳ Compra em andamento por outro ativo...")
                     return
-
+            
                 bot_control["buying_now"] = True
 
             try:
@@ -1332,24 +1345,7 @@ class BinanceTraderBot:
                 print("🔴 STOP LOSS executado")
                 return
 
-        # ================================
-        # 🟢 COMPRA
-        # ================================
-        if not self.isBought() and decision == True:
 
-            print("🏁 COMPRANDO...")
-            order = self.buyLimitedOrder()
-
-            if not order:
-                print("❌ Falha na compra")
-                return
-
-            time.sleep(2)
-            self.updateAllData()
-
-            if self.isBought():
-                self.initial_balance_position = self.last_stock_account_balance
-                print("✅ Compra confirmada")
 
         # ================================
         # 🔴 VENDA
