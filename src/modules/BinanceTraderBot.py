@@ -1286,17 +1286,35 @@ class BinanceTraderBot:
         # 🚫 FILTRO GLOBAL (TOP 1)
         # ================================
         if not self.isBought() and decision == True:
-            
-            # 🚫 só o melhor ativo pode operar
+
+            # 🔒 trava global de compra
             with lock:
-                if best_asset.get("symbol") != self.operation_code:
-                    print(f"🚫 {self.operation_code} ignorado (não é o melhor)")
+                if bot_control.get("buying_now", False):
+                    print(f"⏳ Compra em andamento por outro ativo...")
                     return
-            
-            # 🚫 e só se score for bom
-            if score < min_score:
-                print("🚫 Melhor ativo não tem score suficiente")
-                return
+
+                bot_control["buying_now"] = True
+
+            try:
+                print("🏁 COMPRANDO...")
+
+                order = self.buyLimitedOrder()
+
+                if not order:
+                    print("❌ Falha na compra")
+                    return
+
+                time.sleep(2)
+                self.updateAllData()
+
+                if self.isBought():
+                    self.initial_balance_position = self.last_stock_account_balance
+                    print("✅ Compra confirmada")
+
+            finally:
+                # 🔓 libera trava sempre
+                with lock:
+                    bot_control["buying_now"] = False
 
         # ================================
         # 💰 TAKE PROFIT
@@ -1404,7 +1422,7 @@ class BinanceTraderBot:
             elif 'NOTIONAL' in filters:
                 min_notional = float(filters['NOTIONAL']['minNotional'])
             else:
-                min_notional = 5.0
+                min_notional = 5.20
 
             # =========================
             # 🔧 AJUSTE DE PREÇO
@@ -1415,7 +1433,7 @@ class BinanceTraderBot:
             # =========================
             # 🔧 AJUSTE DE QUANTIDADE
             # =========================
-            quantity = math.floor(quantity / step_size) * step_size
+            quantity = math.ceil(quantity / step_size) * step_size
 
             if quantity < min_qty:
                 quantity = min_qty
@@ -1431,7 +1449,7 @@ class BinanceTraderBot:
                 quantity = min_notional / price
 
                 # reajusta no step
-                quantity = math.floor(quantity / step_size) * step_size
+                quantity = math.ceil(quantity / step_size) * step_size
 
                 print(f"🔧 Nova quantidade ajustada: {quantity}")
 
@@ -1697,6 +1715,8 @@ class BinanceTraderBot:
 
         print(f"💰 Position size: {quantity}")
 
+        min_usdt = 6.0
+        quantity = max(quantity, min_usdt / price)
         return quantity
     
     def is_trend_up(self):

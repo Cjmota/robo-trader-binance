@@ -18,7 +18,8 @@ bot_status = {
 }
 
 bot_control = {
-    "running": True
+    "running": True,
+    "buying_now": False
 }
 
 stocks_traded_list = []
