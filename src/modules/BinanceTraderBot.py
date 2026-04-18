@@ -1137,7 +1137,7 @@ class BinanceTraderBot:
                 best_asset["last_reset"] = time.time()
 
             # reset a cada 30s (ajuste se quiser)
-            if time.time() - best_asset["last_reset"] > 30:
+            if time.time() - best_asset["last_reset"] > 60:
                 best_asset["score"] = 0
                 best_asset["symbol"] = None
                 best_asset["last_reset"] = time.time()
@@ -1173,6 +1173,12 @@ class BinanceTraderBot:
                     best_asset["score"] = score
                     best_asset["symbol"] = self.operation_code
                     print(f"🏆 Melhor ativo atualizado: {self.operation_code} | Score: {score}")
+                    
+            MIN_SCORE_TO_TRADE = 2
+
+            if score < MIN_SCORE_TO_TRADE:
+                print(f"🚫 Score muito baixo ({score}) - ignorando ativo")
+                return
 
         # ================================
         # 📊 DASHBOARD
@@ -1217,10 +1223,17 @@ class BinanceTraderBot:
         # 🚫 FILTRO GLOBAL (TOP 1)
         # ================================
         if not self.isBought() and decision == True:
+            
+            # 🚫 só o melhor ativo pode operar
             with lock:
                 if best_asset.get("symbol") != self.operation_code:
                     print(f"🚫 {self.operation_code} ignorado (não é o melhor)")
                     return
+            
+            # 🚫 e só se score for bom
+            if score < 2:
+                print("🚫 Melhor ativo não tem score suficiente")
+                return
 
         # ================================
         # 💰 TAKE PROFIT
