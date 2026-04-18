@@ -1233,7 +1233,9 @@ class BinanceTraderBot:
         # 🎯 DECISÃO
         # ================================
     
-        print(f"🧠 Estratégia Híbrida | Mercado: {market} | Score: {score}")
+        score_label = score if not self.isBought() else "LOCKED"
+
+        print(f"🧠 Estratégia Híbrida | Mercado: {market} | Score: {score_label}")
 
         # ===================================
         # 📈 TREND = VORTEX
