@@ -137,7 +137,7 @@ class BinanceTraderBot:
         # fmt: on
 
     def isBought(self):
-        return self.getActualTradePosition()
+        return self.actual_trade_position
 
     # Atualiza todos os dados da conta
     # Função importante, sempre incrementar ela, em caso de novos gets
@@ -170,8 +170,7 @@ class BinanceTraderBot:
             # Salva o último valor de venda executado com sucesso
             self.last_sell_price = self.getLastSellPrice(verbose)
             # Se a posição atual for vendida, ele reseta o index do take profit
-            if self.actual_trade_position == False:
-                self.take_profit_index = 0
+            self.actual_trade_position = self.getActualTradePosition()
             
             if self.daily_start_balance == 0:
                 self.daily_start_balance = self.getUSDTBalance()
@@ -222,21 +221,26 @@ class BinanceTraderBot:
     
     def getActualTradePosition(self):
         """
-        Determina a posição atual (comprado ou vendido) com base no saldo da moeda.
-        Usa o stepSize da Binance para ajustar o limite mínimo.
+        Considera comprado apenas se posição tiver valor real em USDT
         """
-        # print(f'STEP SIZE: {self.step_size}')
         try:
-            # Verifica se o saldo é maior que o step_size
-            if self.last_stock_account_balance >= self.step_size:
-                return True  # Comprado
-            else:
-                return False  # Vendido
+            qty = self.last_stock_account_balance
+
+            if qty <= 0:
+                return False
+
+            price = self.stock_data["close_price"].iloc[-1]
+            value_usdt = qty * price
+
+            print(f"📦 {self.operation_code} posição: {qty} | Valor: {value_usdt:.2f} USDT")
+
+            # só considera posição real acima de 5 USDT
+            return value_usdt >= 5 #ou return value_usdt >= self.get_min_notional(self.operation_code)
 
         except Exception as e:
-            print(f"Erro ao determinar a posição atual para {self.operation_code}: {e}")
-            return False  # Retorna como vendido por padrão em caso de erro
-
+            print(f"Erro posição atual {self.operation_code}: {e}")
+            return False
+        
     # Busca os dados do ativo no periodo
     def getStockData(
         self,
