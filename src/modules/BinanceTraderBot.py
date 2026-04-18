@@ -1637,8 +1637,11 @@ class BinanceTraderBot:
             # ==================================
             elif market == "RANGE":
 
-                if rsi < 35:
-                    score += 3
+                if rsi < 45:
+                    score += 2
+
+                if rsi < 38:
+                    score += 1
 
                 if price < ma20:
                     score += 1
