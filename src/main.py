@@ -122,7 +122,9 @@ BTC_USDT = StockStartModel(  stockCode = "BTC",
 # ⤵️ Array que DEVE CONTER as moedas que serão negociadas
 stocks_traded_list = [
     ADA_USDT,
-    SOL_USDT
+    SOL_USDT,
+    BTC_USDT,
+    XRP_USDT
 ]
 
 from src.state import stocks_traded_list as global_list
